@@ -1,0 +1,1 @@
+Extract only the cute white-haired doll character from the source image. Place it on a clean white background, no shadows, isolated from all other elements. Preserve the original 3D rendered style, colors, lighting, and pose exactly as in the source. Keep the character at its original size and aspect ratio.

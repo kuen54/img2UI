@@ -1,0 +1,22 @@
+From the source image (a milk tea blind box result page), extract ALL the following elements and arrange them on a CLEAN WHITE background, separated and laid out in a grid without any overlap. Preserve each element's EXACT shape, colors, lighting, 3D-rendered style, AND ALL TEXT CONTENT exactly as in the source. Do NOT regenerate or restyle.
+
+Elements to extract:
+1. main_3d_container_background: Extract the 3D rendered pink display box background, including its inner shadows, highlights, and the stylized top edge, without the character or text inside.
+2. super_badge: Extract the angled pink and yellow badge with the text 'SUPER' and dotted outline.
+3. hero_3d_character: Extract the 3D character with white cloud hair and a blue puffer jacket, isolated on a transparent background.
+4. chip_brown_sugar_pearl: Extract the white pill-shaped chip with pink outline, cup icon, and text '黑糖珍珠'.
+5. chip_q_milk: Extract the white pill-shaped chip with pink outline, cup icon, and text 'Q弹厚乳'.
+6. chip_classic_milk_tea: Extract the white pill-shaped chip with pink outline, cup icon, and text '经典奶茶系'.
+7. calligraphic_seal: Extract the pink stylized stamp with the characters '解签'.
+8. hanging_ring_left: Extract the 3D rendered pink hanging ring.
+9. hanging_ring_right: Extract the 3D rendered pink hanging ring.
+10. product_image_1: Extract the image of the milk tea cup with pearls on a light background.
+11. product_image_2: Extract the image of the milk tea cup with pearls on a light background.
+
+Hard rules:
+- White background, NOT transparent — keep solid clean white between elements
+- Each element fully visible and isolated, NO overlap
+- ALL Chinese characters and English text MUST be preserved EXACTLY as in source — do NOT regenerate text
+- Do NOT add shadows
+- Do NOT modify shape, colors, perspective
+- Do NOT include any UI elements not listed above (no status bar, no product cards, no text labels other than what's on the listed chips/badges)

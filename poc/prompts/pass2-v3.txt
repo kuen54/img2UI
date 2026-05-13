@@ -1,0 +1,25 @@
+You are given a source design image (a Chinese mobile app page, a milk tea blind-box result page). Your task: find specific decorative elements in this image and arrange them on a clean white background, separated and not overlapping.
+
+Look at the source image carefully. For each element described below, find it in the source and copy it onto the white canvas — preserve its EXACT shape, colors, lighting, 3D rendering, and ALL text content (Chinese and English) as drawn in the source.
+
+Elements to find and extract:
+
+1. 椭圆形 SUPER 徽章,主体粉色填充带黄色描边,内嵌虚线再描一圈,字母『SUPER』为粗体倾斜大写英文白色字带黄色阴影,徽章整体逆时针旋转约 15 度,周围有黄色小星星装饰,扁平风但有微立体感。
+2. 3D 渲染卡通女孩全身像,蓬松云朵般的白色卷发覆盖头顶并垂至两侧,大圆眼睛,粉腮红;身穿浅蓝色羽绒服,领口高、有横向绗线,材质带光泽和阴影;下身穿棕色短靴;双手自然下垂,姿态拘谨可爱;无背景。
+3. 圆角 pill chip,白色填充略带微透,粉色描边约 1.5px,左侧有一枚 mini 奶茶杯 icon(透明杯身+底部褐色奶茶+顶部褐色珍珠球),右侧深紫红『黑糖珍珠』四个中文字,字体微胖偏圆,无衬线,字重 bold;chip 整体水平横放,无阴影,扁平风。
+4. 圆角 pill chip,白色填充略带微透,粉色描边约 1.5px,右侧有一枚 mini 奶茶杯 icon(透明杯身+底部褐色奶茶+顶部褐色珍珠球),左侧深紫红『Q弹厚乳』四个中文字,字体微胖偏圆,无衬线,字重 bold;chip 整体水平横放,无阴影,扁平风。
+5. 圆角 pill chip,白色填充略带微透,粉色描边约 1.5px,右侧有一枚 mini 奶茶杯 icon(透明杯身+底部褐色奶茶+顶部褐色珍珠球),左侧深紫红『经典奶茶系』五个中文字,字体微胖偏圆,无衬线,字重 bold;chip 整体水平横放,无阴影,扁平风。
+6. 不规则粉色气泡形状底板,带有白色高光边缘,内部有两个深紫红色手写毛笔感汉字『解签』,字体粗壮带飞白笔触,整体略微倾斜,周围有黄色小星星装饰,扁平风带微立体感。
+7. 3D 渲染的白色圆环形连接扣,带有高光和阴影,呈现出塑料或陶瓷材质的质感,垂直悬挂状。
+8. 3D 渲染的白色圆环形连接扣,带有高光和阴影,呈现出塑料或陶瓷材质的质感,垂直悬挂状。
+9. 一杯装在透明塑料杯中的黑糖珍珠奶茶,杯壁有黑糖挂壁纹理,杯底有大量黑色珍珠,旁边散落着几颗黑糖珍珠,浅色背景,圆角矩形遮罩。
+10. 一杯装在透明塑料杯中的黑糖珍珠奶茶,杯壁有黑糖挂壁纹理,杯底有大量黑色珍珠,旁边散落着几颗黑糖珍珠,浅色背景,圆角矩形遮罩。
+
+Output rules:
+- Use a clean white (#FFFFFF) background.
+- Place elements clearly separated on the canvas, with comfortable spacing between them. NO overlap.
+- Preserve every Chinese character EXACTLY as drawn in the source — do not substitute, do not romanize, do not drop, do not change the font style.
+- Preserve original colors, gradients, and visual style — these elements are stylized graphics, do not flatten or simplify them.
+- Do NOT include the source image's status bar, navigation buttons, title text, body text, product cards, prices, descriptive paragraphs, or any element not listed above.
+- Do NOT add new shadows underneath elements. Only preserve shadows that are part of the element itself in the source.
+- Do NOT add labels, captions, frames, or any text that is not already on an element.

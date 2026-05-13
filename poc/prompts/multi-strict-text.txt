@@ -1,0 +1,16 @@
+CRITICAL TASK: You MUST preserve all Chinese text characters EXACTLY as they appear in the source image. Do NOT regenerate, modify, or hallucinate any text.
+
+From the source image (a milk tea blind box page in Chinese), extract these decorative elements onto a fully transparent background, separated in a grid without overlap:
+
+1. Cute white-haired doll character (no text)
+2. Pink oval "SUPER" badge (text "SUPER" in English, preserve exactly)
+3. Pink "解签" calligraphic seal/stamp (Chinese characters 解签, preserve exactly)
+4. Pink chip with "黑糖珍珠" text and bubble tea cup icon (preserve "黑糖珍珠" exactly, all 4 characters)
+5. Pink chip with "Q弹厚乳" text and bubble tea cup icon (preserve "Q弹厚乳" exactly)
+6. Pink chip with "经典奶茶系" text and bubble tea cup icon (preserve "经典奶茶系" exactly)
+
+Hard rules:
+- Transparent alpha background, NOT white
+- Preserve original 3D/illustration style, colors, lighting from source
+- Each Chinese character MUST be readable and identical to source — do NOT replace with similar-looking but wrong characters
+- No shadows, no extra UI elements, no container frames

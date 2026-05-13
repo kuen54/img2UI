@@ -1,0 +1,15 @@
+From the source image (a milk tea blind box result page), extract ALL the following decorative elements and arrange them on a fully transparent background, separated and laid out in a grid without any overlap. Preserve each element's exact shape, colors, lighting, and 3D-rendered style from the source.
+
+Elements to extract:
+1. The cute white-haired doll character (with cloud-like hair and blue puffy jacket)
+2. The pink "SUPER" oval badge
+3. The pink "解签" calligraphic seal/stamp
+4. The pink chip-shaped tag with "黑糖珍珠" text and bubble tea cup icon
+5. The pink chip-shaped tag with "Q弹厚乳" text and bubble tea cup icon
+6. The pink chip-shaped tag with "经典奶茶系" text and bubble tea cup icon
+
+Hard rules:
+- Transparent background (alpha channel), NOT white
+- Each element must be fully visible and isolated
+- Do NOT modify shape, colors, perspective
+- Do NOT include any text, container frames, or other UI elements from the source

@@ -1,0 +1,27 @@
+# Runtime data (per CLAUDE.md / SPEC.md, all writes go under /data)
+/data
+
+# PoC outputs(可重现产物 + 大文件,文档里已有结论;不进版本库)
+/outputs
+/poc/outputs
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node (will be augmented by create-next-app in Phase 1 Task 1.1)
+node_modules/
+.next/
+.env
+.env.local
+.env*.local
+
+# OS
+Thumbs.db

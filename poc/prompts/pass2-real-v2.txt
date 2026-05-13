@@ -1,0 +1,27 @@
+TASK: From the source image, extract the listed elements onto a clean white background. The source image is your ONLY source of truth for visual style — descriptions below merely identify WHICH element to extract.
+
+VISUAL FIDELITY (highest priority):
+- Copy each element from the source image PIXEL-FAITHFULLY: same colors, same gradients, same lighting, same 3D rendering, same shadows-on-element, same text content
+- If the description and the source disagree about a visual detail, TRUST THE SOURCE IMAGE
+- Do NOT reinterpret, restyle, or 'improve' the design
+- Preserve EVERY Chinese/English character exactly as drawn in the source
+
+Elements to extract (referenced by their entity_name and rough description):
+1. main_3d_container_background: 3D rendered pink display box serving as the background for the top section.
+2. super_badge: Pink and yellow angled badge with the word 'SUPER'.
+3. hero_3d_character: 3D character with white cloud-like hair and a shiny blue puffer jacket.
+4. chip_brown_sugar_pearl: White pill-shaped chip with pink outline, a small cup icon, and text '黑糖珍珠'.
+5. chip_q_milk: White pill-shaped chip with pink outline, a small cup icon, and text 'Q弹厚乳'.
+6. chip_classic_milk_tea: White pill-shaped chip with pink outline, a small cup icon, and text '经典奶茶系'.
+7. calligraphic_seal: Pink stylized stamp with the characters '解签'.
+8. hanging_ring_left: 3D rendered pink ring connecting the top and bottom containers.
+9. hanging_ring_right: 3D rendered pink ring connecting the top and bottom containers.
+10. product_image_1: Image of a milk tea cup with pearls.
+11. product_image_2: Image of a milk tea cup with pearls.
+
+Output rules:
+- White background (#FFFFFF), NOT transparent
+- All elements visible and isolated, NO overlap, arranged in a clean grid
+- DO NOT add shadows beneath elements (preserve any shadows that are part of the element itself)
+- DO NOT include the original page's status bar, buttons, text labels, or product cards
+- DO NOT crop or partially show any element
