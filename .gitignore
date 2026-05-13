@@ -32,6 +32,10 @@
 *.pem
 Thumbs.db
 
+# Playwright artifacts(临时验证产物,不进版本库)
+.playwright-mcp/
+phase-*-final.png
+
 # Editor
 .vscode/
 .idea/

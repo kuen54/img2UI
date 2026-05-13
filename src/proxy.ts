@@ -7,8 +7,10 @@ import { NextRequest, NextResponse } from 'next/server'
 //   - same-origin / same-site / none(直接打开浏览器地址栏) / 缺失头(老 UA)→ 放行
 //
 // localhost-only 工具,无强认证,这层够用
+//
+// Next.js 16 改用 proxy.ts(原 middleware.ts 已废弃)
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   if (!req.nextUrl.pathname.startsWith('/api/')) return NextResponse.next()
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return NextResponse.next()
 
