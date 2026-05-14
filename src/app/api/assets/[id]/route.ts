@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx) {
   if (body.status !== undefined && !ALLOWED_STATUSES.has(body.status)) {
     return NextResponse.json({ error: `invalid status: ${body.status}` }, { status: 400 })
   }
-  const next = await patchAsset(id, { status: body.status })
+  const next = await patchAsset(id, body.status !== undefined ? { status: body.status } : {})
   if (!next) return NextResponse.json({ error: 'asset not found' }, { status: 404 })
   return NextResponse.json(next)
 }
