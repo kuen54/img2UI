@@ -83,7 +83,7 @@ export default function AssetReviewPage({ params }: PageProps) {
     if (!currentState) return
     const ok = await confirm({
       title: `Run Pass 2 — ${staticElements.length} 个 static 元素`,
-      description: '会调用 image_gen provider(apimart gpt-image-2-official)。约 60-220s,单次成本 ~$0.17。',
+      description: '会调用生图模型(默认 apimart gpt-image-2-official)。约 60-220s,单次成本 ~$0.17。',
       confirmText: 'Run',
     })
     if (!ok) return

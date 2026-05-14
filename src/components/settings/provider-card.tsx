@@ -82,7 +82,7 @@ export function ProviderCard({
         <div className="space-y-1 flex-1 min-w-0">
           <CardTitle className="text-base flex items-center gap-2">
             <span className="truncate">{provider.name || <span className="text-muted-foreground italic">未命名</span>}</span>
-            {provider.active && <Badge variant="default">Active</Badge>}
+            {provider.active && <Badge variant="default">使用中</Badge>}
             {isNew && <Badge variant="outline">未保存</Badge>}
           </CardTitle>
           {provider.model && (
@@ -102,10 +102,10 @@ export function ProviderCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {/* 通用字段 */}
-        <Field label="Name">
+        <Field label="名称">
           <Input value={provider.name} onChange={(e) => update('name', e.target.value)} />
         </Field>
-        <Field label="API format">
+        <Field label="API 格式">
           <Select value={provider.api_format} onValueChange={(v) => update('api_format', v as ApiFormat)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -115,7 +115,7 @@ export function ProviderCard({
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Base URL">
+        <Field label="Base URL(API 接口地址)">
           <Input
             value={provider.base_url}
             onChange={(e) => update('base_url', e.target.value)}
@@ -126,7 +126,7 @@ export function ProviderCard({
         <Field
           label={
             provider.kind === 'cdn'
-              ? 'Credentials(格式:ACCESS_KEY_ID:SECRET)'
+              ? '凭据(格式:ACCESS_KEY_ID:SECRET)'
               : 'API Key'
           }
         >
@@ -135,7 +135,7 @@ export function ProviderCard({
 
         {/* mllm / image_gen 都要 model */}
         {provider.kind !== 'cdn' && (
-          <Field label="Model">
+          <Field label="模型 ID">
             <Input
               value={provider.model ?? ''}
               onChange={(e) => update('model', e.target.value)}
@@ -148,7 +148,7 @@ export function ProviderCard({
         {/* mllm 专属 */}
         {provider.kind === 'mllm' && (
           <>
-            <Field label={`Default temperature(${provider.default_temperature ?? 1})`}>
+            <Field label={`默认温度(temperature = ${provider.default_temperature ?? 1})`}>
               <Slider
                 value={[provider.default_temperature ?? 1]}
                 onValueChange={(v) => {
@@ -160,7 +160,7 @@ export function ProviderCard({
                 step={0.1}
               />
             </Field>
-            <Field label="Default max tokens">
+            <Field label="默认最大 token(中文 30+ 元素建议 ≥ 32000)">
               <Input
                 type="number"
                 value={provider.default_max_tokens ?? 12000}
@@ -173,7 +173,7 @@ export function ProviderCard({
                   checked={provider.vision_capable ?? false}
                   onCheckedChange={(v) => update('vision_capable', !!v)}
                 />
-                Vision capable(必须 true 才能跑 Pass 1)
+                支持视觉输入(必须勾选才能跑 Pass 1 布局分析)
               </label>
             </Field>
           </>
@@ -182,15 +182,15 @@ export function ProviderCard({
         {/* image_gen 专属 */}
         {provider.kind === 'image_gen' && (
           <>
-            <Field label="Endpoint kind">
+            <Field label="接口类型">
               <Select
                 value={provider.endpoint_kind ?? 'image_generation'}
                 onValueChange={(v) => update('endpoint_kind', v as 'image_edit' | 'image_generation')}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="image_generation">image_generation(POST /images/generations)</SelectItem>
-                  <SelectItem value="image_edit">image_edit(POST /images/edits)</SelectItem>
+                  <SelectItem value="image_generation">文生图 image_generation(POST /images/generations)</SelectItem>
+                  <SelectItem value="image_edit">图生图 image_edit(POST /images/edits)</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
@@ -200,10 +200,10 @@ export function ProviderCard({
                   checked={provider.is_async ?? false}
                   onCheckedChange={(v) => update('is_async', !!v)}
                 />
-                Async(submit + poll 模式,如 apimart)
+                异步模式(submit + poll,如 apimart)
               </label>
             </Field>
-            <Field label="Default quality">
+            <Field label="默认画质">
               <Select
                 value={provider.default_quality ?? 'high'}
                 onValueChange={(v) => update('default_quality', v as 'low' | 'medium' | 'high')}
@@ -222,13 +222,13 @@ export function ProviderCard({
         {/* cdn 专属 */}
         {provider.kind === 'cdn' && (
           <>
-            <Field label="Bucket">
+            <Field label="Bucket(对象存储 bucket 名)">
               <Input value={provider.bucket ?? ''} onChange={(e) => update('bucket', e.target.value)} />
             </Field>
-            <Field label="Region">
+            <Field label="区域 Region">
               <Input value={provider.region ?? ''} onChange={(e) => update('region', e.target.value)} placeholder="us-east-1" />
             </Field>
-            <Field label="Public URL prefix">
+            <Field label="公网 URL 前缀(Public URL prefix)">
               <Input
                 value={provider.public_url_prefix ?? ''}
                 onChange={(e) => update('public_url_prefix', e.target.value)}
@@ -253,7 +253,7 @@ export function ProviderCard({
           </div>
         )}
         {isNew && (
-          <p className="text-xs text-muted-foreground pt-2">新增 provider 需先「保存」后才能 Test Connection。</p>
+          <p className="text-xs text-muted-foreground pt-2">新增 provider 需先「保存」后才能测试连通。</p>
         )}
       </CardContent>
     </Card>

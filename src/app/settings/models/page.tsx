@@ -85,13 +85,14 @@ export default function ModelsPage() {
   return (
     <div className="space-y-8">
       <Section
-        title="Multimodal LLM"
-        description="用于 Pass 1 布局分析。MVP-α 推荐 sankuai gemini-3.1-pro-preview(CJK 准确度高)"
-        addLabel="+ 新增 MLLM"
+        title="多模态理解模型"
+        subtitle="Multimodal LLM"
+        description="用于 Pass 1 布局分析(读图 → 识别元素 + 中文 description)。MVP-α 推荐 sankuai gemini-3.1-pro-preview(CJK 准确度高)"
+        addLabel="+ 新增多模态模型"
         onAdd={() => addProvider('mllm')}
       >
         {mllmProviders.length === 0 ? (
-          <EmptyHint>暂无 MLLM provider,点上方按钮新增</EmptyHint>
+          <EmptyHint>暂无多模态模型,点上方按钮新增</EmptyHint>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {mllmProviders.map((p) => (
@@ -110,13 +111,14 @@ export default function ModelsPage() {
       </Section>
 
       <Section
-        title="ImageGen"
-        description="用于 Pass 2 资产提取。MVP-α 推荐 apimart gpt-image-2-official + quality=high(绿幕路径已验证)"
-        addLabel="+ 新增 ImageGen"
+        title="生图模型"
+        subtitle="Image Generation"
+        description="用于 Pass 2 资产提取(原图 + element 描述 → 绿幕背景 PNG)。MVP-α 推荐 apimart gpt-image-2-official + quality=high(绿幕路径已验证)"
+        addLabel="+ 新增生图模型"
         onAdd={() => addProvider('image_gen')}
       >
         {imageGenProviders.length === 0 ? (
-          <EmptyHint>暂无 ImageGen provider</EmptyHint>
+          <EmptyHint>暂无生图模型</EmptyHint>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {imageGenProviders.map((p) => (
@@ -150,12 +152,14 @@ function savedHasId(saved: AppConfig | null, id: string): boolean {
 
 function Section({
   title,
+  subtitle,
   description,
   addLabel,
   onAdd,
   children,
 }: {
   title: string
+  subtitle?: string
   description: string
   addLabel: string
   onAdd: () => void
@@ -165,7 +169,14 @@ function Section({
     <section className="space-y-3">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h2 className="text-lg font-semibold">
+            {title}
+            {subtitle && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                {subtitle}
+              </span>
+            )}
+          </h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         <Button variant="outline" size="sm" onClick={onAdd}>

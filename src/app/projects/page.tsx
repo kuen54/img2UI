@@ -35,6 +35,13 @@ export default function ProjectsPage() {
 
   return (
     <div className="p-6 h-full">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-semibold">项目</h1>
+        <Button onClick={() => setDialogOpen(true)}>
+          <Plus className="size-4 mr-1" />
+          新建项目
+        </Button>
+      </div>
       {projects.length === 0 ? (
         <EmptyState
           icon={Folder}
@@ -48,24 +55,15 @@ export default function ProjectsPage() {
           }
         />
       ) : (
-        <>
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-semibold">项目</h1>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="size-4 mr-1" />
-              新建项目
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {projects.map((p) => (
-              <ProjectCard
-                key={p.id}
-                project={p}
-                onDeleted={(id) => setProjects(projects.filter((x) => x.id !== id))}
-              />
-            ))}
-          </div>
-        </>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {projects.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onDeleted={(id) => setProjects(projects.filter((x) => x.id !== id))}
+            />
+          ))}
+        </div>
       )}
       <NewProjectDialog
         open={dialogOpen}
