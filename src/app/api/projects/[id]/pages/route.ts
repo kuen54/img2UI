@@ -8,7 +8,8 @@ type RouteCtx = { params: Promise<{ id: string }> }
 
 // 删除内部字段 + 注入 thumbnail_url(只在 thumbnail_path 存在时)
 function decoratePage(page: Page): Page {
-  const { thumbnail_path: _thumbnailPath, ...rest } = page
+  const rest = { ...page }
+  delete rest.thumbnail_path
   if (page.thumbnail_path) {
     return { ...rest, thumbnail_url: `/api/thumbs/${page.id}` }
   }

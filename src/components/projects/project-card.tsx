@@ -46,6 +46,7 @@ export function ProjectCard({ project, onDeleted }: ProjectCardProps) {
       <Card className="hover:bg-muted/30 transition-colors cursor-pointer relative h-full overflow-hidden">
         <div className="aspect-square bg-muted/40 flex items-center justify-center">
           {showImg ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 服务于 /api/thumbs 的小尺寸缩略图,不走 next/image 优化
             <img
               src={project.sample_thumbnail_url}
               alt={project.name}
