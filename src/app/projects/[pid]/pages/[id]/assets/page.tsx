@@ -2,13 +2,13 @@
 
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Loader2, Play } from 'lucide-react'
+import { ChevronRight, Loader2, Play, UploadCloud, FolderOutput } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element, Page, State } from '@/lib/types'
 import { getPageApi, listStatesApi } from '@/lib/api/projects-client'
 import { listElementsApi } from '@/lib/api/elements-client'
-import { listAssetsApi, triggerPass2Api } from '@/lib/api/assets-client'
+import { listAssetsApi, triggerPass2Api, uploadAllAssetsApi } from '@/lib/api/assets-client'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -35,6 +35,7 @@ export default function AssetReviewPage({ params }: PageProps) {
   const [currentStateId, setCurrentStateId] = useState<string>('')
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [uploadingAll, setUploadingAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const loadAll = useCallback(async () => {
@@ -98,6 +99,36 @@ export default function AssetReviewPage({ params }: PageProps) {
     }
   }
 
+  const handleUploadAll = async () => {
+    const pending = assets.filter((a) => a.status !== 'uploaded')
+    if (pending.length === 0) {
+      toast.info('全部 asset 已上传')
+      return
+    }
+    const ok = await confirm({
+      title: `批量上传 ${pending.length} 个 asset 到 CDN`,
+      description: '使用 active cdn provider 串行上传。失败的不阻断其他。',
+      confirmText: '上传',
+    })
+    if (!ok) return
+    setUploadingAll(true)
+    try {
+      const result = await uploadAllAssetsApi(pageId)
+      if (result.failed.length === 0) {
+        toast.success(`已上传 ${result.uploaded.length} 个 asset`)
+      } else {
+        toast.warning(
+          `上传 ${result.uploaded.length} 个;失败 ${result.failed.length} 个:${result.failed.map((f) => f.error).slice(0, 2).join(' / ')}`,
+        )
+      }
+      await loadAll()
+    } catch (e) {
+      toast.error('批量上传失败:' + (e as Error).message)
+    } finally {
+      setUploadingAll(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <nav className="px-6 py-3 border-b flex items-center justify-between gap-4 text-sm">
@@ -128,6 +159,27 @@ export default function AssetReviewPage({ params }: PageProps) {
             {running ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <Play className="size-3.5 mr-1" />}
             {running ? '提取中…(可能 60-220s)' : 'Run Pass 2'}
           </Button>
+          {assets.length > 0 && (
+            <Button
+              onClick={() => void handleUploadAll()}
+              disabled={uploadingAll || running}
+              size="sm"
+              variant="outline"
+            >
+              {uploadingAll ? (
+                <Loader2 className="size-3.5 mr-1 animate-spin" />
+              ) : (
+                <UploadCloud className="size-3.5 mr-1" />
+              )}
+              批量上传 CDN
+            </Button>
+          )}
+          <Link href={`/projects/${pid}/pages/${pageId}/export`}>
+            <Button size="sm" variant="outline">
+              <FolderOutput className="size-3.5 mr-1" />
+              Export
+            </Button>
+          </Link>
         </div>
       </nav>
 

@@ -2,7 +2,7 @@
 
 import { Check, Loader2, Circle } from 'lucide-react'
 
-import type { State } from '@/lib/types'
+import type { Asset, Element, State } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export type StepStatus = 'idle' | 'running' | 'done' | 'failed'
@@ -18,9 +18,10 @@ const STEPS = [
 
 export type PipelineStepperProps = {
   states: State[]
+  elements?: Element[]
+  assets?: Asset[]
 }
 
-// Phase 3 只推断 step 1(布局分析);其他步全是 idle,Phase 4+ 接业务
 function inferStep1Status(states: State[]): StepStatus {
   if (states.length === 0) return 'idle'
   if (states.some((s) => s.pipeline_status === 'pass1_running')) return 'running'
@@ -31,13 +32,54 @@ function inferStep1Status(states: State[]): StepStatus {
   return 'idle'
 }
 
-export function PipelineStepper({ states }: PipelineStepperProps) {
+function inferStep3Status(states: State[]): StepStatus {
+  if (states.length === 0) return 'idle'
+  if (states.some((s) => s.pipeline_status === 'pass2_running')) return 'running'
+  if (states.some((s) => s.pipeline_status === 'pass2_failed')) return 'failed'
+  if (states.some((s) => ['pass2_done', 'validating', 'validated'].includes(s.pipeline_status))) {
+    return 'done'
+  }
+  return 'idle'
+}
+
+function inferCdnStatus(elements: Element[], assets: Asset[]): StepStatus {
+  const staticEls = elements.filter((e) => e.type === 'static')
+  if (staticEls.length === 0) {
+    // 没 static element → 无 asset 可传,直接 done
+    return assets.length === 0 ? 'idle' : 'done'
+  }
+  if (assets.length === 0) return 'idle'
+  const uploaded = assets.filter((a) => a.status === 'uploaded')
+  if (assets.some((a) => a.status === 'failed')) return 'failed'
+  if (uploaded.length === 0) return 'idle'
+  if (uploaded.length === assets.length) return 'done'
+  return 'running'
+}
+
+export function PipelineStepper({ states, elements = [], assets = [] }: PipelineStepperProps) {
   const step1 = inferStep1Status(states)
+  // step 2(元素 Review)用 element.reviewed 启发式
+  const reviewedAll = elements.length > 0 && elements.every((e) => e.reviewed)
+  const step2: StepStatus = elements.length === 0 ? 'idle' : reviewedAll ? 'done' : 'idle'
+  const step3 = inferStep3Status(states)
+  // step 4(资产 Review)启发式:assets 全部 status !== 'extracted'(进入 validated/uploaded)→ done
+  const step4: StepStatus =
+    assets.length === 0
+      ? 'idle'
+      : assets.every((a) => a.status === 'validated' || a.status === 'uploaded')
+        ? 'done'
+        : assets.some((a) => a.status === 'failed')
+          ? 'failed'
+          : 'idle'
+  const step5 = inferCdnStatus(elements, assets)
+  // step 6(Export)无持久化 run,默认 idle
+  const step6: StepStatus = 'idle'
+  const statuses: StepStatus[] = [step1, step2, step3, step4, step5, step6]
 
   return (
     <div className="flex items-stretch gap-1">
       {STEPS.map((step, idx) => {
-        const status = idx === 0 ? step1 : 'idle'
+        const status = statuses[idx] ?? 'idle'
         return (
           <div
             key={step.key}

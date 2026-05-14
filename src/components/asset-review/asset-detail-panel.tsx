@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { RefreshCw, Loader2, UploadCloud, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { reExtractElementApi } from '@/lib/api/assets-client'
+import { reExtractElementApi, uploadAssetApi } from '@/lib/api/assets-client'
 
 export type AssetDetailPanelProps = {
   asset: Asset
@@ -16,6 +16,7 @@ export type AssetDetailPanelProps = {
 
 export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailPanelProps) {
   const [reExtracting, setReExtracting] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const handleReExtract = async () => {
     setReExtracting(true)
@@ -27,6 +28,19 @@ export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailP
       toast.error('重抠失败:' + (e as Error).message)
     } finally {
       setReExtracting(false)
+    }
+  }
+
+  const handleUpload = async () => {
+    setUploading(true)
+    try {
+      await uploadAssetApi(asset.id)
+      toast.success('已上传到 CDN')
+      onReExtracted()
+    } catch (e) {
+      toast.error('上传失败:' + (e as Error).message)
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -73,10 +87,30 @@ export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailP
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void handleReExtract()} disabled={reExtracting} size="sm">
+        <Button onClick={() => void handleReExtract()} disabled={reExtracting || uploading} size="sm">
           {reExtracting ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <RefreshCw className="size-3.5 mr-1" />}
           {reExtracting ? '重抠中…(60-180s)' : '重抠该元素'}
         </Button>
+        <Button
+          onClick={() => void handleUpload()}
+          disabled={reExtracting || uploading}
+          size="sm"
+          variant="outline"
+        >
+          {uploading ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <UploadCloud className="size-3.5 mr-1" />}
+          {asset.cdn_url ? '重传 CDN' : '上传 CDN'}
+        </Button>
+        {asset.cdn_url && (
+          <a
+            href={asset.cdn_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground self-center"
+          >
+            <ExternalLink className="size-3" />
+            查看 CDN 链接
+          </a>
+        )}
         <p className="text-xs text-muted-foreground self-center">
           重抠会用当前 element 的 description 重发 Pass 2,覆盖该 asset
         </p>

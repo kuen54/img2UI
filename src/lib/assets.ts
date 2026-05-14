@@ -47,6 +47,24 @@ export async function createOrUpdateAsset(input: CreateAssetInput): Promise<Asse
   return asset
 }
 
+export async function patchAsset(
+  id: string,
+  patch: Partial<Pick<Asset, 'cdn_url' | 'status' | 'alpha_quality' | 'validation_notes'>>,
+): Promise<Asset | null> {
+  const existing = await getAsset(id)
+  if (!existing) return null
+  const next: Asset = {
+    ...existing,
+    ...(patch.cdn_url !== undefined && { cdn_url: patch.cdn_url }),
+    ...(patch.status !== undefined && { status: patch.status }),
+    ...(patch.alpha_quality !== undefined && { alpha_quality: patch.alpha_quality }),
+    ...(patch.validation_notes !== undefined && { validation_notes: patch.validation_notes }),
+    updated_at: new Date().toISOString(),
+  }
+  await writeJson(metaFor(id), next)
+  return next
+}
+
 export async function writeAssetBinary(id: string, buffer: Buffer): Promise<void> {
   await fs.mkdir(BIN_DIR, { recursive: true })
   await fs.writeFile(binFor(id), buffer)

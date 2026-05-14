@@ -24,5 +24,14 @@ export const triggerPass2Api = (stateId: string) =>
 export const reExtractElementApi = (elementId: string) =>
   http<{ run_id: string }>(`/api/elements/${elementId}/re-extract`, { method: 'POST' })
 
+export const uploadAssetApi = (id: string) =>
+  http<Asset>(`/api/assets/${id}/upload`, { method: 'POST' })
+
+export const uploadAllAssetsApi = (pageId: string) =>
+  http<{ uploaded: string[]; failed: { id: string; error: string }[] }>(
+    `/api/pages/${pageId}/upload-all-assets`,
+    { method: 'POST' },
+  )
+
 // 拿 elements(已存在 elements-client 里,re-export 方便组件用)
 export type { Element }
