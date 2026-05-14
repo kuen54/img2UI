@@ -1,0 +1,267 @@
+{
+  "elements": [
+    {
+      "entity_name": "Pink_3D_Display_Box",
+      "type": "static",
+      "type_reasoning": "A highly stylized, 3D-rendered pink box acting as a stage or display case for the character. Its complex shading, irregular top edge, and internal depth make it a special visual structure that cannot be stably reproduced with simple code.",
+      "bbox": [
+        0.03,
+        0.05,
+        0.94,
+        0.58
+      ],
+      "z_index": 1,
+      "description": "The main pink 3D display box container holding the character and top information.",
+      "extraction_prompt": "Extract the large pink 3D display box container with an irregular top edge, internal stage depth, and stylized bottom shelf, without the character or text.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Inner_Stage_Arch",
+      "type": "static",
+      "type_reasoning": "The arched background element inside the pink 3D box forming the immediate backdrop for the character. It has glowing edges and gradients.",
+      "bbox": [
+        0.1,
+        0.2,
+        0.8,
+        0.3
+      ],
+      "z_index": 2,
+      "description": "The glowing arched backdrop inside the display box.",
+      "extraction_prompt": "Extract the glowing arched backdrop panel located inside the pink display box.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Calligraphic_Seal_Container",
+      "type": "static",
+      "type_reasoning": "An irregular, stylized pink tag acting as a container for the '解签' text. It features decorative borders and a 3D pill-like appearance.",
+      "bbox": [
+        0.08,
+        0.51,
+        0.22,
+        0.06
+      ],
+      "z_index": 3,
+      "description": "Irregular pink container for the '解签' label at the bottom left of the 3D box.",
+      "extraction_prompt": "Extract the irregular, stylized pink label container that looks like a 3D pill shape with a decorative outline.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Feature_Tag_Container_Left",
+      "type": "static",
+      "type_reasoning": "A stylized, pill-shaped container holding text and an icon, pointing to the character. It acts as a decorative label container.",
+      "bbox": [
+        0.07,
+        0.27,
+        0.22,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Pill-shaped tag pointing to the left side of the character.",
+      "extraction_prompt": "Extract the white pill-shaped tag with pink outlines and a small connecting line pointing rightwards.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Feature_Tag_Container_TopRight",
+      "type": "static",
+      "type_reasoning": "A stylized, pill-shaped container holding text and an icon, pointing to the character.",
+      "bbox": [
+        0.72,
+        0.2,
+        0.21,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Pill-shaped tag pointing to the top right of the character.",
+      "extraction_prompt": "Extract the white pill-shaped tag with pink outlines and a small connecting line pointing down-left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Feature_Tag_Container_BottomRight",
+      "type": "static",
+      "type_reasoning": "A stylized, pill-shaped container holding text and an icon, pointing to the character.",
+      "bbox": [
+        0.65,
+        0.38,
+        0.27,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Pill-shaped tag pointing to the bottom right of the character.",
+      "extraction_prompt": "Extract the white pill-shaped tag with pink outlines and a small connecting line pointing up-left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Super_Badge_Container",
+      "type": "static",
+      "type_reasoning": "A highly stylized, tilted, glowing badge holding the 'SUPER' text.",
+      "bbox": [
+        0.7,
+        0.1,
+        0.21,
+        0.08
+      ],
+      "z_index": 3,
+      "description": "Glowing oval badge containing the word SUPER.",
+      "extraction_prompt": "Extract the glowing pink oval badge with decorative sparkles and the word SUPER.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Bottom_Store_List_Card",
+      "type": "code",
+      "type_reasoning": "A standard large rounded rectangle container acting as a bottom sheet to hold the list of nearby stores. Can be styled via CSS borders, shadows, and border-radius.",
+      "bbox": [
+        0.03,
+        0.63,
+        0.94,
+        0.37
+      ],
+      "z_index": 2,
+      "description": "Large white rounded card at the bottom containing the store lists.",
+      "shape_spec": "Rounded rectangle with top-left and top-right corner radius ~24px, bottom corners squared off or slightly rounded.",
+      "material_spec": "Solid white background, subtle drop shadow.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "List_Header_Tag_Container",
+      "type": "code",
+      "type_reasoning": "A simple rounded rectangle container for the '购买后自动领取' sub-label. It is a standard UI tag.",
+      "bbox": [
+        0.36,
+        0.66,
+        0.21,
+        0.025
+      ],
+      "z_index": 3,
+      "description": "Small pink rounded tag next to the list title.",
+      "shape_spec": "Rounded rectangle, full pill shape.",
+      "material_spec": "Solid light pink background.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Store_Item_Container_1",
+      "type": "code",
+      "type_reasoning": "A container grouping the layout of a single list item (image, title, details, price). Forms a logical section within the list.",
+      "bbox": [
+        0.08,
+        0.7,
+        0.84,
+        0.13
+      ],
+      "z_index": 3,
+      "description": "Container for the first store item in the list.",
+      "shape_spec": "Rectangular layout container.",
+      "material_spec": "Transparent background.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Store_Item_Image_Container_1",
+      "type": "code",
+      "type_reasoning": "A rounded container specifically masking and holding the product image.",
+      "bbox": [
+        0.08,
+        0.71,
+        0.22,
+        0.1
+      ],
+      "z_index": 4,
+      "description": "Rounded box holding the first product thumbnail.",
+      "shape_spec": "Rounded rectangle, ~12px corner radius.",
+      "material_spec": "Solid very light gray/pink background fill behind image.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Item_Action_Tag_Container_1",
+      "type": "code",
+      "type_reasoning": "Standard pill-shaped tag containing '完单可收藏趣玩'.",
+      "bbox": [
+        0.65,
+        0.79,
+        0.23,
+        0.025
+      ],
+      "z_index": 4,
+      "description": "Small pink action tag inside the first list item.",
+      "shape_spec": "Rounded rectangle, full pill shape.",
+      "material_spec": "Solid light pink background.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Store_Item_Container_2",
+      "type": "code",
+      "type_reasoning": "A container grouping the layout of a single list item (image, title, details, price).",
+      "bbox": [
+        0.08,
+        0.84,
+        0.84,
+        0.14
+      ],
+      "z_index": 3,
+      "description": "Container for the second store item in the list.",
+      "shape_spec": "Rectangular layout container.",
+      "material_spec": "Transparent background.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Store_Item_Image_Container_2",
+      "type": "code",
+      "type_reasoning": "A rounded container specifically masking and holding the product image.",
+      "bbox": [
+        0.08,
+        0.85,
+        0.22,
+        0.1
+      ],
+      "z_index": 4,
+      "description": "Rounded box holding the second product thumbnail.",
+      "shape_spec": "Rounded rectangle, ~12px corner radius.",
+      "material_spec": "Solid very light gray/pink background fill behind image.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Item_Action_Tag_Container_2",
+      "type": "code",
+      "type_reasoning": "Standard pill-shaped tag containing '完单可收藏趣玩'.",
+      "bbox": [
+        0.65,
+        0.93,
+        0.23,
+        0.025
+      ],
+      "z_index": 4,
+      "description": "Small pink action tag inside the second list item.",
+      "shape_spec": "Rounded rectangle, full pill shape.",
+      "material_spec": "Solid light pink background.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

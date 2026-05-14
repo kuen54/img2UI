@@ -1,0 +1,73 @@
+{
+  "elements": [
+    {
+      "entity_name": "global_pink_starry_background",
+      "type": "static",
+      "type_reasoning": "The underlying full-screen ambient background, featuring a soft pink gradient and scattered glowing star sparkles. It establishes the overall aesthetic environment.",
+      "bbox": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "z_index": -1,
+      "description": "Full-screen soft pink gradient background with small glowing stars and sparkles.",
+      "extraction_prompt": "Extract the full-screen soft pink gradient background with scattered glowing star sparkles, removing all foreground text, UI elements, characters, and structural boxes.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "3d_pink_display_box",
+      "type": "static",
+      "type_reasoning": "A highly stylized, 3D-rendered pink box acting as a literal 'stage' or container for the character. Its complex shading, depth, and structural details make it a graphical background element rather than a simple code container.",
+      "bbox": [
+        0.03,
+        0.05,
+        0.94,
+        0.57
+      ],
+      "z_index": 0,
+      "description": "A 3D-rendered pink display box with inner walls, a floor, and a decorative top border with indentations.",
+      "extraction_prompt": "Extract the 3D-rendered pink display box structure, including its side walls, floor, and top border, but remove the character and floating tags inside it.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "arch_backdrop_halo",
+      "type": "static",
+      "type_reasoning": "A decorative arch line and subtle glow behind the character, acting as a secondary backdrop inside the 3D box to highlight the subject.",
+      "bbox": [
+        0.17,
+        0.19,
+        0.66,
+        0.31
+      ],
+      "z_index": 1,
+      "description": "A white arch line and subtle pink halo behind the 3D character inside the box.",
+      "extraction_prompt": "Extract the white arch line and the subtle glowing halo inside the box, removing the character in front of it.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "bottom_white_card_background",
+      "type": "code",
+      "type_reasoning": "A large, standard white rounded rectangle container at the bottom that holds the list of products. It acts as a background for the content but is structurally simple enough to be built with CSS.",
+      "bbox": [
+        0.04,
+        0.63,
+        0.92,
+        0.37
+      ],
+      "z_index": 0,
+      "description": "A large white container with rounded corners at the bottom of the screen, serving as a background for the product list.",
+      "shape_spec": "Rectangle with rounded top-left, top-right, bottom-left, bottom-right corners (e.g., border-radius: 24px)",
+      "material_spec": "Solid white background (#FFFFFF) with a subtle shadow or inner glow.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

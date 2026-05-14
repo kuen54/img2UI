@@ -1,0 +1,157 @@
+{
+  "elements": [
+    {
+      "entity_name": "3d_character_hero",
+      "type": "static",
+      "type_reasoning": "This is a main 3D rendered character illustration serving as the central visual hero of the page.",
+      "bbox": [
+        0.27,
+        0.22,
+        0.46,
+        0.28
+      ],
+      "z_index": 2,
+      "description": "3D rendered character with a white cloud-like head, large eyes, wearing a puffy blue jacket and beige boots.",
+      "extraction_prompt": "Extract the 3D character with a cloud head wearing a blue jacket, keeping the background transparent.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "stylized_super_badge",
+      "type": "static",
+      "type_reasoning": "A highly stylized, slanted neon-pink badge with the text 'SUPER', designed as a graphic rather than standard typography.",
+      "bbox": [
+        0.71,
+        0.11,
+        0.16,
+        0.06
+      ],
+      "z_index": 3,
+      "description": "Pink neon stylized badge with 'SUPER' written inside an outlined bubble shape, angled slightly.",
+      "extraction_prompt": "Extract the pink neon stylized 'SUPER' badge.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "stylized_title_text",
+      "type": "static",
+      "type_reasoning": "Main focal title '珍牛马' flanked by decorative diamond sparkles. The specific typography and layout act as a visual graphic.",
+      "bbox": [
+        0.29,
+        0.14,
+        0.42,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Dark burgundy text reading '珍牛马' with small pink diamond stars on the left and right.",
+      "extraction_prompt": "Extract the stylized text '珍牛马' and its surrounding diamond sparkles.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "feature_tag_left",
+      "type": "static",
+      "type_reasoning": "Stylized pill-shaped tag with pink gradient outline, an icon, and decorative typography. The shape and styling make it a self-contained graphic.",
+      "bbox": [
+        0.07,
+        0.27,
+        0.2,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Pill-shaped badge with a pink outline, containing a small cup icon and the text '黑糖珍珠'.",
+      "extraction_prompt": "Extract the pill-shaped badge with text '黑糖珍珠' and a small cup icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "feature_tag_top_right",
+      "type": "static",
+      "type_reasoning": "Stylized pill-shaped tag with pink gradient outline, an icon, and decorative typography.",
+      "bbox": [
+        0.7,
+        0.21,
+        0.21,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Pill-shaped badge with a pink outline, containing the text 'Q弹厚乳' and a small cup icon.",
+      "extraction_prompt": "Extract the pill-shaped badge with text 'Q弹厚乳' and a small cup icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "feature_tag_bottom_right",
+      "type": "static",
+      "type_reasoning": "Stylized pill-shaped tag with pink gradient outline, an icon, and decorative typography.",
+      "bbox": [
+        0.65,
+        0.38,
+        0.27,
+        0.04
+      ],
+      "z_index": 3,
+      "description": "Pill-shaped badge with a pink outline, containing the text '经典奶茶系' and a small cup icon.",
+      "extraction_prompt": "Extract the pill-shaped badge with text '经典奶茶系' and a small cup icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "calligraphic_seal_badge",
+      "type": "static",
+      "type_reasoning": "A decorative seal/stamp graphic with calligraphic Chinese characters acting as an icon/badge.",
+      "bbox": [
+        0.1,
+        0.5,
+        0.17,
+        0.07
+      ],
+      "z_index": 3,
+      "description": "A stylized, slightly tilted pink seal/stamp with the Chinese characters '解签'.",
+      "extraction_prompt": "Extract the stylized pink seal badge containing the characters '解签'.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "product_image_1",
+      "type": "static",
+      "type_reasoning": "A photographic product image of a milk tea cup.",
+      "bbox": [
+        0.08,
+        0.7,
+        0.24,
+        0.12
+      ],
+      "z_index": 3,
+      "description": "Image of a milk tea cup with boba pearls at the bottom and scattered around the base.",
+      "extraction_prompt": "Extract the image of the milk tea cup with boba pearls.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "product_image_2",
+      "type": "static",
+      "type_reasoning": "A photographic product image of a milk tea cup.",
+      "bbox": [
+        0.08,
+        0.84,
+        0.24,
+        0.12
+      ],
+      "z_index": 3,
+      "description": "Image of a milk tea cup with boba pearls at the bottom and scattered around the base.",
+      "extraction_prompt": "Extract the image of the milk tea cup with boba pearls.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

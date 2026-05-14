@@ -1,0 +1,211 @@
+{
+  "elements": [
+    {
+      "entity_name": "left_diamond_decoration",
+      "type": "static",
+      "type_reasoning": "Small decorative diamond shape next to the title.",
+      "bbox": [
+        0.3,
+        0.15,
+        0.04,
+        0.03
+      ],
+      "z_index": 2,
+      "description": "A small pink, glowing diamond icon to the left of the main title.",
+      "extraction_prompt": "Extract the small pink glowing diamond decoration.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "right_diamond_decoration",
+      "type": "static",
+      "type_reasoning": "Small decorative diamond shape next to the title.",
+      "bbox": [
+        0.66,
+        0.15,
+        0.04,
+        0.03
+      ],
+      "z_index": 2,
+      "description": "A small pink, glowing diamond icon to the right of the main title.",
+      "extraction_prompt": "Extract the small pink glowing diamond decoration.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "super_badge",
+      "type": "static",
+      "type_reasoning": "Stylized badge with graphic text and outline, acting as a visual decoration.",
+      "bbox": [
+        0.69,
+        0.1,
+        0.19,
+        0.07
+      ],
+      "z_index": 3,
+      "description": "A decorative 'SUPER' sticker with a double outline and stylized text, tilted slightly.",
+      "extraction_prompt": "Extract the 'SUPER' sticker badge with its outlines.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "callout_chip_1",
+      "type": "static",
+      "type_reasoning": "Stylized pill-shaped chip containing an icon and text, with a visual connection line.",
+      "bbox": [
+        0.06,
+        0.26,
+        0.23,
+        0.05
+      ],
+      "z_index": 3,
+      "description": "A white pill-shaped callout with a pink outline, containing a small cup icon and the text '黑糖珍珠'.",
+      "extraction_prompt": "Extract the white pill-shaped callout chip with the cup icon, text '黑糖珍珠', and pink outline.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "callout_chip_2",
+      "type": "static",
+      "type_reasoning": "Stylized pill-shaped chip containing an icon and text, with a visual connection line.",
+      "bbox": [
+        0.7,
+        0.2,
+        0.21,
+        0.05
+      ],
+      "z_index": 3,
+      "description": "A white pill-shaped callout with a pink outline, containing text 'Q弹厚乳' and a small cup icon.",
+      "extraction_prompt": "Extract the white pill-shaped callout chip with the text 'Q弹厚乳', cup icon, and pink outline.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "callout_chip_3",
+      "type": "static",
+      "type_reasoning": "Stylized pill-shaped chip containing an icon and text, with a visual connection line.",
+      "bbox": [
+        0.64,
+        0.37,
+        0.28,
+        0.05
+      ],
+      "z_index": 3,
+      "description": "A white pill-shaped callout with a pink outline, containing text '经典奶茶系' and a small cup icon.",
+      "extraction_prompt": "Extract the white pill-shaped callout chip with the text '经典奶茶系', cup icon, and pink outline.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "seal_stamp",
+      "type": "static",
+      "type_reasoning": "A decorative, calligraphic seal/stamp element.",
+      "bbox": [
+        0.08,
+        0.51,
+        0.2,
+        0.06
+      ],
+      "z_index": 2,
+      "description": "A stylised graphic seal with Chinese characters '解签' and decorative sparkles.",
+      "extraction_prompt": "Extract the decorative graphic seal containing the characters '解签'.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "connecting_ring_left",
+      "type": "static",
+      "type_reasoning": "A 3D rendered ring visually connecting the upper and lower sections.",
+      "bbox": [
+        0.13,
+        0.59,
+        0.03,
+        0.06
+      ],
+      "z_index": 4,
+      "description": "A 3D pink ring connecting the top container to the bottom card.",
+      "extraction_prompt": "Extract the small 3D pink connecting ring.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "connecting_ring_right",
+      "type": "static",
+      "type_reasoning": "A 3D rendered ring visually connecting the upper and lower sections.",
+      "bbox": [
+        0.83,
+        0.59,
+        0.03,
+        0.06
+      ],
+      "z_index": 4,
+      "description": "A 3D pink ring connecting the top container to the bottom card.",
+      "extraction_prompt": "Extract the small 3D pink connecting ring.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "auto_receive_tag",
+      "type": "code",
+      "type_reasoning": "Simple text label with a background color and rounded corners.",
+      "bbox": [
+        0.36,
+        0.65,
+        0.22,
+        0.03
+      ],
+      "z_index": 2,
+      "description": "A small light pink tag with text '购买后自动领取'.",
+      "shape_spec": "border-radius: 4px",
+      "material_spec": "background-color: #FFF0F5; color: #FF69B4",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "collectible_tag_1",
+      "type": "code",
+      "type_reasoning": "Simple text label with a background color and rounded corners.",
+      "bbox": [
+        0.64,
+        0.78,
+        0.26,
+        0.03
+      ],
+      "z_index": 2,
+      "description": "A small light pink tag with text '完单可收藏潮玩' on the first item.",
+      "shape_spec": "border-radius: 12px",
+      "material_spec": "background-color: #FFF0F5; color: #FF69B4",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "collectible_tag_2",
+      "type": "code",
+      "type_reasoning": "Simple text label with a background color and rounded corners.",
+      "bbox": [
+        0.64,
+        0.93,
+        0.26,
+        0.03
+      ],
+      "z_index": 2,
+      "description": "A small light pink tag with text '完单可收藏潮玩' on the second item.",
+      "shape_spec": "border-radius: 12px",
+      "material_spec": "background-color: #FFF0F5; color: #FF69B4",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}
