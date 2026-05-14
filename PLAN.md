@@ -526,6 +526,8 @@ git commit -m "feat(ui): 顶层 layout + Sidebar 导航"
 
 **目的:** Settings 页能 CRUD 3 类 provider(mllm / image_gen / cdn),Test Connection 工作,API key 双向 mask
 
+**实施级子 plan**:[`docs/plans/phase-2-provider-config.md`](./docs/plans/phase-2-provider-config.md)(Task 2.1-2.9 完整 checkbox / 代码片段 / 验证步骤,**实施时按子 plan 走**)
+
 **Files to create/modify:**
 
 ```
