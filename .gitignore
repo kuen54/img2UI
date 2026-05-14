@@ -35,6 +35,8 @@ Thumbs.db
 # Playwright artifacts(临时验证产物,不进版本库)
 .playwright-mcp/
 phase-*-final.png
+asset-review*.png
+element-review*.png
 
 # Editor
 .vscode/
