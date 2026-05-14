@@ -3,6 +3,9 @@
 
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
+import { Readable } from 'node:stream'
+
+import archiver from 'archiver'
 
 import type {
   Asset,
@@ -358,4 +361,91 @@ export async function writeExportFolder(
   await fs.writeFile(path.join(pageDir, 'spec.md'), renderSpecMd(payload))
 
   return { path: projectDir }
+}
+
+// =============================================================================
+// streamExportZip — 流式打包,不缓存到内存
+// =============================================================================
+
+export function streamExportZip(payload: ExportPayload): {
+  stream: ReadableStream<Uint8Array>
+  filename: string
+} {
+  const archive = archiver('zip', { zlib: { level: 6 } })
+  const projectSlug = slug(payload.project.name)
+  const pageSlug = slug(payload.page.name)
+  const filename = `${projectSlug}-${pageSlug}.zip`
+
+  // 添加文件 — archiver 边添加边写入 stream,finalize() 不能 await(否则全缓存)
+  // config.json
+  archive.append(JSON.stringify(renderConfigJson(payload), null, 2), {
+    name: `${projectSlug}/config.json`,
+  })
+  // meta.json
+  archive.append(JSON.stringify(renderMetaJson(payload), null, 2), {
+    name: `${projectSlug}/pages/${pageSlug}/meta.json`,
+  })
+  // state JSON × N + raw/original-{name}.png
+  const usedStateNames = new Set<string>()
+  for (const state of payload.states) {
+    let name = slug(state.name)
+    let i = 2
+    while (usedStateNames.has(name)) name = `${slug(state.name)}-${i++}`
+    usedStateNames.add(name)
+    archive.append(
+      JSON.stringify(
+        renderStateJson(state, payload.page, payload.elements, payload.assets),
+        null,
+        2,
+      ),
+      { name: `${projectSlug}/pages/${pageSlug}/states/${name}.json` },
+    )
+    const rawSrc = path.join(DATA_ROOT, 'raw', `${state.id}.png`)
+    archive.file(rawSrc, {
+      name: `${projectSlug}/pages/${pageSlug}/raw/original-${name}.png`,
+    })
+  }
+  // manifest.json + asset PNGs
+  archive.append(
+    JSON.stringify(renderManifestJson(payload.assets, payload.elements), null, 2),
+    { name: `${projectSlug}/pages/${pageSlug}/assets/manifest.json` },
+  )
+  for (const a of payload.assets) {
+    archive.file(path.join(DATA_ROOT, 'assets-bin', `${a.id}.png`), {
+      name: `${projectSlug}/pages/${pageSlug}/assets/${a.id}.png`,
+    })
+  }
+  // raw/extracted.png
+  const canonicalState = payload.states.find(
+    (s) => s.id === payload.page.canonical_state_id,
+  )
+  if (canonicalState) {
+    archive.file(path.join(DATA_ROOT, 'keyed', `${canonicalState.id}.png`), {
+      name: `${projectSlug}/pages/${pageSlug}/raw/extracted.png`,
+    })
+  }
+  // spec.md
+  archive.append(renderSpecMd(payload), {
+    name: `${projectSlug}/pages/${pageSlug}/spec.md`,
+  })
+
+  // 缺文件 archiver 会发 'warning' 事件(ENOENT),不让它崩
+  archive.on('warning', (err) => {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // 真错误,abort 流(消费者看到 stream 早结束)
+      archive.abort()
+    }
+  })
+  archive.on('error', () => {
+    archive.abort()
+  })
+
+  // fire-and-forget
+  void archive.finalize()
+
+  // Node Readable → Web ReadableStream
+  return {
+    stream: Readable.toWeb(archive) as ReadableStream<Uint8Array>,
+    filename,
+  }
 }

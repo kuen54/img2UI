@@ -14,6 +14,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
     "@base-ui/react": "^1.4.1",
+    "archiver": "^7.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^7.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

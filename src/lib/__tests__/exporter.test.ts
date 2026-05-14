@@ -11,6 +11,7 @@ import {
   renderManifestJson,
   renderSpecMd,
   writeExportFolder,
+  streamExportZip,
   type ExportPayload,
 } from '@/lib/exporter'
 import type { Asset, Element, Page, Project, ProviderConfig, State } from '@/lib/types'
@@ -475,5 +476,36 @@ describe('renderMetaJson', () => {
     expect(m.states).toHaveLength(2)
     expect(m.states[0]!.is_canonical).toBe(true)
     expect(m.states[1]!.is_canonical).toBe(false)
+  })
+})
+
+// =============================================================================
+// streamExportZip 烟测(消费 stream → 检查 zip 信令头)
+// =============================================================================
+
+describe('streamExportZip', () => {
+  it('返回 ReadableStream,filename 由 slug 拼出,zip 头正确(PK\\x03\\x04)', async () => {
+    const { stream, filename } = streamExportZip(makePayload())
+    expect(filename).toBe('奶茶盲盒活动页-抽中页.zip')
+
+    // 读全 stream,确认有 zip 数据 + 信令头
+    const reader = stream.getReader()
+    const chunks: Uint8Array[] = []
+    let totalLen = 0
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value) {
+        chunks.push(value)
+        totalLen += value.byteLength
+      }
+    }
+    expect(totalLen).toBeGreaterThan(0)
+    const head = chunks[0]!
+    // ZIP 信令头 PK\x03\x04
+    expect(head[0]).toBe(0x50)
+    expect(head[1]).toBe(0x4b)
+    expect(head[2]).toBe(0x03)
+    expect(head[3]).toBe(0x04)
   })
 })
