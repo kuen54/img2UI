@@ -1,0 +1,219 @@
+{
+  "image": "/Users/lijiakun/Documents/img2UI/poc/inputs/canonical-512.png",
+  "routes": {
+    "background": {
+      "ok": true,
+      "elapsed_s": 8.5,
+      "element_count": 1,
+      "elements": [
+        {
+          "entity_name": "full_page_pink_gradient_background",
+          "type": "static",
+          "bbox": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ]
+        }
+      ]
+    },
+    "button": {
+      "ok": true,
+      "elapsed_s": 12.2,
+      "element_count": 0,
+      "elements": []
+    },
+    "subject": {
+      "ok": true,
+      "elapsed_s": 21.2,
+      "element_count": 4,
+      "elements": [
+        {
+          "entity_name": "Main Character Illustration",
+          "type": "static",
+          "bbox": [
+            0.26,
+            0.21,
+            0.48,
+            0.3
+          ]
+        },
+        {
+          "entity_name": "Artistic Title",
+          "type": "static",
+          "bbox": [
+            0.28,
+            0.14,
+            0.44,
+            0.05
+          ]
+        },
+        {
+          "entity_name": "Product Image 1",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.69,
+            0.25,
+            0.12
+          ]
+        },
+        {
+          "entity_name": "Product Image 2",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.83,
+            0.25,
+            0.12
+          ]
+        }
+      ]
+    },
+    "container": {
+      "ok": true,
+      "elapsed_s": 26.9,
+      "element_count": 2,
+      "elements": [
+        {
+          "entity_name": "Pink Display Box Container",
+          "type": "code",
+          "bbox": [
+            0.033,
+            0.049,
+            0.934,
+            0.57
+          ]
+        },
+        {
+          "entity_name": "White List Container Card",
+          "type": "code",
+          "bbox": [
+            0.033,
+            0.634,
+            0.934,
+            0.366
+          ]
+        }
+      ]
+    },
+    "decoration": {
+      "ok": true,
+      "elapsed_s": 31.7,
+      "element_count": 9,
+      "elements": [
+        {
+          "entity_name": "super_badge",
+          "type": "static",
+          "bbox": [
+            0.69,
+            0.11,
+            0.2,
+            0.08
+          ]
+        },
+        {
+          "entity_name": "title_sparkle_left",
+          "type": "static",
+          "bbox": [
+            0.3,
+            0.15,
+            0.04,
+            0.03
+          ]
+        },
+        {
+          "entity_name": "title_sparkle_right",
+          "type": "static",
+          "bbox": [
+            0.65,
+            0.15,
+            0.04,
+            0.03
+          ]
+        },
+        {
+          "entity_name": "floating_tag_black_sugar",
+          "type": "static",
+          "bbox": [
+            0.07,
+            0.27,
+            0.23,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "floating_tag_q_milk",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.21,
+            0.21,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "floating_tag_classic_tea",
+          "type": "static",
+          "bbox": [
+            0.66,
+            0.38,
+            0.25,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "fortune_stamp",
+          "type": "static",
+          "bbox": [
+            0.1,
+            0.5,
+            0.19,
+            0.07
+          ]
+        },
+        {
+          "entity_name": "connecting_ring_left",
+          "type": "static",
+          "bbox": [
+            0.13,
+            0.6,
+            0.03,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "connecting_ring_right",
+          "type": "static",
+          "bbox": [
+            0.84,
+            0.6,
+            0.03,
+            0.06
+          ]
+        }
+      ]
+    }
+  },
+  "cross_route_duplicates": [
+    {
+      "iou": 0.53,
+      "a": {
+        "category": "background",
+        "name": "full_page_pink_gradient_background"
+      },
+      "b": {
+        "category": "container",
+        "name": "Pink Display Box Container"
+      }
+    }
+  ],
+  "total_elements_across_routes": 16,
+  "unique_elements_estimated": 15,
+  "baseline": {
+    "path": "/Users/lijiakun/Documents/img2UI/poc/outputs/v9b-pass1.json",
+    "element_count": 36,
+    "v12_recall_ratio": 0.42
+  }
+}

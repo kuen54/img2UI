@@ -1,0 +1,72 @@
+{
+  "elements": [
+    {
+      "entity_name": "Main Character Illustration",
+      "type": "static",
+      "type_reasoning": "A 3D rendered character that serves as the main visual subject and prize of the blind box page.",
+      "bbox": [
+        0.26,
+        0.21,
+        0.48,
+        0.3
+      ],
+      "z_index": 10,
+      "description": "3D character with a cloud-like head, big eyes, wearing a blue puffy jacket and brown boots.",
+      "extraction_prompt": "Extract the 3D character with a white cloud-like head and a blue puffy jacket standing in the center.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Artistic Title",
+      "type": "static",
+      "type_reasoning": "Highly stylized artistic typography serving as the main event title.",
+      "bbox": [
+        0.28,
+        0.14,
+        0.44,
+        0.05
+      ],
+      "z_index": 10,
+      "description": "Stylized dark purple text '珍牛马' with decorative sparkles on both sides.",
+      "extraction_prompt": "Extract the stylized text '珍牛马' along with its surrounding decorative diamond-shaped sparkles.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Product Image 1",
+      "type": "static",
+      "type_reasoning": "Product photography showing the physical item, categorized as a visual subject.",
+      "bbox": [
+        0.08,
+        0.69,
+        0.25,
+        0.12
+      ],
+      "z_index": 10,
+      "description": "Image of a milk tea cup with pearls at the bottom and some loose pearls around the base.",
+      "extraction_prompt": "Extract the product image of the milk tea cup with tapioca pearls scattered at its base on the left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "Product Image 2",
+      "type": "static",
+      "type_reasoning": "Product photography showing the physical item, categorized as a visual subject.",
+      "bbox": [
+        0.08,
+        0.83,
+        0.25,
+        0.12
+      ],
+      "z_index": 10,
+      "description": "Image of a milk tea cup with pearls at the bottom and some loose pearls around the base.",
+      "extraction_prompt": "Extract the product image of the milk tea cup with tapioca pearls scattered at its base on the left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

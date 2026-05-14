@@ -1,0 +1,21 @@
+{
+  "elements": [
+    {
+      "entity_name": "full_page_pink_gradient_background",
+      "type": "static",
+      "type_reasoning": "The underlying visual environment is a complex pink gradient with light beams, subtle starry speckles, and atmospheric lighting that cannot be purely reproduced with CSS gradients alone. It serves as the foundation for the entire scene.",
+      "bbox": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "z_index": 0,
+      "description": "Full page background with a soft pink gradient, glowing light beams emanating from the top, and scattered subtle sparkle particles.",
+      "extraction_prompt": "Extract the full page pink gradient background with glowing light beams and subtle starry sparkles, removing all foreground characters, text, cards, and UI elements.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "code": 200,
+  "data": {
+    "actual_time": 746,
+    "completed": 1778750178,
+    "cost": 0.179244,
+    "created": 1778749432,
+    "estimated_time": 60,
+    "id": "task_01KRJVMM8P8EYDD89V2D6JS8AK",
+    "progress": 100,
+    "result": {
+      "images": [
+        {
+          "expires_at": 1778836578,
+          "url": [
+            "https://upload.apimart.ai/f/image/9998221249823171-2a91427a-1e7c-4382-aa57-032efce68ef2-gpt_image_2_official_task_01KRJWBFHWPS7JY4KFMA9KQ2MZ_0.png"
+          ]
+        }
+      ]
+    },
+    "status": "completed"
+  }
+}

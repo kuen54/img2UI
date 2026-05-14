@@ -1,0 +1,157 @@
+{
+  "elements": [
+    {
+      "entity_name": "super_badge",
+      "type": "static",
+      "type_reasoning": "A purely decorative stylized sticker badge with 'SUPER' text and glow effects, acting as a visual embellishment rather than structural content.",
+      "bbox": [
+        0.69,
+        0.11,
+        0.2,
+        0.08
+      ],
+      "z_index": 10,
+      "description": "A stylized pink and purple glowing sticker badge with the word 'SUPER'.",
+      "extraction_prompt": "Extract the glowing pink and purple sticker badge with the text 'SUPER'.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "title_sparkle_left",
+      "type": "static",
+      "type_reasoning": "A small decorative four-pointed star graphic used to embellish the title.",
+      "bbox": [
+        0.3,
+        0.15,
+        0.04,
+        0.03
+      ],
+      "z_index": 5,
+      "description": "Small pink four-pointed star sparkle to the left of the main title.",
+      "extraction_prompt": "Extract the small pink four-pointed star sparkle graphic.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "title_sparkle_right",
+      "type": "static",
+      "type_reasoning": "A small decorative four-pointed star graphic used to embellish the title.",
+      "bbox": [
+        0.65,
+        0.15,
+        0.04,
+        0.03
+      ],
+      "z_index": 5,
+      "description": "Small pink four-pointed star sparkle to the right of the main title.",
+      "extraction_prompt": "Extract the small pink four-pointed star sparkle graphic.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "floating_tag_black_sugar",
+      "type": "static",
+      "type_reasoning": "A stylized, decorative floating chip with text '黑糖珍珠' and a small milk tea icon. The visual gradient and custom bubble shape make it a static decorative asset.",
+      "bbox": [
+        0.07,
+        0.27,
+        0.23,
+        0.04
+      ],
+      "z_index": 10,
+      "description": "Pink stylized floating bubble tag with icon and text '黑糖珍珠'.",
+      "extraction_prompt": "Extract the pink floating bubble tag with the milk tea icon and text '黑糖珍珠'.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "floating_tag_q_milk",
+      "type": "static",
+      "type_reasoning": "A stylized, decorative floating chip with text 'Q弹厚乳' and a small milk tea icon. The visual gradient and custom bubble shape make it a static decorative asset.",
+      "bbox": [
+        0.7,
+        0.21,
+        0.21,
+        0.04
+      ],
+      "z_index": 10,
+      "description": "Pink stylized floating bubble tag with text 'Q弹厚乳' and a milk tea icon.",
+      "extraction_prompt": "Extract the pink floating bubble tag with the text 'Q弹厚乳' and milk tea icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "floating_tag_classic_tea",
+      "type": "static",
+      "type_reasoning": "A stylized, decorative floating chip with text '经典奶茶系' and a small milk tea icon. The visual gradient and custom bubble shape make it a static decorative asset.",
+      "bbox": [
+        0.66,
+        0.38,
+        0.25,
+        0.04
+      ],
+      "z_index": 10,
+      "description": "Pink stylized floating bubble tag with text '经典奶茶系' and a milk tea icon.",
+      "extraction_prompt": "Extract the pink floating bubble tag with the text '经典奶茶系' and milk tea icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "fortune_stamp",
+      "type": "static",
+      "type_reasoning": "A decorative calligraphic stamp/seal reading '解签', functioning as a stylized visual asset rather than plain text.",
+      "bbox": [
+        0.1,
+        0.5,
+        0.19,
+        0.07
+      ],
+      "z_index": 10,
+      "description": "A decorative pink calligraphic stamp graphic with the text '解签'.",
+      "extraction_prompt": "Extract the pink decorative calligraphic stamp graphic containing the characters '解签'.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "connecting_ring_left",
+      "type": "static",
+      "type_reasoning": "A small decorative 3D-like connecting ring linking the top display box to the bottom card.",
+      "bbox": [
+        0.13,
+        0.6,
+        0.03,
+        0.06
+      ],
+      "z_index": 15,
+      "description": "A small metallic-looking pink ring linking the top and bottom containers on the left side.",
+      "extraction_prompt": "Extract the small pink connecting ring graphic on the left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "connecting_ring_right",
+      "type": "static",
+      "type_reasoning": "A small decorative 3D-like connecting ring linking the top display box to the bottom card.",
+      "bbox": [
+        0.84,
+        0.6,
+        0.03,
+        0.06
+      ],
+      "z_index": 15,
+      "description": "A small metallic-looking pink ring linking the top and bottom containers on the right side.",
+      "extraction_prompt": "Extract the small pink connecting ring graphic on the right.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "elements": [
+    {
+      "entity_name": "Pink Display Box Container",
+      "type": "code",
+      "type_reasoning": "A complex, custom-shaped 3D container holding the main character, titles, and tags. It defines the visual boundary for the top hero section.",
+      "bbox": [
+        0.033,
+        0.049,
+        0.934,
+        0.57
+      ],
+      "z_index": 1,
+      "description": "The main top pink showcase/box with 3D inner volume, stylized top flaps, and a bottom shelf area.",
+      "shape_spec": "Complex irregular shape resembling an opened box or stage, with top castle-like flaps and a folded bottom ledge.",
+      "material_spec": "Pink gradients, inner shadow for 3D depth, soft highlights.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "White List Container Card",
+      "type": "code",
+      "type_reasoning": "A large rounded panel acting as the structural container for the list of product items at the bottom.",
+      "bbox": [
+        0.033,
+        0.634,
+        0.934,
+        0.366
+      ],
+      "z_index": 1,
+      "description": "The bottom white card with rounded corners hanging from the top box, containing the drink recommendations.",
+      "shape_spec": "Large rounded rectangle.",
+      "material_spec": "Solid white background with a very subtle drop shadow.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}
