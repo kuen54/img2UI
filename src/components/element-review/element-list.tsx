@@ -131,7 +131,7 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
           手动添加元素(在 canvas 空白区拖)
         </Button>
         <p className="text-xs text-muted-foreground mt-2">
-          {states.length > 1 && `当前 page 有 ${states.length} 个状态。同 entity 跨状态共享 id。`}
+          {states.length > 1 && `当前 page 有 ${states.length} 张设计稿。同 entity 跨状态共享 id。`}
         </p>
       </div>
     </div>

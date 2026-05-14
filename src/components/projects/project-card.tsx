@@ -25,7 +25,7 @@ export function ProjectCard({ project, onDeleted }: ProjectCardProps) {
     e.stopPropagation()
     const ok = await confirm({
       title: `删除项目「${project.name}」?`,
-      description: '会级联删除该项目下所有页面、状态图、元素和资产数据。不可撤销。',
+      description: '会级联删除该项目下所有页面、设计稿、元素和资产数据。不可撤销。',
       confirmText: '删除',
       destructive: true,
     })
@@ -44,13 +44,13 @@ export function ProjectCard({ project, onDeleted }: ProjectCardProps) {
   return (
     <Link href={`/projects/${project.id}`} className="block">
       <Card className="hover:bg-muted/30 transition-colors cursor-pointer relative h-full overflow-hidden">
-        <div className="aspect-square bg-muted/40 flex items-center justify-center">
+        <div className="aspect-[4/3] bg-muted/40 flex items-center justify-center">
           {showImg ? (
             // eslint-disable-next-line @next/next/no-img-element -- 服务于 /api/thumbs 的小尺寸缩略图,不走 next/image 优化
             <img
               src={project.sample_thumbnail_url}
               alt={project.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               onError={() => setImgFailed(true)}
             />
           ) : (

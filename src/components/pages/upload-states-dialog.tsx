@@ -123,9 +123,9 @@ export function UploadStatesDialog({
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>上传状态图</DialogTitle>
+          <DialogTitle>上传设计稿</DialogTitle>
           <DialogDescription>
-            选 N 张 PNG 设计稿。每张填名字(canonical / hover / empty 等),指定其中一张为 canonical(主参考)。
+            选 N 张 PNG 设计稿。每张填一个交互状态名(canonical / hover / empty 等),指定其中一张为 canonical(主参考)。
           </DialogDescription>
         </DialogHeader>
 

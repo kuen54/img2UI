@@ -104,22 +104,22 @@ export default function PageDetailPage({ params }: PageProps) {
       {/* States 区 */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">状态图({states.length})</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">设计稿({states.length})</h2>
           <Button onClick={() => setUploadOpen(true)} size="sm">
             <Plus className="size-3.5 mr-1" />
-            上传状态图
+            上传设计稿
           </Button>
         </div>
 
         {states.length === 0 ? (
           <EmptyState
             icon={ImageIcon}
-            title="暂无状态图"
-            description="上传 1-N 张同页面不同状态的设计稿(canonical / hover / empty 等),系统会自动跑 Pass 1 布局分析"
+            title="暂无设计稿"
+            description="上传 1-N 张同页面不同交互状态的设计稿(canonical / hover / empty 等),系统会自动跑 Pass 1 布局分析"
             action={
               <Button onClick={() => setUploadOpen(true)}>
                 <Plus className="size-4 mr-1" />
-                上传状态图
+                上传设计稿
               </Button>
             }
           />

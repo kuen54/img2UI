@@ -57,7 +57,7 @@ export function NewPageDialog({ projectId, open, onOpenChange, onCreated }: NewP
       <DialogContent>
         <DialogHeader>
           <DialogTitle>新建页面</DialogTitle>
-          <DialogDescription>页面对应一个独立的 UI 单元(路由)。后续上传 N 张状态图(canonical / hover / empty 等)。</DialogDescription>
+          <DialogDescription>页面对应一个独立的 UI 单元(路由)。后续上传 N 张设计稿(canonical / hover / empty 等不同交互状态)。</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">

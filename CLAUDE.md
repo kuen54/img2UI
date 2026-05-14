@@ -4,6 +4,15 @@
 
 **当前阶段**:v0.1.x MVP-α 已上线 + v0.2 多路 Pass + 拖框生效化已完成(Phase 8a-8e 全部 merge)。CHANGELOG `[Unreleased]` 攒 v0.2 草稿待 tag。
 
+## 术语映射(2026-05-14 dogfood round 4 起锁定)
+
+| UI 中文 | 代码标识符 | 含义 |
+|---|---|---|
+| 设计稿 | `State` / `state` / `/api/states/*` / `data/states/` | 同一页面在某个交互状态(canonical / hover / empty 等)下的截图。每张设计稿 = 一个 State 实体 |
+| 状态(单独使用) | — | 仅指交互状态属性本身(canonical/hover/empty),如「出现在状态」「跨状态变化」 |
+
+**写新 UI 文案时:** 名词性的"那张图"统一用「设计稿」,**禁止**用「状态图」(易被误读为状态机图)。代码层 `State` 类型 / API 路径 / `data/states/` 目录**不动**——这是技术契约,与 evalyst 抄来的 `state.pipeline_status` 等字段语义保持稳定。文档里 `## 状态: canonical` / `## 跨状态变化` 等出现在 export spec.md 的 markdown,是 coding agent 消费契约,**不重命名**。
+
 ## 第一次进项目?读这两份
 
 | 我想了解... | 看这里 |

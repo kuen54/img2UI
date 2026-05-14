@@ -65,8 +65,8 @@ export function StateCard({ state, isCanonical, onDeleted, onRetried }: StateCar
 
   const handleDelete = async () => {
     const ok = await confirm({
-      title: `删除状态「${state.name}」?`,
-      description: isCanonical ? '这是 canonical 状态,删除后页面会失去主参考。' : '不可撤销。',
+      title: `删除「${state.name}」设计稿?`,
+      description: isCanonical ? '这是 canonical 设计稿,删除后页面会失去主参考。' : '不可撤销。',
       confirmText: '删除',
       destructive: true,
     })

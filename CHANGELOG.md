@@ -4,6 +4,16 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### dogfood round 4 — 用户实测后的 4 处 UX 卡点
+
+嘉锟实测 v0.2 / 0.1.1 后反馈的 4 处「乍看不影响功能,但持续干扰」的 UX 问题修复。无能力变化,纯打磨。
+
+- **缩略图清晰度 + 卡片占比**:`thumbnails.ts` 最长边 256 → 512(retina 1:1 显示);ProjectCard / PageCard `aspect-square` → `aspect-[4/3]`,`object-cover` → `object-contain`(设计稿不是照片,裁切反而损失信息)
+- **创建后跳转**:新建项目 → `/projects/{id}`、新建页面 → `/projects/{pid}/pages/{id}`,不再停在列表
+- **Pipeline stepper 加当前步骤 hint 行**:`PipelineStepper` 内部按 6 步状态推断「正在做什么 / 大概多久 / 完成后下一步」一行文案,running/info/success/failed 4 种 tone 配色
+- **术语「状态图」→「设计稿」**:UI 文案全替换(dialogs / cards / empty states / toasts)。`State` 类型 / `/api/states/*` 路径 / `data/states/` 目录**不动**(技术契约)。Export spec.md 里 `## 状态: canonical` / `## 跨状态变化` 的 markdown 也不动(coding agent 消费契约)。CLAUDE.md 顶部加术语映射表
+
+
 ### Added — Phase 8 v12 多路 Pass + 拖框生效化
 
 dogfood 反馈四件套(Pass 1/2 1-shot 不准 / 列表无缩略图 / chroma key 性能担忧 / 拖框无效)的定向修复。一套 v12 架构:Pass 1+2 都按 5 类 visual_category 并行,bbox crop 喂 Pass 2 当多参考图,**拖框终于生效**。

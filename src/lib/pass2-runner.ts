@@ -42,7 +42,7 @@ export async function runPass2(
     acquireLock(lockKey, `pass2-${Date.now()}`)
   } catch (e) {
     if (e instanceof RunLockConflictError) {
-      throw new Error('该状态正在跑 pipeline,稍候再试')
+      throw new Error('该设计稿正在跑 pipeline,稍候再试')
     }
     throw e
   }

@@ -19,7 +19,7 @@ async function makePng(width: number, height: number): Promise<Buffer> {
 }
 
 describe('thumbnails lib', () => {
-  it('generateThumbnail writes 256px PNG and returns path', async () => {
+  it('generateThumbnail writes 512px PNG and returns path', async () => {
     const src = await makePng(2000, 1500)
     const outPath = await generateThumbnail('page_test01', src)
 
@@ -28,21 +28,21 @@ describe('thumbnails lib', () => {
     expect(stat.isFile()).toBe(true)
 
     const meta = await sharp(outPath).metadata()
-    // longest edge ≤ 256
-    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(256)
-    // 2000:1500 = 4:3 → 256:192
-    expect(meta.width).toBe(256)
-    expect(meta.height).toBe(192)
+    // longest edge ≤ 512
+    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(512)
+    // 2000:1500 = 4:3 → 512:384
+    expect(meta.width).toBe(512)
+    expect(meta.height).toBe(384)
   })
 
-  it('output file < 50KB', async () => {
+  it('output file < 100KB', async () => {
     const src = await makePng(3000, 3000)
     const outPath = await generateThumbnail('page_size01', src)
     const stat = await fs.stat(outPath)
-    expect(stat.size).toBeLessThan(50 * 1024)
+    expect(stat.size).toBeLessThan(100 * 1024)
   })
 
-  it('does not enlarge images smaller than 256', async () => {
+  it('does not enlarge images smaller than 512', async () => {
     const src = await makePng(120, 100)
     const outPath = await generateThumbnail('page_small1', src)
     const meta = await sharp(outPath).metadata()
@@ -60,8 +60,8 @@ describe('thumbnails lib', () => {
     await generateThumbnail('page_dup0001', a)
     await generateThumbnail('page_dup0001', b)
     const meta = await sharp(thumbnailPathFor('page_dup0001')).metadata()
-    // second write should win (800:600 → 256:192)
-    expect(meta.width).toBe(256)
-    expect(meta.height).toBe(192)
+    // second write should win (800:600 → 512:384)
+    expect(meta.width).toBe(512)
+    expect(meta.height).toBe(384)
   })
 })
