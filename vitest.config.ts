@@ -4,6 +4,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['src/**/__tests__/**/*.test.ts'],
+    exclude: ['node_modules/**', 'e2e/**'],
     environment: 'node',
     // 多个测试文件共享 data/ 目录,afterEach 清理会互相干扰 → 串行跑
     fileParallelism: false,

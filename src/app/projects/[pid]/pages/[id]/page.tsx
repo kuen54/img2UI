@@ -164,6 +164,7 @@ export default function PageDetailPage({ params }: PageProps) {
                   // 同时刷新 page(canonical 可能被清)
                   void getPageApi(pageId).then(setPage).catch(() => {})
                 }}
+                onRetried={() => void loadAll()}
               />
             ))}
           </div>

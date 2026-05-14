@@ -19,7 +19,7 @@ import { acquireLock, releaseLock, RunLockConflictError } from '@/lib/run-lock'
 import { newElementId } from '@/lib/id'
 
 // LLM 输出 schema(SPEC § Pass 1 prompt 模板)
-type LlmElementOut = {
+export type LlmElementOut = {
   entity_name: string
   type: 'static' | 'code'
   type_reasoning?: string
@@ -116,7 +116,7 @@ export async function runPass1(stateId: string): Promise<Pass1Result> {
     }
 
     // 合并已有 Elements(cross-state by entity_name)
-    const merged = await mergeWithExisting(state, parsed.elements)
+    const merged = await mergeElements(state, parsed.elements)
     await saveElementsForPage(state.page_id, merged)
 
     // 收尾
@@ -189,7 +189,12 @@ function stripMarkdownJsonFence(content: string): string {
   return trimmed
 }
 
-async function mergeWithExisting(state: State, llmElements: LlmElementOut[]): Promise<Element[]> {
+// 合并 LLM 输出与已有 elements:跨状态对齐 + bbox 像素坐标 fallback 归一化
+// export 是为了单测覆盖(2026-05-14 dogfood 暴露的 bbox 像素坐标分支)
+export async function mergeElements(
+  state: State,
+  llmElements: LlmElementOut[],
+): Promise<Element[]> {
   const existing = await getElementsByPage(state.page_id)
   const now = new Date().toISOString()
 

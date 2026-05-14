@@ -242,12 +242,14 @@ export function ProviderCard({
         {/* Test Connection */}
         {!isNew && (
           <div className="pt-2">
-            <TestConnectionButton providerId={provider.id} disabled={hasUnsavedChanges} />
-            {hasUnsavedChanges && (
-              <p className="text-xs text-muted-foreground mt-1">
-                有未保存改动,请先点底部「保存」再测试连通。
-              </p>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <TestConnectionButton providerId={provider.id} disabled={hasUnsavedChanges} />
+              {hasUnsavedChanges && (
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ 有未保存改动,请先点底部「保存」再测试连通
+                </span>
+              )}
+            </div>
           </div>
         )}
         {isNew && (
