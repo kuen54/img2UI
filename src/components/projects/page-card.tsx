@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import Link from 'next/link'
 import { Trash2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,6 +19,7 @@ export type PageCardProps = {
 
 export function PageCard({ page, projectId, onDeleted }: PageCardProps) {
   const confirm = useConfirm()
+  const [imgFailed, setImgFailed] = React.useState(false)
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -38,9 +40,25 @@ export function PageCard({ page, projectId, onDeleted }: PageCardProps) {
     }
   }
 
+  const showImg = page.thumbnail_url && !imgFailed
+
   return (
     <Link href={`/projects/${projectId}/pages/${page.id}`} className="block">
-      <Card className="hover:bg-muted/30 transition-colors cursor-pointer h-full">
+      <Card className="hover:bg-muted/30 transition-colors cursor-pointer h-full overflow-hidden">
+        <div className="aspect-square bg-muted/40 flex items-center justify-center">
+          {showImg ? (
+            <img
+              src={page.thumbnail_url}
+              alt={page.name}
+              className="w-full h-full object-cover"
+              onError={() => setImgFailed(true)}
+            />
+          ) : (
+            <div data-testid="page-thumbnail-fallback" className="text-muted-foreground">
+              <FileText className="size-12" />
+            </div>
+          )}
+        </div>
         <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
           <div className="flex-1 min-w-0 space-y-1">
             <CardTitle className="text-base flex items-center gap-2">
