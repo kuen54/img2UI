@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useEffect, useState, useCallback, useRef } from 'react'
-import { Plus, Image as ImageIcon } from 'lucide-react'
+import { Plus, Image as ImageIcon, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element, Page, State } from '@/lib/types'
@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { StateCard } from '@/components/pages/state-card'
 import { UploadStatesDialog } from '@/components/pages/upload-states-dialog'
 import { PipelineStepper } from '@/components/pages/pipeline-stepper'
+import { AssetGrid } from '@/components/asset-review/asset-grid'
 
 type PageProps = { params: Promise<{ pid: string; id: string }> }
 
@@ -88,7 +89,7 @@ export default function PageDetailPage({ params }: PageProps) {
         )}
       </div>
 
-      {/* Pipeline 进度(stepper 步骤可点击,右上重复按钮已删除) */}
+      {/* Pipeline 进度(stepper 步骤可点击) */}
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">Pipeline 进度</h2>
         <PipelineStepper
@@ -101,21 +102,15 @@ export default function PageDetailPage({ params }: PageProps) {
         <p className="text-xs text-muted-foreground">提示:点击已点亮的步骤可直接跳转。</p>
       </section>
 
-      {/* States 区 */}
+      {/* 设计稿区(只标题 + grid,不再有显眼的「上传设计稿」按钮 — 新建页面已合并上传;补传走 EmptyState 兜底) */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">设计稿({states.length})</h2>
-          <Button onClick={() => setUploadOpen(true)} size="sm">
-            <Plus className="size-3.5 mr-1" />
-            上传设计稿
-          </Button>
-        </div>
+        <h2 className="text-sm font-medium text-muted-foreground">设计稿({states.length})</h2>
 
         {states.length === 0 ? (
           <EmptyState
             icon={ImageIcon}
             title="暂无设计稿"
-            description="上传 1-N 张同页面不同交互状态的设计稿(canonical / hover / empty 等),系统会自动跑 Pass 1 布局分析"
+            description="新建页面时未上传图片。点下方按钮补传 1-N 张同页面不同交互状态的设计稿(canonical / hover / empty 等),系统会自动跑 Pass 1 布局分析"
             action={
               <Button onClick={() => setUploadOpen(true)}>
                 <Plus className="size-4 mr-1" />
@@ -132,7 +127,6 @@ export default function PageDetailPage({ params }: PageProps) {
                 isCanonical={s.id === canonicalId}
                 onDeleted={(id) => {
                   setStates((curr) => curr.filter((x) => x.id !== id))
-                  // 同时刷新 page(canonical 可能被清)
                   void getPageApi(pageId).then(setPage).catch(() => {})
                 }}
                 onRetried={() => void loadAll()}
@@ -142,13 +136,29 @@ export default function PageDetailPage({ params }: PageProps) {
         )}
       </section>
 
+      {/* 资产平铺(Pass 2 产出,跨 state 跨 element 全部展示) */}
+      {states.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Package className="size-4" />
+            资产({assets.length})
+          </h2>
+          {assets.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-6 text-center border border-dashed rounded-md">
+              资产将在 Pass 2 完成后展示。先去 Element Review 确认框选 → 触发 Pass 2 提取资产。
+            </p>
+          ) : (
+            <AssetGrid assets={assets} elements={elements} selectedId={null} onSelect={() => {}} />
+          )}
+        </section>
+      )}
+
       <UploadStatesDialog
         pageId={pageId}
         hasCanonical={!!canonicalId}
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         onUploaded={() => {
-          // 上传 + 触发 Pass 1 后,reload pages + states
           void loadAll()
         }}
       />
