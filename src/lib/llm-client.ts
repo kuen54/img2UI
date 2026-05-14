@@ -328,7 +328,7 @@ function errMessage(e: unknown): string {
 
 const APIMART_INITIAL_DELAY_MS = 12_000
 const APIMART_POLL_INTERVAL_MS = 5_000
-const APIMART_MAX_ATTEMPTS = 36   // 36 × 5s = 180s
+const APIMART_MAX_ATTEMPTS = 60   // Phase 8f BUG #2:60 × 5s = 300s(5 分钟兜底)
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 Chrome/120.0.0.0'
 
 export type CallImageGenOptions = {
@@ -398,10 +398,14 @@ async function callApimartAsync(
   if (!taskId) throw new Error(`apimart submit 未返回 task_id: ${JSON.stringify(submitJson).slice(0, 200)}`)
 
   // 2. poll
-  await new Promise((r) => setTimeout(r, APIMART_INITIAL_DELAY_MS))
+  // Phase 8f BUG #2:provider polling 配置优先,fallback 到顶层常量(60 attempts × 5s = 5min)
+  const pollMaxAttempts = p.poll_max_attempts ?? APIMART_MAX_ATTEMPTS
+  const pollIntervalMs = (p.poll_interval_seconds ?? 5) * 1000
+  const pollInitialDelayMs = (p.poll_initial_delay_seconds ?? 12) * 1000
+  await new Promise((r) => setTimeout(r, pollInitialDelayMs))
   let imageUrl: string | null = null
   let cost: number | undefined
-  for (let i = 0; i < APIMART_MAX_ATTEMPTS; i++) {
+  for (let i = 0; i < pollMaxAttempts; i++) {
     const pollRes = await fetch(`${p.base_url}/tasks/${taskId}`, {
       headers: { Authorization: `Bearer ${p.api_key}` },
       ...(opts.signal !== undefined && { signal: opts.signal }),
@@ -423,9 +427,9 @@ async function callApimartAsync(
     if (status === 'failed') {
       throw new Error(`apimart task failed: ${pollJson.data?.error ?? 'unknown'}`)
     }
-    await new Promise((r) => setTimeout(r, APIMART_POLL_INTERVAL_MS))
+    await new Promise((r) => setTimeout(r, pollIntervalMs))
   }
-  if (!imageUrl) throw new Error('apimart 轮询超时(>3min)')
+  if (!imageUrl) throw new Error('apimart 轮询超时(>5min)')
 
   // 3. download(必须带浏览器 UA,否则 S3 403)
   const dlRes = await fetch(imageUrl, {
