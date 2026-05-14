@@ -19,7 +19,7 @@ type PageProps = { params: Promise<{ pid: string; id: string }> }
 
 const DEFAULT_VIEW: CanvasViewOptions = {
   showOutlines: true,
-  showLabels: true,
+  showLabels: false, // 默认不展示全部标签,避免密集元素场景互相遮挡;选中/hover 仍显示该元素标签
   imageOpacity: 1,
   filter: 'all',
 }

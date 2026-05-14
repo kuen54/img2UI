@@ -56,6 +56,7 @@ export function ElementCanvas({
 }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<DragMode>({ type: 'idle' })
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   const eventToNormalized = (e: { clientX: number; clientY: number }): { x: number; y: number } | null => {
     if (!svgRef.current) return null
@@ -215,8 +216,13 @@ export function ElementCanvas({
             const w = bw * imageDims.width
             const h = bh * imageDims.height
             const colorClass = el.type === 'static' ? 'stroke-blue-500' : 'stroke-orange-500'
+            const isHovered = hoveredId === el.id
             return (
-              <g key={el.id}>
+              <g
+                key={el.id}
+                onMouseEnter={() => setHoveredId(el.id)}
+                onMouseLeave={() => setHoveredId((curr) => (curr === el.id ? null : curr))}
+              >
                 <rect
                   x={x}
                   y={y}
@@ -225,7 +231,7 @@ export function ElementCanvas({
                   className={cn(
                     'fill-transparent transition-[stroke-width]',
                     colorClass,
-                    isSelected ? 'stroke-[4]' : 'stroke-2',
+                    isSelected ? 'stroke-[4]' : isHovered ? 'stroke-[3]' : 'stroke-2',
                   )}
                   style={{ cursor: 'move' }}
                   onMouseDown={(e) => startMove(e, el)}
@@ -251,15 +257,29 @@ export function ElementCanvas({
                     })}
                   </>
                 )}
-                {view.showLabels && (
-                  <text
-                    x={x + 4}
-                    y={y - 4}
-                    fontSize={Math.max(10, Math.min(imageDims.width, imageDims.height) * 0.025)}
-                    className={cn('font-medium pointer-events-none select-none', el.type === 'static' ? 'fill-blue-700' : 'fill-orange-700')}
-                  >
-                    {el.name}
-                  </text>
+                {/* 标签:全局 toggle 显示 全部,或仅显示 selected/hovered 元素的标签(避免密集场景互相遮挡) */}
+                {(view.showLabels || isSelected || isHovered) && (
+                  <g pointerEvents="none">
+                    {/* 标签底色,提高可读性 */}
+                    <rect
+                      x={x}
+                      y={y - Math.max(14, Math.min(imageDims.width, imageDims.height) * 0.028)}
+                      width={Math.min(w, el.name.length * Math.max(8, Math.min(imageDims.width, imageDims.height) * 0.018) + 8)}
+                      height={Math.max(14, Math.min(imageDims.width, imageDims.height) * 0.028)}
+                      className={cn(
+                        el.type === 'static' ? 'fill-blue-500/95' : 'fill-orange-500/95',
+                      )}
+                      rx={2}
+                    />
+                    <text
+                      x={x + 4}
+                      y={y - 4}
+                      fontSize={Math.max(10, Math.min(imageDims.width, imageDims.height) * 0.022)}
+                      className="font-medium select-none fill-white"
+                    >
+                      {el.name}
+                    </text>
+                  </g>
                 )}
               </g>
             )

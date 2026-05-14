@@ -183,7 +183,7 @@ export default function AssetReviewPage({ params }: PageProps) {
         </div>
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 pb-24 space-y-6">
         {currentState && currentState.pipeline_status !== 'idle' && (
           <BatchPngViewer stateId={currentState.id} />
         )}

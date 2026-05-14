@@ -1,8 +1,7 @@
 'use client'
 
 import { use, useEffect, useState, useCallback, useRef } from 'react'
-import Link from 'next/link'
-import { Plus, Image as ImageIcon, ListChecks, Layers, FolderOutput } from 'lucide-react'
+import { Plus, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element, Page, State } from '@/lib/types'
@@ -81,7 +80,7 @@ export default function PageDetailPage({ params }: PageProps) {
   const canonicalId = page.canonical_state_id
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 pb-24 space-y-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold">{page.name}</h1>
         {page.route_hint && (
@@ -89,34 +88,17 @@ export default function PageDetailPage({ params }: PageProps) {
         )}
       </div>
 
-      {/* Pipeline 进度 */}
+      {/* Pipeline 进度(stepper 步骤可点击,右上重复按钮已删除) */}
       <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">Pipeline 进度</h2>
-          {states.some((s) => ['pass1_done', 'pass2_running', 'pass2_done', 'validating', 'validated'].includes(s.pipeline_status)) && (
-            <div className="flex items-center gap-2">
-              <Link href={`/projects/${pid}/pages/${pageId}/elements`}>
-                <Button size="sm" variant="outline">
-                  <ListChecks className="size-3.5 mr-1" />
-                  Element Review
-                </Button>
-              </Link>
-              <Link href={`/projects/${pid}/pages/${pageId}/assets`}>
-                <Button size="sm" variant="outline">
-                  <Layers className="size-3.5 mr-1" />
-                  Asset Review
-                </Button>
-              </Link>
-              <Link href={`/projects/${pid}/pages/${pageId}/export`}>
-                <Button size="sm" variant="outline">
-                  <FolderOutput className="size-3.5 mr-1" />
-                  Export
-                </Button>
-              </Link>
-            </div>
-          )}
-        </div>
-        <PipelineStepper states={states} elements={elements} assets={assets} />
+        <h2 className="text-sm font-medium text-muted-foreground">Pipeline 进度</h2>
+        <PipelineStepper
+          states={states}
+          elements={elements}
+          assets={assets}
+          projectId={pid}
+          pageId={pageId}
+        />
+        <p className="text-xs text-muted-foreground">提示:点击已点亮的步骤可直接跳转。</p>
       </section>
 
       {/* States 区 */}
