@@ -91,17 +91,13 @@ export function UploadStatesDialog({
         }
       }
       if (result.created.length > 0) {
-        toast.success(`已上传 ${result.created.length} 张,自动跑 Pass 1…`)
-        // 自动触发每张 state 的 mock Pass 1
-        await Promise.all(
-          result.created.map(async (s) => {
-            try {
-              await triggerPass1Api(s.id)
-            } catch (e) {
-              toast.error(`Pass 1 触发失败 (${s.name}):` + (e as Error).message)
-            }
-          }),
-        )
+        toast.success(`已上传 ${result.created.length} 张,布局分析中…`)
+        // fire-and-forget:不 await,让 dialog 立即关闭、详情页立即看到 pass1_running
+        for (const s of result.created) {
+          void triggerPass1Api(s.id).catch((e) => {
+            toast.error(`Pass 1 触发失败 (${s.name}):` + (e as Error).message)
+          })
+        }
         onUploaded(result.created)
       }
       reset()

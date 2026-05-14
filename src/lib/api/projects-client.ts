@@ -97,4 +97,4 @@ export const deleteStateApi = (id: string) =>
   http<void>(`/api/states/${id}`, { method: 'DELETE' })
 
 export const triggerPass1Api = (stateId: string) =>
-  http<{ run_id: string }>(`/api/states/${stateId}/pass1`, { method: 'POST' })
+  http<{ status: string }>(`/api/states/${stateId}/pass1`, { method: 'POST' })

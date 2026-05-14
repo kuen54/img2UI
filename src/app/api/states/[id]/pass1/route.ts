@@ -7,14 +7,13 @@ export const maxDuration = 180  // Pass 1 真实跑可能 ~50s,留余量
 
 type RouteCtx = { params: Promise<{ id: string }> }
 
+// fire-and-forget:立即 202 返回,Pass 1 在后台跑(setPipelineStatus 在 runner 里维护状态)
+// 失败时 runner 会标 pass1_failed,前端 2s 轮询能感知
 export async function POST(_req: NextRequest, ctx: RouteCtx) {
   const { id: stateId } = await ctx.params
-  try {
-    const { run_id } = await runPass1(stateId)
-    return NextResponse.json({ run_id }, { status: 202 })
-  } catch (e) {
-    const msg = (e as Error).message
-    const status = msg.includes('not found') ? 404 : msg.includes('稍候再试') ? 409 : 500
-    return NextResponse.json({ error: msg }, { status })
-  }
+  // 不 await:让 dialog/前端立即关闭,UI 立刻显示「布局分析中」
+  void runPass1(stateId).catch((e) => {
+    console.error(`[pass1 background] state=${stateId}:`, (e as Error).message)
+  })
+  return NextResponse.json({ status: 'accepted' }, { status: 202 })
 }

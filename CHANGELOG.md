@@ -4,6 +4,14 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### dogfood round 5 — Pass 1 触发改异步 + 上传合并 + 批量 reviewed
+
+嘉锟 v0.2.0 上线后实测又抓 3 处:无法看到 Pass 1 进行中状态、新建页面 → 上传图片要分两步、布局分析完了不知道怎么"确认完成"。
+
+- **服务端真异步触发**(`/api/states/[id]/pass{1,2}/route.ts`):此前 `await runPass{1,2}(stateId)` 阻塞 60-220s 才返回 202,语义错误。改成 fire-and-forget(`void runner(...).catch(log)` + 立即 `202 { status: accepted }`)。前端 `triggerPass{1,2}Api` 立即拿到响应,upload dialog 立即关闭,page detail 立即看到 `pass{1,2}_running` 卡片 + stepper 蓝色 hint「布局分析中…」。受影响:`triggerPass1Api` 返回类型 `{ run_id }` → `{ status }`;`triggerPass2Api` 返回类型 `{ run_id, created_assets }` → `{ status }`,Asset Review 的「Run Pass 2」toast 文案改成「已触发,后台跑约 60-220s」
+- **新建页面 + 上传合并**(`new-page-dialog.tsx`):dialog 加文件 picker + 状态名/canonical 行内编辑(复用 `upload-states-dialog` 结构),一次提交先 createPage → 再 uploadStates → fire-and-forget 触发 Pass 1 → 跳详情页。`upload-states-dialog` 保留作为详情页「补传更多设计稿」入口
+- **Element Review 批量 reviewed + 完成引导**(`elements/page.tsx`):顶部 nav 常驻「已 review N / M」+「全部标记 reviewed」按钮(一键标 draft 触发 dirty);全部 reviewed 且非 dirty 时显示 `→ 去「资产 Review」触发 Pass 2` 链接
+
 ### Fixed — Phase 8f Pass 2 P0 bugs(QA 阻断级)
 
 QA playwright 全流程实测出来 2 个 P0 bug:Pass 2 完全跑不出 asset。定向修复。
