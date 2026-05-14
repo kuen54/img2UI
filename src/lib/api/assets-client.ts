@@ -19,7 +19,7 @@ export const deleteAssetApi = (id: string) =>
   http<void>(`/api/assets/${id}`, { method: 'DELETE' })
 
 export const triggerPass2Api = (stateId: string) =>
-  http<{ run_id: string; created_assets: number }>(`/api/states/${stateId}/pass2`, { method: 'POST' })
+  http<{ status: string }>(`/api/states/${stateId}/pass2`, { method: 'POST' })
 
 export const reExtractElementApi = (elementId: string) =>
   http<{ run_id: string }>(`/api/elements/${elementId}/re-extract`, { method: 'POST' })

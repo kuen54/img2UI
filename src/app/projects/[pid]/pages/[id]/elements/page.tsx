@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, CheckCircle2, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Element, Page, PipelineRun, State } from '@/lib/types'
@@ -16,6 +16,7 @@ import { ElementList } from '@/components/element-review/element-list'
 import { ElementDetailPanel } from '@/components/element-review/element-detail-panel'
 import { PipelineProgress } from '@/components/pipeline-progress'
 import { StickySaveBar } from '@/components/ui/sticky-save-bar'
+import { Button } from '@/components/ui/button'
 
 type PageProps = { params: Promise<{ pid: string; id: string }> }
 
@@ -165,6 +166,18 @@ export default function ElementReviewPage({ params }: PageProps) {
     }
   }
 
+  const reviewedCount = useMemo(
+    () => draftElements.filter((el) => el.reviewed).length,
+    [draftElements],
+  )
+  const allReviewed = draftElements.length > 0 && reviewedCount === draftElements.length
+
+  const markAllReviewed = () => {
+    if (draftElements.length === 0) return
+    setDraftElements((curr) => curr.map((el) => (el.reviewed ? el : { ...el, reviewed: true })))
+    toast.info('已标记全部 reviewed,记得点底部「保存」落库')
+  }
+
   if (loading || !page) {
     return <p className="p-6 text-sm text-muted-foreground">加载中…</p>
   }
@@ -189,7 +202,7 @@ export default function ElementReviewPage({ params }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       {/* 二级面包屑 */}
-      <nav className="px-6 py-3 border-b flex items-center gap-3 text-sm text-muted-foreground">
+      <nav className="px-6 py-3 border-b flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
         <div className="flex items-center gap-1.5">
           <Link href={`/projects/${pid}/pages/${pageId}`} className="hover:text-foreground transition-colors">
             {page.name}
@@ -197,6 +210,35 @@ export default function ElementReviewPage({ params }: PageProps) {
           <ChevronRight className="size-3.5" />
           <span className="text-foreground font-medium">Element Review</span>
         </div>
+
+        {/* Review 进度 + 批量确认 + 完成后引导(Pass 1 跑完后才有 elements) */}
+        {draftElements.length > 0 && (
+          <div className="flex items-center gap-3 ml-4">
+            <span className="text-xs flex items-center gap-1.5">
+              <CheckCircle2
+                className={
+                  allReviewed ? 'size-4 text-emerald-600' : 'size-4 text-muted-foreground/40'
+                }
+              />
+              已 review <span className="font-medium text-foreground">{reviewedCount}</span> / {draftElements.length}
+            </span>
+            {!allReviewed && (
+              <Button size="sm" variant="outline" onClick={markAllReviewed}>
+                全部标记 reviewed
+              </Button>
+            )}
+            {allReviewed && !dirty && (
+              <Link
+                href={`/projects/${pid}/pages/${pageId}/assets`}
+                className="text-sm text-primary hover:underline flex items-center gap-1"
+              >
+                去「资产 Review」触发 Pass 2
+                <ArrowRight className="size-3.5" />
+              </Link>
+            )}
+          </div>
+        )}
+
         {activePass && subRuns.length > 0 && (
           <div className="ml-auto flex items-center gap-2 min-w-[280px]">
             <PipelineProgress

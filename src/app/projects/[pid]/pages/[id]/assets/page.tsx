@@ -89,11 +89,11 @@ export default function AssetReviewPage({ params }: PageProps) {
     if (!ok) return
     setRunning(true)
     try {
-      const result = await triggerPass2Api(currentState.id)
-      toast.success(`Pass 2 完成,产出 ${result.created_assets} 个 asset`)
+      await triggerPass2Api(currentState.id)
+      toast.success('Pass 2 已触发,后台跑约 60-220s,完成后自动刷新')
       await loadAll()
     } catch (e) {
-      toast.error('Pass 2 失败:' + (e as Error).message)
+      toast.error('Pass 2 触发失败:' + (e as Error).message)
     } finally {
       setRunning(false)
     }
