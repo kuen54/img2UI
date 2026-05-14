@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { callImageGen } from '@/lib/llm-client'
+import { defaultProviders } from '@/lib/seeds/default-providers'
 import type { ProviderConfig } from '@/lib/types'
 
 const PROVIDER: ProviderConfig = {
@@ -85,4 +86,46 @@ describe('callImageGen multi-ref', () => {
     await new Promise((r) => setTimeout(r, 50))
     expect((capturedBody as Body | null)?.image_urls).toBeUndefined()
   })
+
+  it('Phase 8f BUG #2: defaults poll_max_attempts to 60 in apimart seed', () => {
+    // 此前默认 24,实测 image_gen 单次 ~150-220s+,4 路并发拥挤 → 改 60(5 分钟兜底)
+    const seeds = defaultProviders()
+    const apimart = seeds.find((p) => p.api_format === 'apimart' && p.kind === 'image_gen')
+    expect(apimart).toBeDefined()
+    expect(apimart!.poll_max_attempts).toBe(60)
+  })
+
+  it('Phase 8f BUG #2: callImageGen honors provider.poll_max_attempts', async () => {
+    const providerWith3 = {
+      ...PROVIDER,
+      poll_interval_seconds: 0,
+      poll_initial_delay_seconds: 0,
+      poll_max_attempts: 3,
+    } as ProviderConfig
+
+    let pollCount = 0
+    vi.mocked(global.fetch).mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.includes('/tasks/')) {
+        pollCount++
+        return new Response(
+          JSON.stringify({ code: 200, data: { status: 'pending' } }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify({ code: 200, data: [{ task_id: 't1' }] }), { status: 200 })
+    })
+
+    await expect(
+      callImageGen(providerWith3, {
+        prompt: 'p',
+        reference_image_base64: 'data:image/png;base64,M',
+        size: '1:1',
+        resolution: '1k',
+        quality: 'high',
+        n: 1,
+      }),
+    ).rejects.toThrow(/超时|timeout/i)
+    expect(pollCount).toBe(3)
+  }, 10_000)
 })

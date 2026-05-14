@@ -4,6 +4,13 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed — Phase 8f Pass 2 P0 bugs(QA 阻断级)
+
+QA playwright 全流程实测出来 2 个 P0 bug:Pass 2 完全跑不出 asset。定向修复。
+
+- **BUG #1:零面积 / 越界 bbox 让整路 Pass 2 全军覆没**(`bbox-crop.ts` + `pass2-runner.ts` + `render-pass1-route.ts`)。Pass 1 偶尔回 status_bar bbox=`[1, 0.113, 0.237, 0.068]`(x=1.0 越界),`cropFromBbox` clamp 后 width=0 throw → subject 路 10 个元素都没产出。修 3 处:(a) `cropFromBbox` 激进 clamp 把 x/y 限到 [0, 1-1px),width/height 至少 1 像素,只有 NaN/真零面积才抛;(b) `pass2-runner` 单 element crop 失败标 `failed` asset + 用剩下 valid elements 继续走 image_gen,不阻断该路;(c) Pass 1 prompt 头加 `x + w ≤ 1 / y + h ≤ 1` 约束 + 全屏元素正确写法举例
+- **BUG #2:apimart `poll_max_attempts: 24` 不够,Pass 2 多路并发普遍超时**(`seeds/default-providers.ts` + `llm-client.ts` + `settings/models/page.tsx`)。实测 image_gen 单次 ~150-220s+,4 路并发拥挤可能 3-15 分钟,24 × 5s = 120s 太短。修 3 处:(a) 默认 seed 24 → 60(5 分钟兜底);(b) UI 新建 image_gen provider 默认 60;(c) `llm-client.ts` apimart polling 现在读 `provider.poll_max_attempts / poll_interval_seconds / poll_initial_delay_seconds`(此前完全忽略),fallback 60 / 5s / 12s
+
 ### dogfood round 4 — 用户实测后的 4 处 UX 卡点
 
 嘉锟实测 v0.2 / 0.1.1 后反馈的 4 处「乍看不影响功能,但持续干扰」的 UX 问题修复。无能力变化,纯打磨。

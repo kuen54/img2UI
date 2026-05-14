@@ -36,7 +36,7 @@ export function defaultProviders(): ProviderConfig[] {
       is_async: true,
       poll_interval_seconds: 5,
       poll_initial_delay_seconds: 12,
-      poll_max_attempts: 24,
+      poll_max_attempts: 60,  // Phase 8f BUG #2:实测 image_gen 单次 ~150-220s+,4 路并发拥挤,5 分钟兜底
       default_quality: 'high',  // 必须 high,否则文字大量乱码
       active: true,
       created_at: now,

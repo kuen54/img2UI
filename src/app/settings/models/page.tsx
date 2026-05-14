@@ -73,7 +73,7 @@ export default function ModelsPage() {
             is_async: true,
             poll_interval_seconds: 5,
             poll_initial_delay_seconds: 12,
-            poll_max_attempts: 24,
+            poll_max_attempts: 60,
             default_quality: 'high',
             active: false,
             created_at: now,

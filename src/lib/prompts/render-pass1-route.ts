@@ -29,6 +29,8 @@ ${VISUAL_CATEGORY_DEFINITION_EN[category]}
 **Concrete examples of ${category} elements**:
 ${VISUAL_CATEGORY_EXAMPLES_CN[category]}
 
+**BBox format**: \`[x, y, w, h]\` all NORMALIZED 0-1 floats. CONSTRAINT: \`x + w ≤ 1\` AND \`y + h ≤ 1\`. If an element extends to the right/bottom edge, set the start coord smaller (e.g. status bar across the top: \`[0, 0, 1.0, 0.04]\` not \`[1.0, 0, 0.04, 1.0]\`; full-width footer: \`[0, 0.96, 1.0, 0.04]\`).
+
 For elements you do return, still classify each as \`static\` or \`code\` per the rules below.
 
 ---
