@@ -1,18 +1,20 @@
 'use client'
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react'
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 
-import type { Element, Page, State } from '@/lib/types'
+import type { Element, Page, PipelineRun, State } from '@/lib/types'
 import { newElementId } from '@/lib/id'
 import { getPageApi, listStatesApi } from '@/lib/api/projects-client'
 import { listElementsApi, saveElementsApi } from '@/lib/api/elements-client'
+import { getRunWithSubApi } from '@/lib/api/pipelines-client'
 import { ElementCanvas, type CanvasViewOptions } from '@/components/element-review/canvas'
 import { CanvasToolbar } from '@/components/element-review/canvas-toolbar'
 import { ElementList } from '@/components/element-review/element-list'
 import { ElementDetailPanel } from '@/components/element-review/element-detail-panel'
+import { PipelineProgress } from '@/components/pipeline-progress'
 import { StickySaveBar } from '@/components/ui/sticky-save-bar'
 
 type PageProps = { params: Promise<{ pid: string; id: string }> }
@@ -36,6 +38,9 @@ export default function ElementReviewPage({ params }: PageProps) {
   const [view, setView] = useState<CanvasViewOptions>(DEFAULT_VIEW)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // 多路 sub-runs 实时进度(8d.6)
+  const [subRuns, setSubRuns] = useState<PipelineRun[]>([])
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadAll = useCallback(async () => {
     try {
@@ -63,6 +68,52 @@ export default function ElementReviewPage({ params }: PageProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAll()
   }, [loadAll])
+
+  // 当前 state 的 active pass(同步派生,避免 effect 内 setState)
+  const { activePass, parentRunId } = useMemo(() => {
+    const cur = states.find((s) => s.id === currentStateId)
+    if (!cur) return { activePass: null as 'pass1' | 'pass2' | null, parentRunId: undefined as string | undefined }
+    if (cur.pipeline_status === 'pass1_running') {
+      return { activePass: 'pass1' as const, parentRunId: cur.pass1_run_id }
+    }
+    if (cur.pipeline_status === 'pass2_running') {
+      return { activePass: 'pass2' as const, parentRunId: cur.pass2_run_id }
+    }
+    return { activePass: null, parentRunId: undefined }
+  }, [states, currentStateId])
+
+  // 多路 sub-runs 轮询:active pass 时拉 sub_runs
+  useEffect(() => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    if (!activePass || !parentRunId) {
+      return
+    }
+
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const { sub_runs } = await getRunWithSubApi(parentRunId)
+        if (cancelled) return
+        setSubRuns(sub_runs)
+      } catch {
+        // 静默失败:轮询继续
+      }
+      if (cancelled) return
+      // 父 state 仍 running 才继续轮询;否则等 states 刷新触发本 effect 重算
+      pollTimerRef.current = setTimeout(() => {
+        void listStatesApi(pageId).then(setStates).catch(() => {})
+      }, 2000)
+    }
+    void poll()
+
+    return () => {
+      cancelled = true
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+  }, [activePass, parentRunId, pageId])
 
   const dirty = useMemo(
     () => JSON.stringify(savedElements) !== JSON.stringify(draftElements),
@@ -138,12 +189,24 @@ export default function ElementReviewPage({ params }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       {/* 二级面包屑 */}
-      <nav className="px-6 py-3 border-b flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href={`/projects/${pid}/pages/${pageId}`} className="hover:text-foreground transition-colors">
-          {page.name}
-        </Link>
-        <ChevronRight className="size-3.5" />
-        <span className="text-foreground font-medium">Element Review</span>
+      <nav className="px-6 py-3 border-b flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <Link href={`/projects/${pid}/pages/${pageId}`} className="hover:text-foreground transition-colors">
+            {page.name}
+          </Link>
+          <ChevronRight className="size-3.5" />
+          <span className="text-foreground font-medium">Element Review</span>
+        </div>
+        {activePass && subRuns.length > 0 && (
+          <div className="ml-auto flex items-center gap-2 min-w-[280px]">
+            <PipelineProgress
+              total={activePass === 'pass1' ? 5 : subRuns.length}
+              succeeded={subRuns.filter((r) => r.status === 'completed').length}
+              failed={subRuns.filter((r) => r.status === 'failed').length}
+              pass={activePass}
+            />
+          </div>
+        )}
       </nav>
 
       {/* 主区:Canvas + 列表 */}

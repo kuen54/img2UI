@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import type { PipelineRun, PipelinePassKind } from '@/lib/types'
-import { DATA_ROOT, readJson, writeJson } from '@/lib/fs-utils'
+import { DATA_ROOT, readJson, writeJson, listJsonInDir } from '@/lib/fs-utils'
 import { newRunId } from '@/lib/id'
 
 const DIR = path.join(DATA_ROOT, 'pipelines')
@@ -9,6 +9,16 @@ const fileFor = (id: string) => path.join(DIR, `${id}.json`)
 
 export async function getRun(id: string): Promise<PipelineRun | null> {
   return readJson<PipelineRun>(fileFor(id))
+}
+
+// 列出某 state 下属于同一个 parent pass 的 sub-runs(pass1_* 或 pass2_*)
+// 用于 PipelineProgress 多路进度展示。
+export async function listSubRuns(stateId: string, parent: 'pass1' | 'pass2'): Promise<PipelineRun[]> {
+  const all = await listJsonInDir<PipelineRun>(DIR)
+  return all
+    .filter((r) => r.state_id === stateId)
+    .filter((r) => r.pass.startsWith(`${parent}_`))
+    .sort((a, b) => a.started_at.localeCompare(b.started_at))
 }
 
 export type CreateRunInput = {

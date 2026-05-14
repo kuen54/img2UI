@@ -9,6 +9,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useConfirm } from '@/components/ui/confirm-dialog'
+import {
+  VISUAL_CATEGORIES,
+  visualCategoryCn,
+  type VisualCategory,
+} from '@/lib/visual-category'
 
 export type ElementDetailPanelProps = {
   element: Element
@@ -82,6 +87,26 @@ export function ElementDetailPanel({ element, states, onChange, onDelete }: Elem
         <Button variant="ghost" size="sm" onClick={() => void handleDelete()} title="删除">
           <Trash2 className="size-4 text-red-500" />
         </Button>
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="visual-category" className="text-xs">视觉类别</Label>
+        <select
+          id="visual-category"
+          aria-label="视觉类别"
+          value={element.visual_category}
+          onChange={(e) => update('visual_category', e.target.value as VisualCategory)}
+          className="h-8 w-full text-sm rounded-md border border-input bg-transparent px-2 py-1 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          {VISUAL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {visualCategoryCn(c)}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          影响 Pass 2 调度组(同类元素并行)
+        </p>
       </div>
 
       <div className="space-y-1">

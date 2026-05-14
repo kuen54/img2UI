@@ -187,7 +187,12 @@ export function ElementCanvas({
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-muted/30 overflow-hidden">
+    <div className="flex flex-col w-full h-full">
+      <div className="px-3 py-2 text-xs bg-amber-50 border-b border-amber-200 text-amber-900 shrink-0">
+        <strong>拖动框 = 调整位置坐标</strong>(进 layout.json)且作为 <strong>Pass 2 参考图裁剪</strong>边界。
+        改 description / 类别 / 拆合并需要<strong>重跑 Pass 2</strong> 才生效。
+      </div>
+      <div className="relative w-full flex-1 flex items-center justify-center bg-muted/30 overflow-hidden">
       <div
         className="relative max-w-full max-h-full"
         style={{ aspectRatio: `${imageDims.width} / ${imageDims.height}` }}
@@ -298,6 +303,7 @@ export function ElementCanvas({
             />
           )}
         </svg>
+      </div>
       </div>
     </div>
   )
