@@ -1,6 +1,7 @@
 'use client'
 
 import { use, useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -15,6 +16,7 @@ type PageProps = { params: Promise<{ pid: string }> }
 
 export default function ProjectDetailPage({ params }: PageProps) {
   const { pid } = use(params)
+  const router = useRouter()
   const [pages, setPages] = useState<Page[] | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -73,7 +75,10 @@ export default function ProjectDetailPage({ params }: PageProps) {
         projectId={pid}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onCreated={(page) => setPages([page, ...(pages ?? [])])}
+        onCreated={(page) => {
+          setPages([page, ...(pages ?? [])])
+          router.push(`/projects/${pid}/pages/${page.id}`)
+        }}
       />
     </div>
   )

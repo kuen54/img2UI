@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Folder } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -12,6 +13,7 @@ import { ProjectCard } from '@/components/projects/project-card'
 import { NewProjectDialog } from '@/components/projects/new-project-dialog'
 
 export default function ProjectsPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<Project[] | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -68,7 +70,10 @@ export default function ProjectsPage() {
       <NewProjectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onCreated={(project) => setProjects([project, ...(projects ?? [])])}
+        onCreated={(project) => {
+          setProjects([project, ...(projects ?? [])])
+          router.push(`/projects/${project.id}`)
+        }}
       />
     </div>
   )

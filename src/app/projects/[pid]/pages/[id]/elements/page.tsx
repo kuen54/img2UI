@@ -172,7 +172,7 @@ export default function ElementReviewPage({ params }: PageProps) {
   if (!currentStateId || states.length === 0) {
     return (
       <div className="p-6 pb-24 space-y-4">
-        <p className="text-sm text-muted-foreground">该页面尚未上传状态图,无法 Element Review。</p>
+        <p className="text-sm text-muted-foreground">该页面尚未上传设计稿,无法 Element Review。</p>
         <Link
           href={`/projects/${pid}/pages/${pageId}`}
           className="text-sm text-primary hover:underline"

@@ -120,7 +120,7 @@ GPT-image-2 不接受 polygon-aware 条件输入。文本 prompt 里写顶点坐
 ### 核心流程
 
 ```
-[配置模型/CDN] → [新建项目] → [新建页面] → [上传 N 张状态图]
+[配置模型/CDN] → [新建项目] → [新建页面] → [上传 N 张设计稿]
   → [Pass 1: 布局分析] → [Element Review]
   → [Pass 2: 资产提取] → [Asset Review]
   → [上传 CDN] → [导出项目文件夹] → [coding agent 消费]
@@ -215,7 +215,7 @@ GPT-image-2 不接受 polygon-aware 条件输入。文本 prompt 里写顶点坐
 |---|---|
 | **入口**: 顶部 Sidebar `Settings`<br/>**布局**: 一级 Tab(Models / CDN / Prompts),Models 下二级分组(Multimodal / ImageGen / Segmenter)<br/>**provider 卡片**:<br/>1. 每个 provider 一张卡,展示 `name` / `model` / 状态(Active / Idle / Error)<br/>2. 卡内字段(按 `kind` 显示不同字段):<br/>   - 通用:`name`、`api_format`(下拉)、`base_url`、`api_key`(password 输入框 + 显示/隐藏 button)、`model`(下拉,基于 api_format 联动)<br/>   - mllm/image_gen 额外:`default_temperature`(slider)、`default_max_tokens`(input)<br/>   - cdn 额外:`bucket`、`region`、`public_url_prefix`<br/>3. **Test Connection** button:发一次最小请求,Badge 渲染 ok/fail<br/>4. **Set Active** button(同一 kind 下唯一)<br/>5. **Delete** button(走 `useConfirm` Promise)<br/>6. 卡片底部 Add Provider button + 全局 StickySaveBar<br/>**API key 双向遮罩**(直接复用 evalyst 模式):<br/>- 服务端 GET 时调 `maskKey` 返回 `sk-***xxxx`<br/>- 用户编辑时若没改 API key,前端回传 mask 字符串<br/>- 服务端 PUT 时调 `unmaskApiKeys` 用磁盘原值还原 | 参见 ASCII 屏 `Settings — API 配置` |
 
-### Use Case 2:新建项目 + 新建页面 + 上传状态图
+### Use Case 2:新建项目 + 新建页面 + 上传设计稿
 
 | 功能描述 | 原型说明 |
 |---|---|

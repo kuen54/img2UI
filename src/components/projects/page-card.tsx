@@ -26,7 +26,7 @@ export function PageCard({ page, projectId, onDeleted }: PageCardProps) {
     e.stopPropagation()
     const ok = await confirm({
       title: `删除页面「${page.name}」?`,
-      description: '会级联删除该页面下所有状态图。不可撤销。',
+      description: '会级联删除该页面下所有设计稿。不可撤销。',
       confirmText: '删除',
       destructive: true,
     })
@@ -45,13 +45,13 @@ export function PageCard({ page, projectId, onDeleted }: PageCardProps) {
   return (
     <Link href={`/projects/${projectId}/pages/${page.id}`} className="block">
       <Card className="hover:bg-muted/30 transition-colors cursor-pointer h-full overflow-hidden">
-        <div className="aspect-square bg-muted/40 flex items-center justify-center">
+        <div className="aspect-[4/3] bg-muted/40 flex items-center justify-center">
           {showImg ? (
             // eslint-disable-next-line @next/next/no-img-element -- 服务于 /api/thumbs 的小尺寸缩略图,不走 next/image 优化
             <img
               src={page.thumbnail_url}
               alt={page.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               onError={() => setImgFailed(true)}
             />
           ) : (
@@ -85,7 +85,7 @@ export function PageCard({ page, projectId, onDeleted }: PageCardProps) {
             创建:{new Date(page.created_at).toLocaleDateString('zh-CN')}
           </p>
           {!page.canonical_state_id && (
-            <p className="text-xs text-amber-600 mt-1">尚未上传状态图</p>
+            <p className="text-xs text-amber-600 mt-1">尚未上传设计稿</p>
           )}
         </CardContent>
       </Card>
