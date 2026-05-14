@@ -1,6 +1,6 @@
 // llm-client: chat completions + image_gen 调用
 // Phase 2 实现:Test Connection 用的 ping(最小请求 + 30s timeout)
-// Phase 4/5 扩展:加 retry / response 解析 / streaming
+// Phase 4 扩展:callMllm 完整 chat completion(多模态 messages + 解析 content)
 
 import type { ProviderConfig } from '@/lib/types'
 
@@ -9,6 +9,148 @@ export type PingResult =
   | { ok: false; error: string }
 
 const PING_TIMEOUT_MS = 30_000
+const CALL_TIMEOUT_MS = 120_000
+
+// =============================================================================
+// callMllm:完整 chat completion(Pass 1 主调用,Phase 4 新增)
+// =============================================================================
+
+// 内部约定输入用 OpenAI message 格式,内部转译 anthropic
+export type MllmTextPart = { type: 'text'; text: string }
+export type MllmImagePart = { type: 'image_url'; image_url: { url: string } }
+export type MllmContent = string | Array<MllmTextPart | MllmImagePart>
+export type MllmMessage = { role: 'system' | 'user' | 'assistant'; content: MllmContent }
+
+export type CallMllmOptions = {
+  messages: MllmMessage[]
+  max_tokens?: number
+  temperature?: number
+  response_format?: { type: 'json_object' }
+  extra_body?: Record<string, unknown>
+  signal?: AbortSignal
+}
+
+export async function callMllm(
+  provider: ProviderConfig,
+  opts: CallMllmOptions,
+): Promise<{ content: string; usage?: Record<string, unknown> }> {
+  if (provider.kind !== 'mllm') throw new Error(`provider kind 不是 mllm: ${provider.kind}`)
+  if (!provider.api_key) throw new Error('api_key 未填')
+  if (!provider.model) throw new Error('model 未填')
+
+  switch (provider.api_format) {
+    case 'openai':
+    case 'apimart':
+      return callOpenAICompat(provider, opts, true)
+    case 'sankuai':
+      return callOpenAICompat(provider, opts, false)
+    case 'anthropic':
+      return callAnthropic(provider, opts)
+    default:
+      throw new Error(`mllm 不支持 api_format: ${provider.api_format}`)
+  }
+}
+
+async function callOpenAICompat(
+  p: ProviderConfig,
+  opts: CallMllmOptions,
+  withBearer: boolean,
+): Promise<{ content: string; usage?: Record<string, unknown> }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: withBearer ? `Bearer ${p.api_key}` : p.api_key,
+  }
+  const body: Record<string, unknown> = {
+    model: p.model,
+    messages: opts.messages,
+    ...(opts.max_tokens !== undefined && { max_tokens: opts.max_tokens }),
+    ...(opts.temperature !== undefined && { temperature: opts.temperature }),
+    ...(opts.response_format !== undefined && { response_format: opts.response_format }),
+    ...(opts.extra_body !== undefined && opts.extra_body),
+  }
+  const json = (await callJsonWithTimeout(`${p.base_url}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    ...(opts.signal !== undefined && { signal: opts.signal }),
+  })) as { choices?: Array<{ message?: { content?: string } }>; usage?: Record<string, unknown> }
+  const content = json.choices?.[0]?.message?.content
+  if (typeof content !== 'string') {
+    throw new Error(`LLM 响应无 content:${JSON.stringify(json).slice(0, 300)}`)
+  }
+  return { content, ...(json.usage !== undefined && { usage: json.usage }) }
+}
+
+async function callAnthropic(
+  p: ProviderConfig,
+  opts: CallMllmOptions,
+): Promise<{ content: string; usage?: Record<string, unknown> }> {
+  // 转译 OpenAI → Anthropic 格式:
+  //   - system message → top-level `system` 字段
+  //   - user content array image_url → image source(data URL parse)
+  let systemText = ''
+  const userMessages: Array<{ role: 'user' | 'assistant'; content: unknown }> = []
+  for (const m of opts.messages) {
+    if (m.role === 'system') {
+      systemText += (typeof m.content === 'string' ? m.content : '') + '\n'
+      continue
+    }
+    if (typeof m.content === 'string') {
+      userMessages.push({ role: m.role, content: m.content })
+      continue
+    }
+    const parts = m.content.map((part) => {
+      if (part.type === 'text') return { type: 'text', text: part.text }
+      // image_url: data:image/png;base64,xxx
+      const url = part.image_url.url
+      const m1 = url.match(/^data:([^;]+);base64,(.+)$/)
+      if (!m1) throw new Error('Anthropic 仅支持 data URL 形式的 image')
+      return { type: 'image', source: { type: 'base64', media_type: m1[1], data: m1[2] } }
+    })
+    userMessages.push({ role: m.role, content: parts })
+  }
+  const body: Record<string, unknown> = {
+    model: p.model,
+    max_tokens: opts.max_tokens ?? 4096,
+    messages: userMessages,
+    ...(systemText.trim() && { system: systemText.trim() }),
+    ...(opts.temperature !== undefined && { temperature: opts.temperature }),
+  }
+  const json = (await callJsonWithTimeout(`${p.base_url}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': p.api_key,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+    ...(opts.signal !== undefined && { signal: opts.signal }),
+  })) as { content?: Array<{ type: string; text?: string }>; usage?: Record<string, unknown> }
+  const text = json.content?.find((c) => c.type === 'text')?.text
+  if (typeof text !== 'string') {
+    throw new Error(`Anthropic 响应无 text content:${JSON.stringify(json).slice(0, 300)}`)
+  }
+  return { content: text, ...(json.usage !== undefined && { usage: json.usage }) }
+}
+
+async function callJsonWithTimeout(url: string, init: RequestInit): Promise<unknown> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS)
+  try {
+    const passedSignal = init.signal
+    if (passedSignal) {
+      passedSignal.addEventListener('abort', () => ctrl.abort())
+    }
+    const res = await fetch(url, { ...init, signal: ctrl.signal })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`)
+    }
+    return await res.json()
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // =============================================================================
 // MLLM ping(5-token chat completion)
