@@ -64,3 +64,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 debug-*.png
+qa-screenshots/

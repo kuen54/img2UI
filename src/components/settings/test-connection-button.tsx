@@ -60,7 +60,7 @@ export function TestConnectionButton({ providerId, disabled }: TestConnectionBut
             <Loader2 className="size-3 animate-spin mr-1" /> 测试中…
           </>
         ) : (
-          'Test Connection'
+          'Test Connection 测试连通'
         )}
       </Button>
       {result.state === 'ok' && (

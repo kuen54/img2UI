@@ -38,6 +38,13 @@ export default function ProjectDetailPage({ params }: PageProps) {
 
   return (
     <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-semibold">页面</h1>
+        <Button onClick={() => setDialogOpen(true)}>
+          <Plus className="size-4 mr-1" />
+          新建页面
+        </Button>
+      </div>
       {pages.length === 0 ? (
         <EmptyState
           icon={FileText}
@@ -51,25 +58,16 @@ export default function ProjectDetailPage({ params }: PageProps) {
           }
         />
       ) : (
-        <>
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-semibold">页面</h1>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="size-4 mr-1" />
-              新建页面
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {pages.map((p) => (
-              <PageCard
-                key={p.id}
-                page={p}
-                projectId={pid}
-                onDeleted={(id) => setPages(pages.filter((x) => x.id !== id))}
-              />
-            ))}
-          </div>
-        </>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {pages.map((p) => (
+            <PageCard
+              key={p.id}
+              page={p}
+              projectId={pid}
+              onDeleted={(id) => setPages(pages.filter((x) => x.id !== id))}
+            />
+          ))}
+        </div>
       )}
       <NewPageDialog
         projectId={pid}

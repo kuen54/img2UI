@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Plus, Image as ImageIcon, ListChecks, Layers, FolderOutput } from 'lucide-react'
+import { Plus, Image as ImageIcon, ListChecks, Layers, FolderOutput } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element, Page, State } from '@/lib/types'
@@ -82,15 +82,6 @@ export default function PageDetailPage({ params }: PageProps) {
 
   return (
     <div className="p-6 space-y-6">
-      {/* 二级面包屑(项目级面包屑在 [pid]/layout.tsx 已有) */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground -mt-2">
-        <Link href={`/projects/${pid}`} className="hover:text-foreground transition-colors">
-          页面
-        </Link>
-        <ChevronRight className="size-3.5" />
-        <span className="text-foreground font-medium">{page.name}</span>
-      </nav>
-
       <div className="space-y-1">
         <h1 className="text-xl font-semibold">{page.name}</h1>
         {page.route_hint && (
@@ -132,12 +123,10 @@ export default function PageDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-muted-foreground">状态图({states.length})</h2>
-          {states.length > 0 && (
-            <Button onClick={() => setUploadOpen(true)} size="sm">
-              <Plus className="size-3.5 mr-1" />
-              上传状态图
-            </Button>
-          )}
+          <Button onClick={() => setUploadOpen(true)} size="sm">
+            <Plus className="size-3.5 mr-1" />
+            上传状态图
+          </Button>
         </div>
 
         {states.length === 0 ? (
