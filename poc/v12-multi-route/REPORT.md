@@ -141,6 +141,54 @@
 - ⚠️ spec §4.1 `only-X` prompt 头部要修正:删除「If unsure, lean toward NOT returning」,改为激进 EXHAUSTIVE
 - ⚠️ 召回兜底:加一路「only-uncategorized」prompt(返回 5 类都不属于但用户视觉上重要的元素)?**或者**接受 77% 召回 + 用户在 Element Review 手动补漏元素
 
+### PoC #2 修正版(EXHAUSTIVE 措辞,2026-05-14 复测)
+
+**修正点**:`only-X` prompt 头从「If unsure, lean toward NOT returning」改为「Be EXHAUSTIVE. Even small/subtle elements count. MISS NOTHING.」(spec §4.1)
+
+**实测结果**:
+
+| Route | 元素数 | latency_s |
+|---|---|---|
+| subject | 9 | 31.4 |
+| button | 0 | 17.9 |
+| container | 5 | 30.3 |
+| background | 1 | 20.1 |
+| decoration | 9 | 32.7 |
+
+总元素数(5 路并集):24,跨路 IoU>0.5 重复对:11,去重估算:13。
+
+| 指标 | 修正前(77%) | 修正后 | 通过标准 |
+|---|---|---|---|
+| Static 召回(对比 v9b 13 个,IoU>0.4) | 10/13 | **9/13** | ≥ 12/13 = 92% |
+
+**逐元素召回详情**(IoU > 0.4 判定):
+
+| v9b static 元素 | 修正后是否命中 | 命中路 |
+|---|---|---|
+| background_image | ✅ | background |
+| super_badge | ✅ | subject(stylized_super_badge,decoration 路也有 super_badge_sticker) |
+| character_3d_model | ✅ | subject(3d_character_hero) |
+| tag_black_sugar_pearl | ✅ | container/decoration/subject(三路重复识别) |
+| tag_q_bounce_milk | ✅ | container/decoration/subject |
+| tag_classic_milk_tea | ✅ | container/decoration/subject |
+| fortune_seal | ✅ | subject(calligraphic_seal_badge,decoration 路也有) |
+| hanging_rings(整段 0.725 宽) | ❌ MISS(被拆 left/right 两个 small ring) | — |
+| auto_claim_badge「购买后自动领取」 | ❌ MISS | — |
+| product_image_1 | ✅ | subject |
+| product_claim_badge_1 | ❌ MISS | — |
+| product_image_2 | ✅ | subject |
+| product_claim_badge_2 | ❌ MISS | — |
+
+**结论**: ❌ **未通过**(9/13 = 69%,低于 92% 阈值,且比修正前 77% 还退化)
+
+**根因分析**:
+1. 修正前漏的 3 个小徽章(`auto_claim_badge`, `product_claim_badge_1/2`)修正后**仍然全部漏**——EXHAUSTIVE 措辞没救回这类「贴在卡片底部的纯文字小标签」。原因可能是模型把它们判定为**普通文本**而非 visual asset,这是更根本的认知问题,不是 prompt 保守度问题
+2. `hanging_rings` 多漏一个:修正后 decoration 路被「Even small/subtle elements count」鼓励,把整段挂钩拆成 left/right 两个 27px 宽的 small ring;v9b 的整段 bbox 与之 IoU < 0.4 ⇒ 形式上 MISS,但元素**实际被识别**(只是粒度更细)
+3. **跨路重复增加**:修正后 24 个元素 / 13 unique(重复 11 对),修正前 16 个 / 15 unique(重复 1 对)。EXHAUSTIVE 让 5 路开始抢类目模糊的元素(chip 既被 container/decoration/subject 三路认领)。这增加了下游合并算法的负担
+4. **意外 finding**:subject 路把 product_image_1/2 / character / seal / title 全收了,跟 decoration 路在 super_badge / fortune_seal 等元素上重复 ⇒ 「subject vs decoration」边界在 EXHAUSTIVE 措辞下崩塌
+
+**STATUS: BLOCKED** — 8a 未通过 92% 阈值,本 PR 不 merge。回 spec §10「Phase 8a fallback」分支:改 8b 为 1-shot+tag 形式(单次 mllm 调用 + 给元素打 visual_category tag),Pass 2 仍按 category 分组多路。或先优化 1-shot prompt 让模型更注意小文字徽章,再决定 8b 走哪条路。
+
 **输出文件**:
 - `poc/v12-multi-route/outputs/poc2-pass1-{subject,button,container,background,decoration}.json`
 - `poc/v12-multi-route/outputs/poc2-summary.json`

@@ -1,0 +1,409 @@
+{
+  "image": "/Users/lijiakun/Documents/img2UI/poc/inputs/canonical-512.png",
+  "routes": {
+    "button": {
+      "ok": true,
+      "elapsed_s": 17.9,
+      "element_count": 0,
+      "elements": []
+    },
+    "background": {
+      "ok": true,
+      "elapsed_s": 20.1,
+      "element_count": 1,
+      "elements": [
+        {
+          "entity_name": "Global Background",
+          "type": "static",
+          "bbox": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ]
+        }
+      ]
+    },
+    "container": {
+      "ok": true,
+      "elapsed_s": 30.3,
+      "element_count": 5,
+      "elements": [
+        {
+          "entity_name": "pink_3d_display_box",
+          "type": "static",
+          "bbox": [
+            0.03,
+            0.05,
+            0.94,
+            0.58
+          ]
+        },
+        {
+          "entity_name": "product_list_card_panel",
+          "type": "code",
+          "bbox": [
+            0.04,
+            0.63,
+            0.92,
+            0.35
+          ]
+        },
+        {
+          "entity_name": "tag_container_pearl",
+          "type": "static",
+          "bbox": [
+            0.07,
+            0.27,
+            0.21,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "tag_container_q_milk",
+          "type": "static",
+          "bbox": [
+            0.71,
+            0.21,
+            0.21,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "tag_container_classic",
+          "type": "static",
+          "bbox": [
+            0.65,
+            0.37,
+            0.25,
+            0.04
+          ]
+        }
+      ]
+    },
+    "subject": {
+      "ok": true,
+      "elapsed_s": 31.4,
+      "element_count": 9,
+      "elements": [
+        {
+          "entity_name": "3d_character_hero",
+          "type": "static",
+          "bbox": [
+            0.27,
+            0.22,
+            0.46,
+            0.28
+          ]
+        },
+        {
+          "entity_name": "stylized_super_badge",
+          "type": "static",
+          "bbox": [
+            0.71,
+            0.11,
+            0.16,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "stylized_title_text",
+          "type": "static",
+          "bbox": [
+            0.29,
+            0.14,
+            0.42,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "feature_tag_left",
+          "type": "static",
+          "bbox": [
+            0.07,
+            0.27,
+            0.2,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "feature_tag_top_right",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.21,
+            0.21,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "feature_tag_bottom_right",
+          "type": "static",
+          "bbox": [
+            0.65,
+            0.38,
+            0.27,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "calligraphic_seal_badge",
+          "type": "static",
+          "bbox": [
+            0.1,
+            0.5,
+            0.17,
+            0.07
+          ]
+        },
+        {
+          "entity_name": "product_image_1",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.7,
+            0.24,
+            0.12
+          ]
+        },
+        {
+          "entity_name": "product_image_2",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.84,
+            0.24,
+            0.12
+          ]
+        }
+      ]
+    },
+    "decoration": {
+      "ok": true,
+      "elapsed_s": 32.7,
+      "element_count": 9,
+      "elements": [
+        {
+          "entity_name": "super_badge_sticker",
+          "type": "static",
+          "bbox": [
+            0.705,
+            0.113,
+            0.176,
+            0.074
+          ]
+        },
+        {
+          "entity_name": "title_star_left",
+          "type": "static",
+          "bbox": [
+            0.301,
+            0.149,
+            0.032,
+            0.021
+          ]
+        },
+        {
+          "entity_name": "title_star_right",
+          "type": "static",
+          "bbox": [
+            0.664,
+            0.149,
+            0.032,
+            0.021
+          ]
+        },
+        {
+          "entity_name": "attribute_chip_1",
+          "type": "static",
+          "bbox": [
+            0.067,
+            0.266,
+            0.224,
+            0.046
+          ]
+        },
+        {
+          "entity_name": "attribute_chip_2",
+          "type": "static",
+          "bbox": [
+            0.707,
+            0.198,
+            0.229,
+            0.046
+          ]
+        },
+        {
+          "entity_name": "attribute_chip_3",
+          "type": "static",
+          "bbox": [
+            0.637,
+            0.381,
+            0.285,
+            0.046
+          ]
+        },
+        {
+          "entity_name": "fortune_seal_stamp",
+          "type": "static",
+          "bbox": [
+            0.101,
+            0.509,
+            0.179,
+            0.075
+          ]
+        },
+        {
+          "entity_name": "card_suspension_ring_left",
+          "type": "static",
+          "bbox": [
+            0.133,
+            0.596,
+            0.027,
+            0.054
+          ]
+        },
+        {
+          "entity_name": "card_suspension_ring_right",
+          "type": "static",
+          "bbox": [
+            0.835,
+            0.596,
+            0.027,
+            0.054
+          ]
+        }
+      ]
+    }
+  },
+  "cross_route_duplicates": [
+    {
+      "iou": 0.55,
+      "a": {
+        "category": "background",
+        "name": "Global Background"
+      },
+      "b": {
+        "category": "container",
+        "name": "pink_3d_display_box"
+      }
+    },
+    {
+      "iou": 0.95,
+      "a": {
+        "category": "container",
+        "name": "tag_container_pearl"
+      },
+      "b": {
+        "category": "subject",
+        "name": "feature_tag_left"
+      }
+    },
+    {
+      "iou": 0.82,
+      "a": {
+        "category": "container",
+        "name": "tag_container_pearl"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "attribute_chip_1"
+      }
+    },
+    {
+      "iou": 0.91,
+      "a": {
+        "category": "container",
+        "name": "tag_container_q_milk"
+      },
+      "b": {
+        "category": "subject",
+        "name": "feature_tag_top_right"
+      }
+    },
+    {
+      "iou": 0.61,
+      "a": {
+        "category": "container",
+        "name": "tag_container_q_milk"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "attribute_chip_2"
+      }
+    },
+    {
+      "iou": 0.56,
+      "a": {
+        "category": "container",
+        "name": "tag_container_classic"
+      },
+      "b": {
+        "category": "subject",
+        "name": "feature_tag_bottom_right"
+      }
+    },
+    {
+      "iou": 0.68,
+      "a": {
+        "category": "subject",
+        "name": "stylized_super_badge"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "super_badge_sticker"
+      }
+    },
+    {
+      "iou": 0.78,
+      "a": {
+        "category": "subject",
+        "name": "feature_tag_left"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "attribute_chip_1"
+      }
+    },
+    {
+      "iou": 0.57,
+      "a": {
+        "category": "subject",
+        "name": "feature_tag_top_right"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "attribute_chip_2"
+      }
+    },
+    {
+      "iou": 0.79,
+      "a": {
+        "category": "subject",
+        "name": "feature_tag_bottom_right"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "attribute_chip_3"
+      }
+    },
+    {
+      "iou": 0.69,
+      "a": {
+        "category": "subject",
+        "name": "calligraphic_seal_badge"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "fortune_seal_stamp"
+      }
+    }
+  ],
+  "total_elements_across_routes": 24,
+  "unique_elements_estimated": 13,
+  "baseline": {
+    "path": "/Users/lijiakun/Documents/img2UI/poc/outputs/v9b-pass1.json",
+    "element_count": 36,
+    "v12_recall_ratio": 0.36
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "elements": [
+    {
+      "entity_name": "super_badge_sticker",
+      "type": "static",
+      "type_reasoning": "A stylized, graphical sticker-like badge with 'SUPER' text, highly decorative.",
+      "bbox": [
+        0.705,
+        0.113,
+        0.176,
+        0.074
+      ],
+      "z_index": 2,
+      "description": "Pink hollow sticker badge with the word SUPER in stylized 3D lettering and a small sparkle.",
+      "extraction_prompt": "Extract the pink sticker-like badge with the text 'SUPER' and surrounding decorative outline.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "title_star_left",
+      "type": "static",
+      "type_reasoning": "Small 4-point star icon serving as purely decorative flair next to the title.",
+      "bbox": [
+        0.301,
+        0.149,
+        0.032,
+        0.021
+      ],
+      "z_index": 2,
+      "description": "Small pink four-point star on the left side of the main title.",
+      "extraction_prompt": "Extract the small pink 4-point star graphic.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "title_star_right",
+      "type": "static",
+      "type_reasoning": "Small 4-point star icon serving as purely decorative flair next to the title.",
+      "bbox": [
+        0.664,
+        0.149,
+        0.032,
+        0.021
+      ],
+      "z_index": 2,
+      "description": "Small pink four-point star on the right side of the main title.",
+      "extraction_prompt": "Extract the small pink 4-point star graphic.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "attribute_chip_1",
+      "type": "static",
+      "type_reasoning": "Stylized decorative pill-shaped chip containing text and a mini bubble tea icon, acts as a visual label/callout for the character.",
+      "bbox": [
+        0.067,
+        0.266,
+        0.224,
+        0.046
+      ],
+      "z_index": 3,
+      "description": "White and pink pill-shaped chip reading '黑糖珍珠' with a small milk tea cup icon on the left.",
+      "extraction_prompt": "Extract the pink-outlined pill-shaped badge containing the text '黑糖珍珠' and a small milk tea icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "attribute_chip_2",
+      "type": "static",
+      "type_reasoning": "Stylized decorative pill-shaped chip containing text and a mini bubble tea icon.",
+      "bbox": [
+        0.707,
+        0.198,
+        0.229,
+        0.046
+      ],
+      "z_index": 3,
+      "description": "White and pink pill-shaped chip reading 'Q弹厚乳' with a small milk tea cup icon on the right.",
+      "extraction_prompt": "Extract the pink-outlined pill-shaped badge containing the text 'Q弹厚乳' and a small milk tea icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "attribute_chip_3",
+      "type": "static",
+      "type_reasoning": "Stylized decorative pill-shaped chip containing text and a mini bubble tea icon.",
+      "bbox": [
+        0.637,
+        0.381,
+        0.285,
+        0.046
+      ],
+      "z_index": 3,
+      "description": "White and pink pill-shaped chip reading '经典奶茶系' with a small milk tea cup icon on the right.",
+      "extraction_prompt": "Extract the pink-outlined pill-shaped badge containing the text '经典奶茶系' and a small milk tea icon.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "fortune_seal_stamp",
+      "type": "static",
+      "type_reasoning": "A decorative graphic imitating a traditional fortune-telling seal or stamp with calligraphic text.",
+      "bbox": [
+        0.101,
+        0.509,
+        0.179,
+        0.075
+      ],
+      "z_index": 2,
+      "description": "Pink graphical stamp/seal with stylized Chinese text '解签' inside an irregular border.",
+      "extraction_prompt": "Extract the pink decorative stamp graphic with the text '解签'.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "card_suspension_ring_left",
+      "type": "static",
+      "type_reasoning": "A skeumorphic graphical element depicting a hanging ring connecting two UI sections.",
+      "bbox": [
+        0.133,
+        0.596,
+        0.027,
+        0.054
+      ],
+      "z_index": 3,
+      "description": "A small white/pink 3D-looking ring connecting the top pink container and the bottom white card on the left side.",
+      "extraction_prompt": "Extract the small 3D ring connecting the UI panels on the left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "card_suspension_ring_right",
+      "type": "static",
+      "type_reasoning": "A skeumorphic graphical element depicting a hanging ring connecting two UI sections.",
+      "bbox": [
+        0.835,
+        0.596,
+        0.027,
+        0.054
+      ],
+      "z_index": 3,
+      "description": "A small white/pink 3D-looking ring connecting the top pink container and the bottom white card on the right side.",
+      "extraction_prompt": "Extract the small 3D ring connecting the UI panels on the right.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

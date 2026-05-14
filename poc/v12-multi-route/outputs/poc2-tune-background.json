@@ -1,0 +1,21 @@
+{
+  "elements": [
+    {
+      "entity_name": "Global Background",
+      "type": "static",
+      "type_reasoning": "This is the underlying full-screen visual environment. It consists of a pink gradient with subtle glowing ambient light and faint sparkle textures, serving as the base canvas for all foreground UI, containers, and characters.",
+      "bbox": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "z_index": -1,
+      "description": "Full-screen pink gradient background with faint glowing star and sparkle textures.",
+      "extraction_prompt": "Extract the pure background layer: a full-screen pink gradient with subtle ambient glowing stars and sparkles, devoid of any foreground containers, UI elements, characters, or text.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "elements": [
+    {
+      "entity_name": "pink_3d_display_box",
+      "type": "static",
+      "type_reasoning": "A highly stylized, 3D rendered pink display case/box with internal depth, lighting, a crenellated top edge, and a thick 3D base. It serves as the main stage for the character and cannot be recreated with simple code.",
+      "bbox": [
+        0.03,
+        0.05,
+        0.94,
+        0.58
+      ],
+      "z_index": 1,
+      "description": "Large pink 3D display box containing the main character, with an archway graphic inside and a 3D base.",
+      "extraction_prompt": "Extract the large pink 3D display box with the crenellated top edge, inner glowing arch background, and thick bottom base. Do not include the character, text, or floating badges if possible, just the empty container.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "product_list_card_panel",
+      "type": "code",
+      "type_reasoning": "A standard white rounded rectangle card serving as a container for the product list items at the bottom of the screen.",
+      "bbox": [
+        0.04,
+        0.63,
+        0.92,
+        0.35
+      ],
+      "z_index": 1,
+      "description": "White rounded rectangle panel at the bottom containing the list of available drinks.",
+      "shape_spec": "rect with approx 16px border radius",
+      "material_spec": "solid white background",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "tag_container_pearl",
+      "type": "static",
+      "type_reasoning": "Custom-shaped label baseboard (pill shape with a small pointer/tail and decorative border) holding text.",
+      "bbox": [
+        0.07,
+        0.27,
+        0.21,
+        0.04
+      ],
+      "z_index": 2,
+      "description": "Small white tag with pink border and pointer, holding the text '黑糖珍珠'.",
+      "extraction_prompt": "Extract the small white pill-shaped tag with a pink border, a small pointer pointing right, and a tiny icon on the left.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "tag_container_q_milk",
+      "type": "static",
+      "type_reasoning": "Custom-shaped label baseboard holding text.",
+      "bbox": [
+        0.71,
+        0.21,
+        0.21,
+        0.04
+      ],
+      "z_index": 2,
+      "description": "Small white tag with pink border and pointer, holding the text 'Q弹厚乳'.",
+      "extraction_prompt": "Extract the small white pill-shaped tag with a pink border, a small pointer pointing left, and a tiny icon on the right.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "tag_container_classic",
+      "type": "static",
+      "type_reasoning": "Custom-shaped label baseboard holding text.",
+      "bbox": [
+        0.65,
+        0.37,
+        0.25,
+        0.04
+      ],
+      "z_index": 2,
+      "description": "Small white tag with pink border and pointer, holding the text '经典奶茶系'.",
+      "extraction_prompt": "Extract the small white pill-shaped tag with a pink border, a small pointer pointing up-left, and a tiny icon on the right.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}
