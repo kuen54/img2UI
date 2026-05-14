@@ -326,9 +326,8 @@ function errMessage(e: unknown): string {
 // 只支持 apimart async + openai sync 两种(SPEC § Provider 调用模式 § image generation)
 // =============================================================================
 
-const APIMART_INITIAL_DELAY_MS = 12_000
-const APIMART_POLL_INTERVAL_MS = 5_000
-const APIMART_MAX_ATTEMPTS = 60   // Phase 8f BUG #2:60 × 5s = 300s(5 分钟兜底)
+// Phase 8f BUG #2:provider 字段缺失时的 fallback。常量保留为 callApimartAsync 内的默认值
+const APIMART_MAX_ATTEMPTS = 60   // 60 × 5s = 300s(5 分钟兜底)
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 Chrome/120.0.0.0'
 
 export type CallImageGenOptions = {
