@@ -16,9 +16,15 @@
 
 ## 当前阶段
 
-**Phase 4:真实 Pass 1 + Element Review**(进行中)
+**Phase 5:真实 Pass 2 + Asset Review**(进行中)
 
 - ✅ Phase 0:PoC v11 锁定(2026-05-13),架构终版:Pass 1 (gemini) → Pass 2 (gpt-image-2-official, 绿幕 #00FF00) → 本地 chroma green key → scipy split_elements 切片
+- ✅ Phase 1:Next.js 16 + shadcn v4 + 基础库 / Sidebar + 占位页面
+- ✅ Phase 2:Provider 配置 CRUD + Settings UI
+- ✅ Phase 3:Project / Page / State CRUD + 多文件上传 + Mock Pass 1 + Pipeline stepper
+- ✅ Phase 4:真实 Pass 1 LLM 调用 + Element Review canvas
+- 🟡 Phase 5:真实 Pass 2(apimart async + chroma green key + scipy 切片)+ Asset Review
+- ⚪ Phase 6-7:见 [PLAN.md](./PLAN.md)
 - ✅ Phase 1:Next.js 16 + shadcn v4 + 基础库 / Sidebar + 占位页面
 - ✅ Phase 2:Provider 配置 CRUD + Settings UI(API key 双向 mask + Test Connection)
 - ✅ Phase 3:Project / Page / State CRUD + 多文件上传 + Mock Pass 1 + Pipeline stepper

@@ -320,3 +320,143 @@ function errMessage(e: unknown): string {
   }
   return String(e)
 }
+
+// =============================================================================
+// callImageGen:完整 image generation(Pass 2 主调用,Phase 5 新增)
+// 只支持 apimart async + openai sync 两种(SPEC § Provider 调用模式 § image generation)
+// =============================================================================
+
+const APIMART_INITIAL_DELAY_MS = 12_000
+const APIMART_POLL_INTERVAL_MS = 5_000
+const APIMART_MAX_ATTEMPTS = 36   // 36 × 5s = 180s
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 Chrome/120.0.0.0'
+
+export type CallImageGenOptions = {
+  prompt: string
+  reference_image_base64?: string  // 完整 data URL `data:image/png;base64,...`
+  size?: string                    // apimart: '1:1' / '9:16';openai: '1024x1024' 等
+  resolution?: string              // apimart 专用:'1k' / '2k' / '4k'
+  quality?: 'low' | 'medium' | 'high'
+  n?: number
+  signal?: AbortSignal
+}
+
+export async function callImageGen(
+  provider: ProviderConfig,
+  opts: CallImageGenOptions,
+): Promise<{ image: Buffer; cost?: number; latency_ms: number }> {
+  if (provider.kind !== 'image_gen') throw new Error(`provider kind 不是 image_gen: ${provider.kind}`)
+  if (!provider.api_key) throw new Error('api_key 未填')
+  if (!provider.model) throw new Error('model 未填')
+
+  const t0 = Date.now()
+  if (provider.api_format === 'apimart' && provider.is_async) {
+    const result = await callApimartAsync(provider, opts)
+    return { ...result, latency_ms: Date.now() - t0 }
+  }
+  if (provider.api_format === 'openai') {
+    const buffer = await callOpenAIImageSync(provider, opts)
+    return { image: buffer, latency_ms: Date.now() - t0 }
+  }
+  throw new Error(`image_gen 不支持 api_format=${provider.api_format} is_async=${String(provider.is_async)}`)
+}
+
+async function callApimartAsync(
+  p: ProviderConfig,
+  opts: CallImageGenOptions,
+): Promise<{ image: Buffer; cost?: number }> {
+  // 1. submit
+  const submitBody: Record<string, unknown> = {
+    model: p.model,
+    prompt: opts.prompt,
+    size: opts.size ?? '1:1',
+    resolution: opts.resolution ?? '1k',
+    quality: opts.quality ?? p.default_quality ?? 'high',
+    n: opts.n ?? 1,
+  }
+  if (opts.reference_image_base64) {
+    submitBody.image_urls = [opts.reference_image_base64]
+  }
+  const submitRes = await fetch(`${p.base_url}/images/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${p.api_key}`,
+    },
+    body: JSON.stringify(submitBody),
+    ...(opts.signal !== undefined && { signal: opts.signal }),
+  })
+  if (!submitRes.ok) {
+    throw new Error(`apimart submit HTTP ${submitRes.status}: ${(await submitRes.text()).slice(0, 200)}`)
+  }
+  const submitJson = (await submitRes.json()) as { data?: Array<{ task_id?: string }> }
+  const taskId = submitJson.data?.[0]?.task_id
+  if (!taskId) throw new Error(`apimart submit 未返回 task_id: ${JSON.stringify(submitJson).slice(0, 200)}`)
+
+  // 2. poll
+  await new Promise((r) => setTimeout(r, APIMART_INITIAL_DELAY_MS))
+  let imageUrl: string | null = null
+  let cost: number | undefined
+  for (let i = 0; i < APIMART_MAX_ATTEMPTS; i++) {
+    const pollRes = await fetch(`${p.base_url}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${p.api_key}` },
+      ...(opts.signal !== undefined && { signal: opts.signal }),
+    })
+    if (!pollRes.ok) {
+      throw new Error(`apimart poll HTTP ${pollRes.status}: ${(await pollRes.text()).slice(0, 200)}`)
+    }
+    const pollJson = (await pollRes.json()) as {
+      data?: { status?: string; result?: { images?: Array<{ url?: string[] }> }; cost?: number; error?: string }
+    }
+    const status = pollJson.data?.status
+    if (status === 'completed') {
+      const url = pollJson.data?.result?.images?.[0]?.url?.[0]
+      if (!url) throw new Error('apimart completed 但 result.images[0].url[0] 缺失')
+      imageUrl = url
+      cost = pollJson.data?.cost
+      break
+    }
+    if (status === 'failed') {
+      throw new Error(`apimart task failed: ${pollJson.data?.error ?? 'unknown'}`)
+    }
+    await new Promise((r) => setTimeout(r, APIMART_POLL_INTERVAL_MS))
+  }
+  if (!imageUrl) throw new Error('apimart 轮询超时(>3min)')
+
+  // 3. download(必须带浏览器 UA,否则 S3 403)
+  const dlRes = await fetch(imageUrl, {
+    headers: { 'User-Agent': BROWSER_UA },
+    ...(opts.signal !== undefined && { signal: opts.signal }),
+  })
+  if (!dlRes.ok) throw new Error(`apimart download HTTP ${dlRes.status}`)
+  const arrayBuf = await dlRes.arrayBuffer()
+  return { image: Buffer.from(arrayBuf), ...(cost !== undefined && { cost }) }
+}
+
+async function callOpenAIImageSync(
+  p: ProviderConfig,
+  opts: CallImageGenOptions,
+): Promise<Buffer> {
+  const body: Record<string, unknown> = {
+    model: p.model,
+    prompt: opts.prompt,
+    size: opts.size ?? '1024x1024',
+    n: opts.n ?? 1,
+    response_format: 'b64_json',
+  }
+  if (opts.quality) body.quality = opts.quality
+  const res = await fetch(`${p.base_url}/images/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${p.api_key}`,
+    },
+    body: JSON.stringify(body),
+    ...(opts.signal !== undefined && { signal: opts.signal }),
+  })
+  if (!res.ok) throw new Error(`openai image HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  const json = (await res.json()) as { data?: Array<{ b64_json?: string }> }
+  const b64 = json.data?.[0]?.b64_json
+  if (!b64) throw new Error('openai 响应无 b64_json')
+  return Buffer.from(b64, 'base64')
+}
