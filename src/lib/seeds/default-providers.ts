@@ -18,7 +18,7 @@ export function defaultProviders(): ProviderConfig[] {
       api_key: '',  // 用户自填
       model: 'gemini-3.1-pro-preview',
       default_temperature: 1,  // PoC v8-v11 实测最优
-      default_max_tokens: 12000,
+      default_max_tokens: 32000,  // gemini thinking_config 占 budget,中文 30 元素 JSON ~6k char,留 buffer 防截断(2026-05-14 dogfood 验证 12k 不够)
       vision_capable: true,
       active: true,
       created_at: now,

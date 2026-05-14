@@ -200,16 +200,35 @@ async function mergeWithExisting(state: State, llmElements: LlmElementOut[]): Pr
   const merged: Element[] = [...existing]
   const seenIds = new Set<string>()
 
+  // bbox 归一化兜底:LLM 偶尔无视 prompt 输出像素坐标(observed: gemini-3.1-pro 不稳定)
+  // 启发式:同批中任一元素 bbox 任意分量 > 1.5 → 视为像素坐标,按图片尺寸整批归一化
+  const isPixelCoords = llmElements.some((el) =>
+    Array.isArray(el.bbox) && el.bbox.some((v) => typeof v === 'number' && v > 1.5),
+  )
+
   for (const llm of llmElements) {
     const name = llm.entity_name || `unnamed_${newElementId()}`
     const key = normalizeName(name)
 
-    // clamp bbox 到 [0, 1]
+    const rawBbox: [number, number, number, number] = [
+      llm.bbox?.[0] ?? 0,
+      llm.bbox?.[1] ?? 0,
+      llm.bbox?.[2] ?? 0,
+      llm.bbox?.[3] ?? 0,
+    ]
+    const normalized = isPixelCoords
+      ? ([
+          rawBbox[0] / state.width,
+          rawBbox[1] / state.height,
+          rawBbox[2] / state.width,
+          rawBbox[3] / state.height,
+        ] as [number, number, number, number])
+      : rawBbox
     const bbox: [number, number, number, number] = [
-      clamp01(llm.bbox?.[0] ?? 0),
-      clamp01(llm.bbox?.[1] ?? 0),
-      clamp01(llm.bbox?.[2] ?? 0),
-      clamp01(llm.bbox?.[3] ?? 0),
+      clamp01(normalized[0]),
+      clamp01(normalized[1]),
+      clamp01(normalized[2]),
+      clamp01(normalized[3]),
     ]
 
     const found = indexedExisting.get(key)
