@@ -49,6 +49,11 @@ vi.mock('@/lib/assets', () => ({
   writeAssetBinary: vi.fn(),
   patchAsset: vi.fn(),
 }))
+vi.mock('@/lib/slices', () => ({
+  writeSlice: vi.fn(),
+  saveManifest: vi.fn(),
+  assignSliceToElement: vi.fn(),
+}))
 vi.mock('@/lib/bbox-crop', () => ({
   cropFromBbox: vi.fn().mockImplementation(async (_buf: Buffer, bbox: number[]) =>
     Buffer.from(`crop-${bbox.join(',')}`),
@@ -80,6 +85,7 @@ import { getPage } from '@/lib/pages'
 import { getProject } from '@/lib/projects'
 import { getElementsByPage } from '@/lib/elements'
 import { createOrUpdateAsset, writeAssetBinary, patchAsset } from '@/lib/assets'
+import { writeSlice, saveManifest, assignSliceToElement } from '@/lib/slices'
 import { sliceAssets } from '@/lib/slicer'
 
 describe('runPass2 multi-route', () => {
@@ -118,6 +124,9 @@ describe('runPass2 multi-route', () => {
     vi.mocked(writeAssetBinary).mockReset()
     vi.mocked(patchAsset).mockReset()
     vi.mocked(setPipelineStatus).mockReset()
+    vi.mocked(writeSlice).mockReset()
+    vi.mocked(saveManifest).mockReset()
+    vi.mocked(assignSliceToElement).mockReset()
     vi.mocked(sliceAssets).mockReset()
     vi.mocked(sliceAssets).mockResolvedValue([
       { buffer: Buffer.from('s1'), opaque_pct: 50, bbox: [0, 0, 10, 10] },
@@ -247,10 +256,19 @@ describe('runPass2 multi-route', () => {
 
     await runPass2('st')
     // 即使每路返回 2 切片,subject 路只该匹配 e1(1 个 element);decoration 路只匹配 e2
-    // writeAssetBinary 应该只被调 2 次(不是 4 次)
-    expect(writeAssetBinary).toHaveBeenCalledTimes(2)
-    const calledIds = vi.mocked(writeAssetBinary).mock.calls.map((c) => c[0]).sort()
+    // assignSliceToElement 应该只被调 2 次(不是 4 次)
+    expect(assignSliceToElement).toHaveBeenCalledTimes(2)
+    const calledIds = vi
+      .mocked(assignSliceToElement)
+      .mock.calls.map((c) => c[3])
+      .sort()
     expect(calledIds).toEqual(['e1', 'e2'])
+
+    // 切片库:每路所有 2 个 slice 都写到了切片库(不是只写指派的那 1 个)
+    // 2 路 × 2 slice = 4 次 writeSlice 调用
+    expect(writeSlice).toHaveBeenCalledTimes(4)
+    // 每路一份 manifest
+    expect(saveManifest).toHaveBeenCalledTimes(2)
   })
 
   it('skips type=code elements entirely', async () => {
@@ -307,11 +325,11 @@ describe('runPass2 multi-route', () => {
       .mock.calls.filter(([input]) => input.status === 'failed' && input.id === 'e_bad')
     expect(failedCalls.length).toBe(1)
 
-    // e_ok 写入 asset(非 failed)
+    // e_ok 通过 assignSliceToElement 写入 asset(非 failed 路径)
     const okCalls = vi
-      .mocked(createOrUpdateAsset)
-      .mock.calls.filter(([input]) => input.id === 'e_ok' && input.status !== 'failed')
-    expect(okCalls.length).toBeGreaterThan(0)
+      .mocked(assignSliceToElement)
+      .mock.calls.filter(([, , , elementId]) => elementId === 'e_ok')
+    expect(okCalls.length).toBe(1)
   })
 
   it('Phase 8f BUG #1: 整路所有 elements 都 crop 失败时 fail 该路,不阻断其他路', async () => {
