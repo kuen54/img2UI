@@ -40,7 +40,6 @@ export default function ElementReviewPage({ params }: PageProps) {
   const [saving, setSaving] = useState(false)
   // 多路 sub-runs 实时进度(8d.6)
   const [subRuns, setSubRuns] = useState<PipelineRun[]>([])
-  const [activePass, setActivePass] = useState<'pass1' | 'pass2' | null>(null)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadAll = useCallback(async () => {
@@ -70,38 +69,33 @@ export default function ElementReviewPage({ params }: PageProps) {
     void loadAll()
   }, [loadAll])
 
-  // 多路 sub-runs 轮询:当前 state 处于 pass{1,2}_running 时拉 sub_runs
+  // 当前 state 的 active pass(同步派生,避免 effect 内 setState)
+  const { activePass, parentRunId } = useMemo(() => {
+    const cur = states.find((s) => s.id === currentStateId)
+    if (!cur) return { activePass: null as 'pass1' | 'pass2' | null, parentRunId: undefined as string | undefined }
+    if (cur.pipeline_status === 'pass1_running') {
+      return { activePass: 'pass1' as const, parentRunId: cur.pass1_run_id }
+    }
+    if (cur.pipeline_status === 'pass2_running') {
+      return { activePass: 'pass2' as const, parentRunId: cur.pass2_run_id }
+    }
+    return { activePass: null, parentRunId: undefined }
+  }, [states, currentStateId])
+
+  // 多路 sub-runs 轮询:active pass 时拉 sub_runs
   useEffect(() => {
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current)
       pollTimerRef.current = null
     }
-    const cur = states.find((s) => s.id === currentStateId)
-    if (!cur) {
-      setSubRuns([])
-      setActivePass(null)
+    if (!activePass || !parentRunId) {
       return
     }
-    let pass: 'pass1' | 'pass2' | null = null
-    let parentRunId: string | undefined
-    if (cur.pipeline_status === 'pass1_running') {
-      pass = 'pass1'
-      parentRunId = cur.pass1_run_id
-    } else if (cur.pipeline_status === 'pass2_running') {
-      pass = 'pass2'
-      parentRunId = cur.pass2_run_id
-    }
-    if (!pass || !parentRunId) {
-      setSubRuns([])
-      setActivePass(null)
-      return
-    }
-    setActivePass(pass)
 
     let cancelled = false
     const poll = async () => {
       try {
-        const { sub_runs } = await getRunWithSubApi(parentRunId!)
+        const { sub_runs } = await getRunWithSubApi(parentRunId)
         if (cancelled) return
         setSubRuns(sub_runs)
       } catch {
@@ -119,7 +113,7 @@ export default function ElementReviewPage({ params }: PageProps) {
       cancelled = true
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
     }
-  }, [states, currentStateId, pageId])
+  }, [activePass, parentRunId, pageId])
 
   const dirty = useMemo(
     () => JSON.stringify(savedElements) !== JSON.stringify(draftElements),

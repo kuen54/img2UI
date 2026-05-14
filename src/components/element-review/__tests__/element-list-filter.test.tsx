@@ -5,7 +5,16 @@ import { ElementList } from '@/components/element-review/element-list'
 import type { Element, State } from '@/lib/types'
 
 const states: State[] = [
-  { id: 's', page_id: 'p', name: 's1', screenshot_path: '', created_at: '', updated_at: '' },
+  {
+    id: 's',
+    page_id: 'p',
+    name: 's1',
+    original_image_path: '',
+    width: 100,
+    height: 100,
+    pipeline_status: 'idle',
+    created_at: '',
+  },
 ]
 
 const baseEl = {
