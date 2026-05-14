@@ -36,4 +36,14 @@ describe('renderPass1RoutePrompt', () => {
     const set = new Set(prompts)
     expect(set.size).toBe(5)
   })
+
+  it('Phase 8f BUG #1: includes bbox boundary constraint hint (x + w ≤ 1)', () => {
+    // Pass 1 偶尔回 x=1.0 越界 bbox(实测 status_bar [1, 0.113, 0.237, 0.068])
+    // prompt 必须明示 x+w≤1 / y+h≤1 约束 + 全屏元素正确写法
+    const out = renderPass1RoutePrompt('subject', BASE)
+    expect(out).toContain('x + w ≤ 1')
+    expect(out).toContain('y + h ≤ 1')
+    // 检查全屏元素写法的引导
+    expect(out).toContain('NORMALIZED')
+  })
 })
