@@ -2,7 +2,7 @@
 
 把 AI 生图设计稿(GPT-image-2 等产出的栅格化 PNG)转成 coding agent 可消费的素材包。本地 web app,Next.js + 文件系统 JSON,无独立后端
 
-**项目还在设计阶段,代码尚未启动。**
+**当前阶段**:v0.1.x MVP-α 已上线 + v0.2 多路 Pass + 拖框生效化已完成(Phase 8a-8e 全部 merge)。CHANGELOG `[Unreleased]` 攒 v0.2 草稿待 tag。
 
 ## 第一次进项目?读这两份
 
