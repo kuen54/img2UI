@@ -280,6 +280,7 @@ export default function AssetReviewPage({ params }: PageProps) {
         <AssetDetailPanel
           asset={selectedAsset}
           element={selectedElement}
+          canonicalStateId={currentStateId}
           onReExtracted={() => void loadAll()}
         />
       )}
