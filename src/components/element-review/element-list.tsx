@@ -14,6 +14,7 @@ import {
   type VisualCategory,
 } from '@/lib/visual-category'
 import { VisualCategoryBadge } from './visual-category-badge'
+import { getBboxWarning } from './bbox-warning'
 
 export type ElementListProps = {
   elements: Element[]
@@ -138,6 +139,7 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
           <ul className="divide-y">
             {filtered.map((el) => {
               const isSelected = el.id === selectedId
+              const warning = getBboxWarning(el)
               return (
                 <li
                   key={el.id}
@@ -155,7 +157,27 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
                     )}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{el.name}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-medium truncate">{el.name}</p>
+                      {warning.level === 'error' && (
+                        <span
+                          aria-label={warning.reason}
+                          title={warning.reason}
+                          className="text-rose-600 shrink-0 leading-none"
+                        >
+                          ⚠️
+                        </span>
+                      )}
+                      {warning.level === 'warning' && (
+                        <span
+                          aria-label={warning.reason}
+                          title={warning.reason}
+                          className="text-amber-600 shrink-0 leading-none"
+                        >
+                          ℹ️
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <Badge
                         variant="outline"
