@@ -156,6 +156,7 @@ type Element = {
   state_ids: string[]              // 出现在哪些 state
   name: string                     // "卡通娃娃"
   type: 'static' | 'code'
+  visual_category: VisualCategory  // Pass 1 输出(Phase 8b),5 类 + other 兜底
   bbox: [number, number, number, number]   // canonical 原图归一化坐标 [x,y,w,h] ∈ [0,1]
   z_index: number                  // Pass 1 产出,可手改
   description: string              // for coding agent + Pass 2 prompt 渲染源, ≤ 80 字
@@ -165,10 +166,25 @@ type Element = {
   material_spec?: string           // 渐变 / 阴影 / 材质参数
 
   cross_state_notes?: string       // "loading 状态下此元素颜色变灰"
+  pass1_routes_seen?: string[]     // debug:此 element 在哪几路 Pass 1 中被识别(Phase 8b)
   reviewed: boolean                // 用户是否手动 review 过
   created_at: string
   updated_at: string
 }
+
+// Phase 8b 新增:5 类视觉分类(正交于 type=static/code)
+// 用于 Pass 1 5 路并行调度 + Pass 2 按类分组(Phase 8c)
+// 不是「第三类 type」,只是给 Pass 1/2 流程用的元数据
+type VisualCategory =
+  | 'subject'        // 主体:IP 角色 / 大艺术字标题 / 主商品图
+  | 'button'         // 异形 / 复杂材质 / 强活动感按钮
+  | 'container'      // 异形展示框 / 票券 / 卡片底图(承载文字内容,响应式)
+  | 'background'    // 全页渐变 / 大色块 / 光晕 / 远景纹理
+  | 'decoration'   // 星星 / 彩带 / 高光 / 小贴纸徽章 / 固定文案小标签
+  | 'other'          // 5 类都套不上的兜底,人工 review 时归类
+
+// 优先级:数字越小越优先(IoU 合并冲突时高优先级胜出)
+// subject(1) < button(2) < container(3) < background(4) < decoration(5) < other(6)
 
 type AssetStatus = 'extracted' | 'validated' | 'uploaded' | 'failed'
 
@@ -191,7 +207,14 @@ type Asset = {
 ### PipelineRun
 
 ```ts
-type PipelinePassKind = 'pass1' | 'pass2' | 'validate' | 're_extract'
+type PipelinePassKind =
+  | 'pass1'                                                              // Phase 8b:多路 Pass 1 的总 run(audit 入口)
+  | 'pass1_subject' | 'pass1_button' | 'pass1_container'                 // Phase 8b sub-runs(每路独立 callMllm + sub-run)
+  | 'pass1_background' | 'pass1_decoration'
+  | 'pass2'                                                              // Phase 8c 之前:单次 image_gen
+  | 'pass2_subject' | 'pass2_button' | 'pass2_container'                 // Phase 8c sub-runs(按 visual_category 分组)
+  | 'pass2_background' | 'pass2_decoration' | 'pass2_other'
+  | 'validate' | 're_extract'
 
 type PipelineRun = {
   id: string                       // nanoid(8)
@@ -414,7 +437,31 @@ api_format='s3',用 @aws-sdk/client-s3 客户端。Test Connection 用 HeadBucke
 
 ### Pass 1: 布局分析
 
-**System / Developer message:**
+**Phase 8b 后:5 路并行 only-X(non-trivial 改动)**
+
+Pass 1 不再是 1-shot,而是 **5 路并行调用** mllm,每路只识别一类 `visual_category`:
+
+| 路次 | category | sub-run pass kind |
+|---|---|---|
+| 1 | subject | `pass1_subject` |
+| 2 | button | `pass1_button` |
+| 3 | container | `pass1_container` |
+| 4 | background | `pass1_background` |
+| 5 | decoration | `pass1_decoration` |
+
+每路在原 base prompt 前面拼一段 over-include 头部(由 `lib/prompts/render-pass1-route.ts` 在运行时拼接),拼接源:
+
+- `VISUAL_CATEGORY_DEFINITION_EN[category]`(英文严格定义,见 `lib/visual-category.ts`)
+- `VISUAL_CATEGORY_EXAMPLES_CN[category]`(中文具体物名锚定,PoC #2 v3 验证可显著提升召回率)
+- 「OVER-INCLUDE PHILOSOPHY」措辞(反例:`PoC #2 v2` 用 EXCLUSIVE「DO NOT return others」会让边界 case 普遍丢元素)
+
+下游合并:`mergeRoutes`(IoU > 0.5 视为同一物理元素,优先级 subject < button < container < background < decoration 决定 category 归属);Promise.allSettled 容忍 ≤ 2/5 路失败,< 3 抛 `PASS1_ERROR`。`pass1_routes_seen` 字段记录元素被哪几路命中(debug 用)。
+
+总 run 用 `pass: 'pass1'` 创建作 audit 入口,`llm_response.successful_routes` / `failed_routes` 记录路次结果;sub-runs 用 `pass: 'pass1_${category}'` 单独创建,挂同一 `state_id`,通过查询 state 关联。
+
+---
+
+**System / Developer message(base prompt,5 路共享):**
 
 ```
 You are a UI design analyzer. Identify EVERY visible visual element in the design mockup. Be EXHAUSTIVE — typical pages have 15-30 elements.
