@@ -567,6 +567,8 @@ src/lib/seeds/default-prompts.ts  # 首启动写入的 Pass 1/2 默认 prompt
 
 ## Phase 3:Project / Page / State CRUD + 上传
 
+**实施级子 plan**:[`docs/plans/phase-3-projects-pages-states.md`](./docs/plans/phase-3-projects-pages-states.md)(Task 3.1-3.7 完整 checkbox / 代码片段 / 验证步骤,**实施时按子 plan 走**)
+
 **目的:** 项目-页面 navigation,页面下能上传多张状态图,触发 Pass 1 占位(返回模拟数据)
 
 **Files to create:**
