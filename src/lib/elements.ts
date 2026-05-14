@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { promises as fs } from 'node:fs'
 
 import type { Element } from '@/lib/types'
 import { DATA_ROOT, readJson, writeJson } from '@/lib/fs-utils'
@@ -14,4 +15,8 @@ export async function getElementsByPage(pageId: string): Promise<Element[]> {
 
 export async function saveElementsForPage(pageId: string, elements: Element[]): Promise<void> {
   await writeJson(fileFor(pageId), elements)
+}
+
+export async function deleteElementsForPage(pageId: string): Promise<void> {
+  await fs.unlink(fileFor(pageId)).catch(() => {})
 }
