@@ -662,6 +662,8 @@ src/components/element-review/element-detail-panel.tsx
 
 ## Phase 5:真实 Pass 2 + Asset Review
 
+**实施级子 plan**:[`docs/plans/phase-5-pass2-asset-review.md`](./docs/plans/phase-5-pass2-asset-review.md)(Task 5.1-5.4)
+
 **目的:** 真实接 image_gen 跑资产提取(绿幕 chroma key 路径),scipy 切片,反向校验,Asset Review 全功能
 
 **Files to create:**
