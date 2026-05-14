@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ★ 测试结果只暴露 { ok, error?, latency_ms? },绝对不返回 raw api_key
+  // matting kind 暂不支持 ping(没有免费 ping endpoint,koukoutu 每次 1 积分)
   const result =
     provider.kind === 'mllm'
       ? await pingMllm(provider)
@@ -25,7 +26,9 @@ export async function POST(req: NextRequest) {
         ? await pingImageGen(provider)
         : provider.kind === 'cdn'
           ? await pingCdn(provider)
-          : ({ ok: false as const, error: `unsupported kind: ${String(provider.kind)}` })
+          : provider.kind === 'matting'
+            ? ({ ok: false as const, error: '抠图 provider 暂不支持连通测试,请到 Asset Review 实测' })
+            : ({ ok: false as const, error: `unsupported kind: ${String(provider.kind)}` })
 
   return NextResponse.json(result)
 }

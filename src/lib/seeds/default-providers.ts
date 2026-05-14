@@ -72,5 +72,20 @@ export function defaultProviders(): ProviderConfig[] {
       created_at: now,
       updated_at: now,
     },
+
+    // === 抠图模型(可选 fallback,不在默认 pipeline) ===
+    // CLAUDE.md § 7:默认仍是绿幕 + chroma key,这条 provider 仅用于 Asset Review 手动重抠
+    {
+      id: newProviderId(),
+      kind: 'matting',
+      name: 'koukoutu (sync)',
+      api_format: 'koukoutu',
+      base_url: 'https://sync.koukoutu.com/v1',
+      api_key: '',  // 用户自填,本地 data/config.json 注入,不进 git
+      model: 'background-removal',  // koukoutu 的 model_key,matting-client 映射成 form 字段
+      active: true,
+      created_at: now,
+      updated_at: now,
+    },
   ]
 }

@@ -40,4 +40,12 @@ export const uploadAllAssetsApi = (pageId: string) =>
     { method: 'POST' },
   )
 
+export const reKeyViaApiClient = (stateId: string) =>
+  http<{
+    run_id: string
+    refreshed: number
+    failed_routes: { category: string; error: string }[]
+  }>(`/api/states/${stateId}/re-key-via-api`, { method: 'POST' })
+
+// 拿 elements(已存在 elements-client 里,re-export 方便组件用)
 export type { Element }

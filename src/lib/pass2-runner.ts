@@ -35,6 +35,8 @@ import {
 import type { SliceManifest, SliceManifestEntry } from '@/lib/types'
 import { renderPass2RoutePrompt } from '@/lib/prompts/render-pass2-route'
 import { cropFromBbox } from '@/lib/bbox-crop'
+import { listMultiRouteFiles } from '@/lib/multi-png-stack'
+import { callMatting } from '@/lib/matting-client'
 import { type VisualCategory } from '@/lib/visual-category'
 
 export type Pass2Result = { run_id: string; created_assets: number }
@@ -481,6 +483,151 @@ async function sharpDims(buf: Buffer): Promise<{ width: number; height: number }
   const sharp = (await import('sharp')).default
   const m = await sharp(buf).metadata()
   return { width: m.width ?? 0, height: m.height ?? 0 }
+}
+
+// =============================================================================
+// reKeyViaApi:用户手动触发的 API 抠图(Asset Review 「用 API 抠图」按钮)
+//
+// 复用 pass2/{stateId}-{cat}.png 绿幕原图,送给抠图 provider(首发 koukoutu sync),
+// 拿到透明 PNG 后覆写 keyed/{stateId}-{cat}.png + 重切片 + 刷新该 category 的 asset。
+// 默认 pipeline 不动 — 仍是绿幕 + chroma key,这条只在用户主动点按钮时跑。
+//
+// 部分失败容忍:某 category 抠图失败 → 该 category 的 asset 不动(保留旧 chroma key 结果),
+// 不像 Pass 2 那样把 asset 标 status=failed。理由:这是用户主动 retry,不该把好的旧结果覆盖坏。
+//
+// 写顺序:matting + slice 都成功后才覆写 keyed/ + 更新 asset。中间任意步骤抛错都不留半成品。
+// =============================================================================
+
+export type ReKeyResult = {
+  run_id: string
+  refreshed: number
+  failed_routes: { category: string; error: string }[]
+}
+
+export async function reKeyViaApi(stateId: string): Promise<ReKeyResult> {
+  const lockKey = `state:${stateId}`
+  try {
+    acquireLock(lockKey, `rekey-${Date.now()}`)
+  } catch (e) {
+    if (e instanceof RunLockConflictError) {
+      throw new Error('该设计稿正在跑 pipeline,稍候再试')
+    }
+    throw e
+  }
+
+  let runId: string | null = null
+  try {
+    const state = await getState(stateId)
+    if (!state) throw new Error('state not found')
+
+    const config = await loadConfig()
+    const provider = config.providers.find((p) => p.kind === 'matting' && p.active)
+    if (!provider) {
+      throw new Error('未配置 active matting provider(去 /settings/models 设置)')
+    }
+
+    const allElements = await getElementsByPage(state.page_id)
+    const staticElements = allElements.filter((e) => e.type === 'static')
+    const elementsByCategory = groupByCategory(staticElements)
+
+    const pass2Dir = path.join(DATA_ROOT, 'pass2')
+    const files = await listMultiRouteFiles(pass2Dir, stateId)
+    if (files.length === 0) {
+      throw new Error('pass2 raw 不存在,请先跑一次 Pass 2')
+    }
+
+    const run = await createRun({
+      state_id: stateId,
+      pass: 're_extract',
+      llm_request: {
+        provider_id: provider.id,
+        model: provider.model ?? 'background-removal',
+        prompt: '[matting API re-key — replaces chroma green key]',
+        images: [state.original_image_path],
+        extra: {
+          method: 'matting_api',
+          api_format: provider.api_format,
+          file_count: files.length,
+        },
+      },
+    })
+    runId = run.id
+
+    const failed: { category: string; error: string }[] = []
+    let refreshed = 0
+    const keyedDir = path.join(DATA_ROOT, 'keyed')
+    await fs.mkdir(keyedDir, { recursive: true })
+
+    for (const file of files) {
+      const cat = inferCategoryFromFilename(file, stateId)
+      const greenScreenPng = await fs.readFile(file)
+      try {
+        const transparentPng = await callMatting(provider, { png: greenScreenPng })
+        const slices = await sliceAssets(transparentPng, {
+          gap: 15,
+          padding: 5,
+          min_size: 30,
+          min_opaque_pct: 1,
+        })
+        await fs.writeFile(path.join(keyedDir, `${stateId}-${cat}.png`), transparentPng)
+
+        const els = elementsByCategory.get(cat as VisualCategory) ?? []
+        const limit = Math.min(els.length, slices.length)
+        for (let i = 0; i < limit; i++) {
+          const el = els[i]!
+          const slice = slices[i]!
+          await writeAssetBinary(el.id, slice.buffer)
+          const meta = await sharpDims(slice.buffer)
+          await createOrUpdateAsset({
+            id: el.id,
+            element_id: el.id,
+            page_id: state.page_id,
+            width: meta.width,
+            height: meta.height,
+            alpha_quality: slice.opaque_pct / 100,
+          })
+          refreshed++
+        }
+      } catch (err) {
+        failed.push({ category: cat, error: (err as Error).message })
+      }
+    }
+
+    if (failed.length === files.length) {
+      throw new Error(`API 抠图全部失败(${failed.length} 路):${failed[0]?.error ?? ''}`)
+    }
+
+    await completeRun(run.id, {
+      llm_response: {
+        successful_routes: files.length - failed.length,
+        total_routes: files.length,
+      },
+      parsed_result: {
+        refreshed,
+        failed_routes: failed,
+        method: 'matting_api',
+      },
+    })
+    return { run_id: run.id, refreshed, failed_routes: failed }
+  } catch (err) {
+    if (runId) {
+      await failRun(runId, {
+        code: 'REKEY_API_ERROR',
+        message: (err as Error).message,
+        retryable: true,
+      })
+    }
+    throw err
+  } finally {
+    releaseLock(lockKey)
+  }
+}
+
+// 从 pass2/{stateId}-{category}.png 推 category。VisualCategory 都是单词,无 `-`,安全。
+function inferCategoryFromFilename(filePath: string, stateId: string): string {
+  const base = path.basename(filePath, '.png')  // 'state_x-button'
+  const prefix = `${stateId}-`
+  return base.startsWith(prefix) ? base.slice(prefix.length) : base
 }
 
 // 仅在测试中用得到的辅助

@@ -41,6 +41,7 @@ export type ProviderCardProps = {
 const MLLM_FORMATS: ApiFormat[] = ['openai', 'anthropic', 'sankuai']
 const IMAGEGEN_FORMATS: ApiFormat[] = ['openai', 'apimart']
 const CDN_FORMATS: ApiFormat[] = ['s3']
+const MATTING_FORMATS: ApiFormat[] = ['koukoutu']
 
 function apiFormatOptions(kind: ProviderKind): ApiFormat[] {
   switch (kind) {
@@ -50,6 +51,8 @@ function apiFormatOptions(kind: ProviderKind): ApiFormat[] {
       return IMAGEGEN_FORMATS
     case 'cdn':
       return CDN_FORMATS
+    case 'matting':
+      return MATTING_FORMATS
   }
 }
 
@@ -133,13 +136,21 @@ export function ProviderCard({
           <ApiKeyInput value={provider.api_key} onChange={(v) => update('api_key', v)} />
         </Field>
 
-        {/* mllm / image_gen 都要 model */}
+        {/* mllm / image_gen / matting 都要 model(matting 时含义是 koukoutu 的 model_key) */}
         {provider.kind !== 'cdn' && (
-          <Field label="模型 ID">
+          <Field
+            label={provider.kind === 'matting' ? '模型 ID(koukoutu model_key)' : '模型 ID'}
+          >
             <Input
               value={provider.model ?? ''}
               onChange={(e) => update('model', e.target.value)}
-              placeholder={provider.kind === 'mllm' ? 'gpt-4o / gemini-3.1-pro-preview' : 'gpt-image-2-official'}
+              placeholder={
+                provider.kind === 'mllm'
+                  ? 'gpt-4o / gemini-3.1-pro-preview'
+                  : provider.kind === 'image_gen'
+                    ? 'gpt-image-2-official'
+                    : 'background-removal'
+              }
               className="font-mono text-sm"
             />
           </Field>
@@ -240,7 +251,11 @@ export function ProviderCard({
         )}
 
         {/* Test Connection */}
-        {!isNew && (
+        {provider.kind === 'matting' ? (
+          <p className="text-xs text-muted-foreground pt-2">
+            抠图 provider 暂不支持连通测试(每次调用消耗 1 积分)。新建后到 Asset Review 点「用 API 抠图」实测。
+          </p>
+        ) : !isNew ? (
           <div className="pt-2">
             <div className="flex items-center gap-2 flex-wrap">
               <TestConnectionButton providerId={provider.id} disabled={hasUnsavedChanges} />
@@ -251,8 +266,7 @@ export function ProviderCard({
               )}
             </div>
           </div>
-        )}
-        {isNew && (
+        ) : (
           <p className="text-xs text-muted-foreground pt-2">新增 provider 需先「保存」后才能测试连通。</p>
         )}
       </CardContent>
