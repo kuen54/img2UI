@@ -4,6 +4,12 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed — 测试隔离 P0(用户 data/ 被五件套清空)
+
+**根因**:`src/lib/fs-utils.ts` 把 `DATA_ROOT` 永远指向 `process.cwd() + /data`,vitest 跑测试时 cwd = 项目根目录 → 测试中的 `DATA_ROOT` 直接指向用户**真实** data/。8 个测试文件(`pages-thumbnail` / `pages` / `projects` / `pipelines` / `thumbnails` / `list-thumbnail-urls` / `states` / `thumbs-route`)都有 `afterEach(async () => { await fs.rm(DATA_ROOT, { recursive: true, force: true }) })`,所以**每次跑 `npm test` 都会把用户真实 data/(projects / pages / states / raw / thumbs / pipelines / config.json / ...) 整个 rm -rf**。dogfood round 4/5 期间被五件套删了 4+ 次。vitest.config.ts 注释明确说「多个测试文件共享 data/ 目录,afterEach 清理会互相干扰 → 串行跑」,但完全没意识到"共享 data/" 是用户真实数据。
+
+**修复**:`fs-utils.ts` 检测 `process.env.VITEST`,vitest 环境下 `DATA_ROOT` 指向 `os.tmpdir()/img2ui-test-{pid}`,测试自然隔离,不动用户真实 data/。8 个测试文件零改动。验证:在 data/ 放 sentinel → 跑 npm test → 194 测试全过 + sentinel 完好。
+
 ### Fixed — Element Review default filters + bbox 异常警告
 
 over-include 架构在密集页面识别 96+ 元素,Element Review list 太长用户挨个调 = 灾难。**保留 over-include 召回率(92%)不动**,仅在 UI 层加默认 filter 保护用户:

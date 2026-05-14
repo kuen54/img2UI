@@ -1,8 +1,15 @@
 import { promises as fs } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { nanoid } from 'nanoid'
 
-export const DATA_ROOT = path.join(process.cwd(), 'data')
+// 测试隔离:vitest 环境下重定向到 OS tmpdir,避免测试文件 afterEach 的
+// `fs.rm(DATA_ROOT, { recursive: true, force: true })` 把用户真实 data/ 删光。
+// 见 fix/test-data-isolation(2026-05-14 dogfood round 5 用户 data/ 被五件套删了 4+ 次)。
+const isVitest = !!process.env.VITEST
+export const DATA_ROOT = isVitest
+  ? path.join(os.tmpdir(), `img2ui-test-${process.pid}`)
+  : path.join(process.cwd(), 'data')
 
 export async function writeAtomic(filepath: string, content: string | Buffer): Promise<void> {
   const dir = path.dirname(filepath)
