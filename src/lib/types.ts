@@ -83,6 +83,7 @@ export type Page = {
   name: string
   route_hint?: string
   canonical_state_id: string
+  thumbnail_path?: string          // data/thumbs/{page-id}.png,canonical state 上传后填(Phase 8e)
   created_at: string
   updated_at: string
 }
