@@ -29,6 +29,7 @@
 |---|---|---|
 | Provider 配置 CRUD + API key 双向 mask | `src/lib/llm-config.ts` + `/settings/{models,cdn}` | evalyst `src/lib/llm-config.ts` 几乎照搬,加 `kind: 'mllm'\|'image_gen'\|'cdn'` discriminator |
 | LLM 调用统一封装(OpenAI/Anthropic/image_gen 分发 + 3 次 retry + 120s 超时) | `src/lib/llm-client.ts` | evalyst `src/lib/llm-client.ts` |
+| 抠图 API client(matting kind,首发 koukoutu sync,Asset Review 手动 fallback) | `src/lib/matting-client.ts` | 自己写 |
 | Pass 1 / Pass 2 / 校验 / 切片 pipeline 主循环 | `src/lib/pipeline-runner.ts` | evalyst `src/lib/batch-runner.ts` |
 | 文件原子写 + 并发锁 | `src/lib/fs-utils.ts`(`writeAtomic`)+ `src/lib/run-lock.ts` | evalyst `src/lib/fs-utils.ts` 直接抄 |
 | CSRF gate | `src/middleware.ts` | evalyst `src/middleware.ts` 直接抄 |
@@ -113,7 +114,7 @@ ref/split_elements.py(scipy binary_dilation + connected component, gap=15)→ �
 
 **Phase 8f BUG #2:apimart polling `poll_max_attempts` 默认 60(5 分钟兜底),不是 24**。多路并发下 apimart 单 task 实测 ~150-220s,偶尔 3-15 分钟(队列拥挤);24 × 5s = 120s 太短,4 路并发普遍超时。新建 image_gen provider 时 UI 默认 60,seed 默认 60。如果某路真要等 5 分钟以上,说明 apimart 队列异常,人为干预(切 provider / 重试)而不是继续抬高超时上限。
 
-### 7. **抠图走本地 chroma green key,不要 koukoutu / rmbg / SAM 任何外部分割模型**(2026-05-13 PoC v11 锁定)
+### 7. **默认抠图走本地 chroma green key,API 抠图(matting kind)只作为 Asset Review 手动 fallback**(2026-05-13 PoC v11 锁定 + 2026-05-15 Phase 8g 加 fallback)
 
 绿幕背景输入下,本地 chroma key 已经 0 噪点 + 0 抠穿:
 - API 调用:0
@@ -135,7 +136,16 @@ G_new = G - max(0, g_excess) for pixels with α > 0
 
 UI 提供 slider 让用户调阈值,Asset Review 提供「edge clean」按钮做局部清理。
 
-**SPEC 之前预留的 `kind: 'segmenter'` provider 已删除**,不再有任何 fallback。如果某页面元素恰好用了纯 #00FF00(罕见,UI 设计稿几乎不存在),处理方式:用户在 Asset Review 单元素重抠 + 手动覆盖,不引入新模型。
+**Phase 8g 加回 `kind: 'matting'` provider(首发 koukoutu sync)作为 Asset Review 手动 fallback** —— 用户在 BatchPngViewer 点「用 API 抠图」按钮才触发,把 `pass2/{state}-{cat}.png` 绿幕原图全部送给抠图 API 重抠,覆写 `keyed/`。**默认 pipeline 不变,仍是绿幕 + chroma key**。
+
+**严守的边界**(否则又退回到 v9-A 的死路:「per-crop koukoutu → chip 白底误抠」):
+- ❌ 不要把 API 抠图当 Pass 2 后的**自动** fallback / 兜底 / 重试
+- ❌ 不要在 element review、pass2 runner、validate 等任何**自动**路径里调 `callMatting`
+- ❌ 不要因为某用户的某张图绿幕抠不好,就把默认改成 API 抠图(那是 1% 的 case,绿幕 95%+ 干净 + 0 成本)
+- ✅ API 抠图永远是用户**主动点按钮**触发 + 单 state 全量重抠 + 失败则保留旧 chroma key 结果(不阻断)
+- ✅ 加新 matting provider(rmbg/SAM)只扩 `MATTING_FORMATS` + `callMatting` switch,**不动**默认 pipeline
+
+如果某页面元素恰好用了纯 #00FF00(罕见,UI 设计稿几乎不存在),处理方式:用户在 Asset Review 点「用 API 抠图」让 koukoutu 顶上,或单元素重抠 + 手动覆盖。
 
 ### 8. **Pass 1 走 5 路并行 only-X mllm,合并用 IoU > 0.5 + 优先级**(2026-05-14 Phase 8b 锁定)
 

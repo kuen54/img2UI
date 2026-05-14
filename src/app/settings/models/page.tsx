@@ -18,6 +18,7 @@ export default function ModelsPage() {
 
   const mllmProviders = draft.providers.filter((p) => p.kind === 'mllm')
   const imageGenProviders = draft.providers.filter((p) => p.kind === 'image_gen')
+  const mattingProviders = draft.providers.filter((p) => p.kind === 'matting')
 
   const updateProvider = (id: string, next: ProviderConfig) => {
     setDraft({
@@ -42,7 +43,7 @@ export default function ModelsPage() {
     })
   }
 
-  const addProvider = (kind: 'mllm' | 'image_gen') => {
+  const addProvider = (kind: 'mllm' | 'image_gen' | 'matting') => {
     const now = new Date().toISOString()
     const newProvider: ProviderConfig =
       kind === 'mllm'
@@ -61,24 +62,37 @@ export default function ModelsPage() {
             created_at: now,
             updated_at: now,
           }
-        : {
-            id: newProviderId(),
-            kind: 'image_gen',
-            name: '新 ImageGen provider',
-            api_format: 'apimart',
-            base_url: 'https://api.apimart.ai/v1',
-            api_key: '',
-            model: '',
-            endpoint_kind: 'image_generation',
-            is_async: true,
-            poll_interval_seconds: 5,
-            poll_initial_delay_seconds: 12,
-            poll_max_attempts: 60,
-            default_quality: 'high',
-            active: false,
-            created_at: now,
-            updated_at: now,
-          }
+        : kind === 'image_gen'
+          ? {
+              id: newProviderId(),
+              kind: 'image_gen',
+              name: '新 ImageGen provider',
+              api_format: 'apimart',
+              base_url: 'https://api.apimart.ai/v1',
+              api_key: '',
+              model: '',
+              endpoint_kind: 'image_generation',
+              is_async: true,
+              poll_interval_seconds: 5,
+              poll_initial_delay_seconds: 12,
+              poll_max_attempts: 60,
+              default_quality: 'high',
+              active: false,
+              created_at: now,
+              updated_at: now,
+            }
+          : {
+              id: newProviderId(),
+              kind: 'matting',
+              name: '新抠图 provider',
+              api_format: 'koukoutu',
+              base_url: 'https://sync.koukoutu.com/v1',
+              api_key: '',
+              model: 'background-removal',
+              active: false,
+              created_at: now,
+              updated_at: now,
+            }
     setDraft({ ...draft, providers: [...draft.providers, newProvider] })
   }
 
@@ -128,6 +142,32 @@ export default function ModelsPage() {
                 onChange={(next) => updateProvider(p.id, next)}
                 onDelete={() => deleteProvider(p.id)}
                 onSetActive={() => setActive(p.id, 'image_gen')}
+                hasUnsavedChanges={dirty}
+                isNew={!savedHasId(saved, p.id)}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section
+        title="抠图模型"
+        subtitle="Matting / Cutout API"
+        description="可选 fallback。默认 pipeline 走绿幕 + 本地 chroma key,这里配的 provider 仅在 Asset Review 点「用 API 抠图」时调用,按图付费"
+        addLabel="+ 新增抠图模型"
+        onAdd={() => addProvider('matting')}
+      >
+        {mattingProviders.length === 0 ? (
+          <EmptyHint>暂无抠图模型,绿幕 chroma key 是默认抠图路径</EmptyHint>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {mattingProviders.map((p) => (
+              <ProviderCard
+                key={p.id}
+                provider={p}
+                onChange={(next) => updateProvider(p.id, next)}
+                onDelete={() => deleteProvider(p.id)}
+                onSetActive={() => setActive(p.id, 'matting')}
                 hasUnsavedChanges={dirty}
                 isNew={!savedHasId(saved, p.id)}
               />

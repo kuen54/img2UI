@@ -50,8 +50,8 @@
 
 ```ts
 // kind 决定字段子集和 UI 展示分组
-type ProviderKind = 'mllm' | 'image_gen' | 'cdn'
-type ApiFormat = 'openai' | 'anthropic' | 'apimart' | 'sankuai' | 's3'
+type ProviderKind = 'mllm' | 'image_gen' | 'cdn' | 'matting'
+type ApiFormat = 'openai' | 'anthropic' | 'apimart' | 'sankuai' | 's3' | 'koukoutu'
 
 type ProviderConfig = {
   id: string                       // nanoid(6)
@@ -443,6 +443,31 @@ async function callImageGen(provider, opts: {
 
 PoC v11 后绿幕 chroma key 已 0 API + 0 抠穿,无需任何外部分割模型 fallback。`kind: 'segmenter'` 从 ProviderKind 中移除。详见 § 抠图 + 切片。
 
+### Matting (kind=matting)
+
+**用途**:**可选** fallback,**不在默认 pipeline**。Asset Review 「用 API 抠图」按钮触发,把 `data/pass2/{state}-{cat}.png` 绿幕原图通过外部抠图 API 重新抠一遍,覆写 `data/keyed/{state}-{cat}.png` + 重切片 + 刷新 asset。默认抠图仍走绿幕 + chroma key(`lib/alpha-key.ts`)。
+
+api_format='koukoutu'(首发,后续可加 rmbg/SAM 等):
+
+| 字段 | 必需 | 说明 |
+|---|---|---|
+| `base_url` | ✓ | `https://sync.koukoutu.com/v1` |
+| `api_key` | ✓ | header `X-API-Key` |
+| `model` | × | koukoutu `model_key`,默认 `'background-removal'` |
+
+调用模式(`lib/matting-client.ts`):
+
+```ts
+async function callMatting(
+  provider: ProviderConfig,
+  opts: { png: Buffer; signal?: AbortSignal },
+): Promise<Buffer>  // 返回透明 RGBA PNG bytes
+```
+
+koukoutu sync `/v1/create`:multipart POST(`model_key` + `output_format=png` + `image_file`),响应 200 + `Content-Type: application/octet-stream` 是 PNG bytes;200 + `application/json` 是错误响应(含 `code` + `message`)。Test Connection **暂不支持**(没有免费 ping endpoint,sync API 每次 1 积分)。
+
+API:`POST /api/states/[id]/re-key-via-api` → `{ run_id, refreshed, failed_routes: [{category, error}] }`。部分失败容忍:某 category 抠图失败 → 该 category 的 asset **不动**(保留旧 chroma key 结果),不像 Pass 2 那样把 asset 标 `failed`。
+
 ### CDN (kind=cdn)
 
 api_format='s3',用 @aws-sdk/client-s3 客户端。Test Connection 用 HeadBucket
@@ -688,7 +713,9 @@ function chromaGreenKey(greenScreenPng: Buffer, opts?: {
 - 元素内部恰好出现 #00FF00 纯绿(UI 设计稿罕见,prompt 已显式排除)→ 该像素被误抠透明 → Asset Review 单元素重抠 + 手动覆盖
 - 元素带半透明阴影邻接绿幕 → 边缘有微弱绿溢 → spill suppression 已处理大部分;Asset Review 提供 slider 调阈值 + 「edge clean」局部清理按钮
 
-**v10 之前预留的 white-threshold 已删除**(否决理由:抠穿元素内部白色,结构性死路)。**`kind: 'segmenter'` provider 也已删除**——绿幕 chroma key 已无需任何外部分割模型 fallback
+**v10 之前预留的 white-threshold 已删除**(否决理由:抠穿元素内部白色,结构性死路)。**`kind: 'segmenter'` provider 也已删除**——绿幕 chroma key 已无需任何外部分割模型作为默认路径。
+
+**Asset Review 手动 fallback**(Phase 8g):配 `kind: 'matting'` provider(首发 koukoutu sync)后,在 BatchPngViewer 点「用 API 抠图」可对当前 state 全部 category 重抠(不动默认 pipeline)。详见 § Provider 与 Config § Matting。
 
 ### 切片算法(`lib/slicer.ts`,基于 `ref/split_elements.py` 的 scipy 实现移植)
 

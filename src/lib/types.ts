@@ -10,8 +10,8 @@ export type { VisualCategory } from '@/lib/visual-category'
 // Provider 与 Config
 // =============================================================================
 
-export type ProviderKind = 'mllm' | 'image_gen' | 'cdn'
-export type ApiFormat = 'openai' | 'anthropic' | 'apimart' | 'sankuai' | 's3'
+export type ProviderKind = 'mllm' | 'image_gen' | 'cdn' | 'matting'
+export type ApiFormat = 'openai' | 'anthropic' | 'apimart' | 'sankuai' | 's3' | 'koukoutu'
 
 export type ProviderConfig = {
   id: string                       // nanoid(6),前缀 prv_

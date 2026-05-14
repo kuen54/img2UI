@@ -4,6 +4,17 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added — 抠图 API provider + Asset Review 「用 API 抠图」按钮(Phase 8g)
+
+dogfood 反馈:绿幕 chroma key 在某些 element(浅色/半透/边缘绿溢色)抠不干净,但默认 pipeline 没有逃生口。**默认 pipeline 不变**(仍是绿幕 + chroma key,0 API 成本,95%+ case 干净),加可选的手动 fallback。
+
+- **新 ProviderKind `'matting'`**(types.ts / SPEC.md / Settings UI 三处同步):新 `ApiFormat = 'koukoutu'`,Settings → 模型 第三个 section「抠图模型」可配置 koukoutu sync API。Test Connection 暂不支持(没有免费 ping endpoint,sync API 每次 1 积分),提示用户到 Asset Review 实测。default-providers seed 给 koukoutu 模板 + 空 key(用户本地 `data/config.json` 注入,key 不进 git)。
+- **新 lib/matting-client.ts**:`callMatting(provider, { png }) → Promise<Buffer>`。koukoutu sync `/v1/create` multipart `image_file` 上传 → `application/octet-stream` 返回 PNG bytes;`application/json` 返回时解析 `{ code, message }` 抛错。60s timeout。
+- **新 pass2-runner.ts § reKeyViaApi(stateId)**:复用现有 `pass2/{state}-{cat}.png` 绿幕原图,逐 category 调 koukoutu → 覆写 `keyed/{state}-{cat}.png` → 重切片 → 更新 asset metadata。state-level lock 复用 Pass 2 同一把锁。**部分失败容忍**:某 category 失败 → 该 category asset 不动(保留旧 chroma key 结果),不像 Pass 2 那样标 `failed`(理由:这是用户主动 retry,不该把好的旧结果覆盖坏)。全失败抛错。
+- **新 API `POST /api/states/[id]/re-key-via-api`** → `{ run_id, refreshed, failed_routes }`。
+- **Asset Review BatchPngViewer**:加「用 API 抠图」按钮,toast 区分全成 / 部分成功 / 全失败。img src 加 `?bust=N` counter 让浏览器 reload 缓存的 keyed PNG。父组件传 `onReKeyed={loadAll}` 刷 asset grid。
+- **CLAUDE.md § 7 修订**:从「禁止外部分割模型」改成「默认禁止,允许作为 Asset Review 手动 fallback」,严守边界(API 抠图永远是用户主动点按钮触发,不进任何自动路径,否则又退回 v9-A 的 chip 白底误抠死路)。
+
 ### Fixed — 测试隔离 P0(用户 data/ 被五件套清空)
 
 **根因**:`src/lib/fs-utils.ts` 把 `DATA_ROOT` 永远指向 `process.cwd() + /data`,vitest 跑测试时 cwd = 项目根目录 → 测试中的 `DATA_ROOT` 直接指向用户**真实** data/。8 个测试文件(`pages-thumbnail` / `pages` / `projects` / `pipelines` / `thumbnails` / `list-thumbnail-urls` / `states` / `thumbs-route`)都有 `afterEach(async () => { await fs.rm(DATA_ROOT, { recursive: true, force: true }) })`,所以**每次跑 `npm test` 都会把用户真实 data/(projects / pages / states / raw / thumbs / pipelines / config.json / ...) 整个 rm -rf**。dogfood round 4/5 期间被五件套删了 4+ 次。vitest.config.ts 注释明确说「多个测试文件共享 data/ 目录,afterEach 清理会互相干扰 → 串行跑」,但完全没意识到"共享 data/" 是用户真实数据。
