@@ -75,6 +75,8 @@ export type Project = {
   cdn_provider_id?: string
   created_at: string
   updated_at: string
+  // API decorated(GET 时附加,不持久化)
+  sample_thumbnail_url?: string    // Phase 8e:取项目下第一个有缩略图的 page
 }
 
 export type Page = {
@@ -86,6 +88,8 @@ export type Page = {
   thumbnail_path?: string          // data/thumbs/{page-id}.png,canonical state 上传后填(Phase 8e)
   created_at: string
   updated_at: string
+  // API decorated(GET 时附加,不持久化)
+  thumbnail_url?: string           // Phase 8e:thumbnail_path 存在时填 /api/thumbs/{pageId}
 }
 
 export type StatePipelineStatus =
