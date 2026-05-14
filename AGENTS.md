@@ -1,5 +1,11 @@
 # Agent / Dev Workflow
 
+<!-- BEGIN:nextjs-agent-rules -->
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+<!-- END:nextjs-agent-rules -->
+
 img2UI 仓库的开发协议:分支命名 / PR / commit / tag / CHANGELOG / Plan-外偏离 / AI 协议
 
 > 项目架构 / 数据流 / 资源 CRUD → [`SPEC.md`](./SPEC.md)。产品定位与决策 → [`PRD.md`](./PRD.md)。反直觉强约束 → [`CLAUDE.md`](./CLAUDE.md)
