@@ -4,6 +4,13 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed — Element Review default filters + bbox 异常警告
+
+over-include 架构在密集页面识别 96+ 元素,Element Review list 太长用户挨个调 = 灾难。**保留 over-include 召回率(92%)不动**,仅在 UI 层加默认 filter 保护用户:
+
+- **`element-list.tsx`**:顶部新增两个默认 ON 的 toggle:`只看静态切图`(过滤 type=code,异形容器/文字块由 coding agent 直接消费)+ `隐藏小碎片(<0.5% 面积)`(over-include 噪声主源)。附摘要 `显示 N / total` + 「显示全部」一键 reset(只在有过滤时出现)。两个 toggle 独立,filter 链最后仍保留原有 6 类 visual_category 和 tab。
+- **`bbox-warning.ts`**(新)+ 列表项 inline icon:4 类 bbox 异常自动检测,error 红 ⚠️ / warning 黄 ℹ️ + hover 看 reason。检测 (a) 越界 (x+w>1 或 y+h>1)、(b) 仅单路识别(`pass1_routes_seen.length == 1`)、(c) 长宽比 > 20:1、(d) 面积 < 0.0001。error 优先级高于 warning。
+
 ## [0.2.1] — 2026-05-14 · 服务端真异步触发 + Phase 8f Pass 2 修复 + dogfood round 5
 
 v0.2.0 tag 后端到端 dogfood 暴露的服务端 P0(Pass 1/2 触发同步阻塞)+ Pass 2 多路并发 P0 bugs + 3 处 UX 卡点修复。无能力变化。

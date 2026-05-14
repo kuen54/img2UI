@@ -130,7 +130,7 @@ describe('ElementList default filters', () => {
   it('「显示全部」 button is hidden when no items are filtered out', () => {
     render(
       <ElementList
-        elements={[els[0]]} // only StaticBig
+        elements={[els[0]!]} // only StaticBig
         states={states}
         selectedId={null}
         onSelect={() => {}}
