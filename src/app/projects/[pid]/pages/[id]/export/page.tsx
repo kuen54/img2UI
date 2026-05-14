@@ -155,7 +155,7 @@ export default function ExportPage({ params }: PageProps) {
         <span className="text-foreground font-medium">Export</span>
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-3xl">
+      <div className="flex-1 overflow-y-auto p-6 pb-24 space-y-6 max-w-3xl">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold">导出</h1>
           <p className="text-sm text-muted-foreground">
