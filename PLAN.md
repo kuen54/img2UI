@@ -610,6 +610,8 @@ src/components/pipeline/pipeline-stepper.tsx
 
 ## Phase 4:真实 Pass 1 + Element Review
 
+**实施级子 plan**:[`docs/plans/phase-4-pass1-element-review.md`](./docs/plans/phase-4-pass1-element-review.md)(Task 4.1-4.6 完整 checkbox / 代码片段 / 验证步骤)
+
 **目的:** 真实接 mllm 跑布局分析,跨状态对齐,Element Review canvas 全功能(bbox 拖拽、空白拖创建、叠加层 toggle、详情面板编辑)
 
 **Files to create:**
