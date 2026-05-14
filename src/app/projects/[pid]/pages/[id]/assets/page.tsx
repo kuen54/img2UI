@@ -1,14 +1,14 @@
 'use client'
 
-import { use, useCallback, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Loader2, Play, UploadCloud, FolderOutput } from 'lucide-react'
+import { ChevronRight, Loader2, Play, UploadCloud, FolderOutput, CheckCircle2, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element, Page, State } from '@/lib/types'
 import { getPageApi, listStatesApi } from '@/lib/api/projects-client'
 import { listElementsApi } from '@/lib/api/elements-client'
-import { listAssetsApi, triggerPass2Api, uploadAllAssetsApi } from '@/lib/api/assets-client'
+import { listAssetsApi, triggerPass2Api, uploadAllAssetsApi, updateAssetApi } from '@/lib/api/assets-client'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -36,6 +36,7 @@ export default function AssetReviewPage({ params }: PageProps) {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [uploadingAll, setUploadingAll] = useState(false)
+  const [markingAll, setMarkingAll] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const loadAll = useCallback(async () => {
@@ -64,6 +65,17 @@ export default function AssetReviewPage({ params }: PageProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAll()
   }, [loadAll])
+
+  // Review 进度:failed 不计入分母(没法 review 失败的)
+  const { reviewable, reviewedCount, allReviewed } = useMemo(() => {
+    const r = assets.filter((a) => a.status !== 'failed')
+    const reviewed = r.filter((a) => a.status === 'validated' || a.status === 'uploaded')
+    return {
+      reviewable: r,
+      reviewedCount: reviewed.length,
+      allReviewed: r.length > 0 && reviewed.length === r.length,
+    }
+  }, [assets])
 
   if (loading || !page) {
     return <p className="p-6 text-sm text-muted-foreground">加载中…</p>
@@ -129,16 +141,81 @@ export default function AssetReviewPage({ params }: PageProps) {
     }
   }
 
+  const handleMarkAllReviewed = async () => {
+    const pending = reviewable.filter((a) => a.status === 'extracted')
+    if (pending.length === 0) {
+      toast.info('全部已 review')
+      return
+    }
+    setMarkingAll(true)
+    try {
+      // 串行,避免并发文件写冲突
+      let ok = 0
+      for (const a of pending) {
+        try {
+          await updateAssetApi(a.id, { status: 'validated' })
+          ok++
+        } catch {
+          // 单个失败继续后面的
+        }
+      }
+      if (ok === pending.length) {
+        toast.success(`已标记 ${ok} 个 reviewed`)
+      } else {
+        toast.warning(`标记 ${ok} / ${pending.length} 个,部分失败可单独重试`)
+      }
+      await loadAll()
+    } finally {
+      setMarkingAll(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
-      <nav className="px-6 py-3 border-b flex items-center justify-between gap-4 text-sm">
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Link href={`/projects/${pid}/pages/${pageId}`} className="hover:text-foreground transition-colors">
-            {page.name}
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <span className="text-foreground font-medium">Asset Review</span>
+      <nav className="px-6 py-3 border-b flex items-center justify-between gap-4 text-sm flex-wrap">
+        <div className="flex items-center gap-3 text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Link href={`/projects/${pid}/pages/${pageId}`} className="hover:text-foreground transition-colors">
+              {page.name}
+            </Link>
+            <ChevronRight className="size-3.5" />
+            <span className="text-foreground font-medium">Asset Review</span>
+          </div>
+
+          {reviewable.length > 0 && (
+            <>
+              <span className="text-xs flex items-center gap-1.5">
+                <CheckCircle2
+                  className={
+                    allReviewed ? 'size-4 text-emerald-600' : 'size-4 text-muted-foreground/40'
+                  }
+                />
+                已 review <span className="font-medium text-foreground">{reviewedCount}</span> / {reviewable.length}
+              </span>
+              {!allReviewed && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleMarkAllReviewed()}
+                  disabled={markingAll}
+                >
+                  {markingAll ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="size-3.5 mr-1" />}
+                  全部标记 reviewed
+                </Button>
+              )}
+              {allReviewed && (
+                <Link
+                  href={`/projects/${pid}/pages/${pageId}/export`}
+                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                >
+                  → Export
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              )}
+            </>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
           {states.length > 1 && currentStateId && (
             <Select value={currentStateId} onValueChange={(v) => v && setCurrentStateId(v)}>
