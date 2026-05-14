@@ -2,11 +2,13 @@
 
 import { use, useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Plus, Image as ImageIcon, ListChecks, Layers } from 'lucide-react'
+import { ChevronRight, Plus, Image as ImageIcon, ListChecks, Layers, FolderOutput } from 'lucide-react'
 import { toast } from 'sonner'
 
-import type { Page, State } from '@/lib/types'
+import type { Asset, Element, Page, State } from '@/lib/types'
 import { getPageApi, listStatesApi } from '@/lib/api/projects-client'
+import { listElementsApi } from '@/lib/api/elements-client'
+import { listAssetsApi } from '@/lib/api/assets-client'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StateCard } from '@/components/pages/state-card'
@@ -20,14 +22,23 @@ export default function PageDetailPage({ params }: PageProps) {
 
   const [page, setPage] = useState<Page | null>(null)
   const [states, setStates] = useState<State[]>([])
+  const [elements, setElements] = useState<Element[]>([])
+  const [assets, setAssets] = useState<Asset[]>([])
   const [uploadOpen, setUploadOpen] = useState(false)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadAll = useCallback(async () => {
     try {
-      const [p, s] = await Promise.all([getPageApi(pageId), listStatesApi(pageId)])
+      const [p, s, e, a] = await Promise.all([
+        getPageApi(pageId),
+        listStatesApi(pageId),
+        listElementsApi(pageId).catch(() => [] as Element[]),
+        listAssetsApi(pageId).catch(() => [] as Asset[]),
+      ])
       setPage(p)
       setStates(s)
+      setElements(e)
+      setAssets(a)
     } catch (e) {
       toast.error('加载失败:' + (e as Error).message)
     }
@@ -105,10 +116,16 @@ export default function PageDetailPage({ params }: PageProps) {
                   Asset Review
                 </Button>
               </Link>
+              <Link href={`/projects/${pid}/pages/${pageId}/export`}>
+                <Button size="sm" variant="outline">
+                  <FolderOutput className="size-3.5 mr-1" />
+                  Export
+                </Button>
+              </Link>
             </div>
           )}
         </div>
-        <PipelineStepper states={states} />
+        <PipelineStepper states={states} elements={elements} assets={assets} />
       </section>
 
       {/* States 区 */}

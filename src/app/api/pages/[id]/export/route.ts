@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'node:path'
+import os from 'node:os'
 
 import { loadExportPayload, writeExportFolder, streamExportZip } from '@/lib/exporter'
 
@@ -41,11 +42,15 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
         { status: 400 },
       )
     }
-    if (!path.isAbsolute(body.output_dir)) {
-      return NextResponse.json({ error: 'output_dir 必须是绝对路径' }, { status: 400 })
+    // 展开 ~
+    const expanded = body.output_dir.startsWith('~')
+      ? path.join(os.homedir(), body.output_dir.slice(1))
+      : body.output_dir
+    if (!path.isAbsolute(expanded)) {
+      return NextResponse.json({ error: 'output_dir 必须是绝对路径(或以 ~ 开头)' }, { status: 400 })
     }
     try {
-      const result = await writeExportFolder(payload, body.output_dir)
+      const result = await writeExportFolder(payload, expanded)
       return NextResponse.json(result)
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 500 })
