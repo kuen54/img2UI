@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getPage, updatePage } from '@/lib/pages'
+import { getPage, updatePage, maybeGenerateThumbnailForPage } from '@/lib/pages'
 import { listStatesByPage, createState, writeStateRawImage } from '@/lib/states'
 import { readImageDimensions, isPng } from '@/lib/image-meta'
 import { acquireLock, releaseLock, RunLockConflictError } from '@/lib/run-lock'
@@ -91,6 +91,12 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     // 设 canonical(只在 page 当前为空 + 用户标了 is_canonical 时才覆盖)
     if (canonicalAssigned && !page.canonical_state_id) {
       await updatePage(pageId, { canonical_state_id: canonicalAssigned })
+      // canonical state 上传后同步生成缩略图(Phase 8e)。失败不阻断。
+      try {
+        await maybeGenerateThumbnailForPage(pageId)
+      } catch (e) {
+        console.error('[thumbnail] generate failed for', pageId, e)
+      }
     }
 
     return NextResponse.json({ created, errors }, { status: 201 })
