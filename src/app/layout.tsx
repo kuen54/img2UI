@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Toaster } from '@/components/ui/sonner'
+import { ConfirmProvider } from '@/components/ui/confirm-dialog'
 import { Sidebar } from '@/components/sidebar'
 import './globals.css'
 
@@ -16,9 +17,11 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <body className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">{children}</main>
-        <Toaster position="bottom-right" />
+        <ConfirmProvider>
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto">{children}</main>
+          <Toaster position="bottom-right" />
+        </ConfirmProvider>
       </body>
     </html>
   )
