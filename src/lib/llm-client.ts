@@ -333,9 +333,10 @@ const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 C
 
 export type CallImageGenOptions = {
   prompt: string
-  reference_image_base64?: string  // 完整 data URL `data:image/png;base64,...`
-  size?: string                    // apimart: '1:1' / '9:16';openai: '1024x1024' 等
-  resolution?: string              // apimart 专用:'1k' / '2k' / '4k'
+  reference_image_base64?: string    // 完整 data URL `data:image/png;base64,...`(主图,通常是原图)
+  reference_image_base64s?: string[] // 额外参考图(crop 列表),Phase 8c 多参考图新增
+  size?: string                      // apimart: '1:1' / '9:16';openai: '1024x1024' 等
+  resolution?: string                // apimart 专用:'1k' / '2k' / '4k'
   quality?: 'low' | 'medium' | 'high'
   n?: number
   signal?: AbortSignal
@@ -374,8 +375,11 @@ async function callApimartAsync(
     quality: opts.quality ?? p.default_quality ?? 'high',
     n: opts.n ?? 1,
   }
-  if (opts.reference_image_base64) {
-    submitBody.image_urls = [opts.reference_image_base64]
+  if (opts.reference_image_base64 || opts.reference_image_base64s?.length) {
+    const imageUrls: string[] = []
+    if (opts.reference_image_base64) imageUrls.push(opts.reference_image_base64)
+    if (opts.reference_image_base64s) imageUrls.push(...opts.reference_image_base64s)
+    submitBody.image_urls = imageUrls
   }
   const submitRes = await fetch(`${p.base_url}/images/generations`, {
     method: 'POST',

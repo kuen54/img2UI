@@ -390,6 +390,9 @@ Body: {
   model: "gpt-image-2-official",         // ★ 不是 backup `gpt-image-2`
   prompt: string,
   image_urls?: string[],     // 图生图,base64 with "data:image/png;base64," prefix 或 URL
+                             // ★ Phase 8c 起支持多张:[原图, ...crops](Pass 2 多参考图)
+                             //    PoC #1 实测 gpt-image-2-official 接受多张时按 crop 复刻不 regenerate
+                             //    数组顺序约定:index 0 = 主图(整体语境),1..N = 各 element 的 crop
   size: "1:1" | "9:16" | ...,
   resolution: "1k" | "2k" | "4k",
   quality: "low" | "medium" | "high",    // ★ 必须 "high",否则文字乱码
@@ -416,9 +419,13 @@ call 层封装成 promise(对调用方透明 sync):
 ```ts
 async function callImageGen(provider, opts: {
   prompt: string,
-  reference_images?: Buffer[],   // 多张参考图
+  reference_image_base64?: string,      // 主图 data URL(原图)
+  reference_image_base64s?: string[],   // 额外参考图(crop 列表,Phase 8c 多参考图)
+                                        // 内部拼成 image_urls = [main, ...refs]
   size?: string,
   resolution?: string,
+  quality?: 'low' | 'medium' | 'high',
+  n?: number,
   signal?: AbortSignal
 }): Promise<{ image: Buffer, cost?: number, latency_ms: number }>
 ```
@@ -541,44 +548,50 @@ Be EXHAUSTIVE. Identify every distinct element separately. Return JSON.
 
 ### Pass 2: 资产提取
 
-**Image edit instruction(发给 gpt-image-2-official / image-to-image endpoint):**
+**Phase 8c 后:按 visual_category 分组并行 + 多参考图**
 
-模板使用会话式自然语言,运行时按当前 page 的 Pass 1 元素列表渲染。`{{element_summary}}` 由前端渲染层从 type=static 元素的 name + description 聚合,**按相同 name 自动数量分组**(如三张奶茶 chip 渲染成「奶茶 chip 共 3 个,文字分别是...」)。
+Pass 2 不再是 1-shot,而是 **按 type=static 元素的 `visual_category` 分组**(subject / button / container / background / decoration / other),每组一路 image-edit 调用,每路传 `[原图, ...crops]` 多参考图。code 元素整体跳过(用户在 Element Review 校对完后,Pass 2 只处理 static)。
+
+| 路次 | category | sub-run pass kind |
+|---|---|---|
+| 1 | subject | `pass2_subject` |
+| 2 | button | `pass2_button` |
+| 3 | container | `pass2_container` |
+| 4 | background | `pass2_background` |
+| 5 | decoration | `pass2_decoration` |
+| 6 | other | `pass2_other` |
+
+并发用 `Promise.allSettled`,**部分失败容忍**:单路失败 → 该路所有 elements 的 asset 标 `status='failed'`,其他路正常完成。Pass 2 总 run 仍 `completed`,失败的 element 在 Asset Review 提示用户重抠。
+
+总 run 用 `pass: 'pass2'` 创建作 audit 入口,`llm_response.successful_routes` / `total_routes` 记录路次结果;sub-runs 用 `pass: 'pass2_${category}'` 单独创建。
+
+**Image edit instruction(发给 gpt-image-2-official / image-to-image endpoint,每 category 单独渲染,见 `lib/prompts/render-pass2-route.ts`):**
+
+模板使用会话式自然语言,运行时按当前 page 当前 category 的 elements 渲染。**编号引用规则**:参考图 #1 是原图(整体语境),#2..#N 是 crops(每个 element 一张,顺序与 elements 数组一致)。
 
 ```
-我们来尝试一下，再把这张图详细地拆解。这张图是 {{page_description}}，请把这张图里的装饰性图片元素提取出来,单独放在一张鲜亮的纯绿色 #00FF00 背景画布上,作为后期抠像的绿幕。元素本身不要使用这个绿色。
+我们来尝试一下,把这张图({{page_description}})里的{{category_cn}}类元素提取出来,单独放在一张鲜亮的纯绿色 #00FF00 背景画布上,作为后期抠像的绿幕。元素本身不要使用这个绿色。
 
-画布上要出现这些元素,一个都不能少:
-{{element_summary}}
+第 1 张参考图是原图,展示了这些元素在画面里的整体样貌。后面的参考图是从原图取出的每个元素的特写,要画的就是这些:
 
-共 {{element_count}} 个元素,记得每个都画到。元素之间留出至少一整个元素宽度的空隙,宁可画布留白多也不要挤在一起。保持原图的风格、颜色、文字内容,不要重新设计任何元素,每个都要跟原图里完全一致。
+- 参考图 #2:「{{element_1.name}}」({{element_1.description}})
+- 参考图 #3:「{{element_2.name}}」({{element_2.description}})
+...
+
+共 {{element_count}} 个元素,记得每个都画到。元素之间留出至少一整个元素宽度的空隙,宁可画布留白多也不要挤在一起。每个元素都要跟参考图里完全一致——保持原图的风格、颜色、文字内容,不要重新设计任何元素。
 ```
 
-**`{{element_summary}}` 渲染规则**(`lib/prompts/render-element-summary.ts`):
+**`reference_images` 数组顺序**(由 `pass2-runner.ts` 拼装):
 
-```ts
-function renderElementSummary(elements: Element[]): { text: string, count: number } {
-  // 1. 取 type === 'static' 的元素
-  // 2. 按 name 分组(完全相同 name 的归一组,不做模糊匹配)
-  // 3. 每组渲染:
-  //    - 单数:  `- {name}(description 提取的关键视觉特征)`
-  //    - 复数:  `- {name} 共 {count} 个({聚合所有 description 的关键差异点,如不同文字内容})`
-  // 4. element_count = elements.filter(static).length
-}
-```
+| 索引 | 内容 | 来源 |
+|---|---|---|
+| #1 | 原图(整体语境) | `data/raw/{state-id}.png` |
+| #2 | 第 1 个 element 的 crop | `cropFromBbox(rawBuf, elements[0].bbox)` |
+| #3 | 第 2 个 element 的 crop | `cropFromBbox(rawBuf, elements[1].bbox)` |
+| ... | ... | ... |
+| #N+1 | 第 N 个 element 的 crop | `cropFromBbox(rawBuf, elements[N-1].bbox)` |
 
-示例渲染输出(以奶茶盲盒抽中页为例):
-```
-- 卡通 3D 娃娃 1 个(白色云朵头发、蓝色羽绒服、棕色靴子)
-- 「SUPER」装饰徽章 1 个(粉黄椭圆 + 虚线 + 星星)
-- 「解签」毛笔字印章 1 个(粉色)
-- 奶茶 chip 共 3 个(白底粉边粉字 pill,文字分别是「黑糖珍珠」「Q弹厚乳」「经典奶茶系」,每个 chip 旁有小奶茶杯图标)
-- 奶茶杯产品图 2 个(透明杯 + 棕色奶茶 + 白色奶盖 + 黑色珍珠,其中一个杯身写「熔岩黑糖+脆啵啵」)
-- 粉色金属挂钩 2 个
-- 粉色异形展示框 1 个(顶部 notch + 内部空腔)
-```
-
-**Reference image:** canonical state PNG(via apimart `image_urls: ["data:image/png;base64,..."]`)
+`callImageGen` 接口对应:`reference_image_base64` = 原图 data URL,`reference_image_base64s` = crops 数组,内部拼成 `image_urls = [main, ...crops]` 喂给 apimart。
 
 **Provider 设置:** `gpt-image-2-official` via apimart(首选,**注意不是 backup `gpt-image-2`**)
 - `size: "1:1"` 或 `"9:16"`(竖屏)
@@ -591,11 +604,15 @@ function renderElementSummary(elements: Element[]): { text: string, count: numbe
 - ❌ 不要白底:本地抠图会抠穿元素内部白色(chip 白底、娃娃白发等)
 - ❌ 不要 transparent prompt:触发模型 regenerate,漏画 + 字形漂
 - ✅ 用 `#00FF00` 绿幕:0 抠穿 + 0 API 抠图 + 文字保真
+- ✅ Phase 8c 起:多参考图 `[原图, ...crops]` 让 bbox 编辑生效(用户拖框 → crop 改 → 模型按新 crop 复刻,不 regenerate)
 
 **Prompt 措辞硬约束**(违反必复发 v2 失败):
 - ❌ 不写 "TRUST SOURCE NOT DESCRIPTION" / "pixel-faithfully" / "MUST" 等激进措辞
 - ❌ 不在 prompt 里塞 entity_name / bbox / JSON / 字段名
 - ✅ 用会话式自然中文,「记得」「保持」「不要重新设计」这种温和措辞
+- ✅ 用编号引用 crop:「参考图 #2 是 X」(不是 entity_name,降低模型出现 schema-aware 的可能)
+
+**切片合并约束:** 每路独立做 chroma key + slice + 写 asset,**只在该路 elements 范围内匹配**(`limit = min(elements.length, slices.length)`)。模型多画的切片直接丢弃,模型漏画的元素该路无对应 asset(用户在 Asset Review 看到空 → 触发 re_extract)。**不跨 category 串切片。**
 
 **输出尺寸:** 由模型决定(1024×1024 默认),前端按实际尺寸读取。元素位置坐标用 Pass 1 bbox 不依赖 Pass 2 输出位置(见 [CLAUDE.md § 反直觉强约束 § 2](./CLAUDE.md))
 

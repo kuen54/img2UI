@@ -99,6 +99,9 @@ ref/split_elements.py(scipy binary_dilation + connected component, gap=15)→ �
 - 元素间距「至少一整个元素宽度的空隙,宁可画布留白多也不要挤在一起」
 - **会话式自然语言**——不要 hard rules / TRUST SOURCE / pixel-faithfully(v2 失败教训) / 不要塞 entity_name / bbox / JSON 字段名(v1/v3 失败教训)
 
+**Phase 8c(v12)起:Pass 2 喂 [原图, ...crops] 多参考图,prompt 用「参考图 #2 是 X」编号引用。**
+拖框生效路径:用户拖 bbox → crop 改 → 参考图改 → 模型按新 crop 复刻(PoC #1 验证 gpt-image-2-official 接受多张 image_urls 时按 crop 复刻不 regenerate)。Pass 2 改为按 `visual_category` 分组并行,每组一路 image_gen 调用,部分失败容忍(单路失败 → 该路 elements 标 status=failed,其他路正常完成)。
+
 ### 7. **抠图走本地 chroma green key,不要 koukoutu / rmbg / SAM 任何外部分割模型**(2026-05-13 PoC v11 锁定)
 
 绿幕背景输入下,本地 chroma key 已经 0 噪点 + 0 抠穿:
