@@ -87,6 +87,7 @@ export default function ElementReviewPage({ params }: PageProps) {
       state_ids: [currentStateId],
       name: `新元素 ${draftElements.length + 1}`,
       type: 'static',
+      visual_category: 'other',
       bbox,
       z_index: 0,
       description: '',

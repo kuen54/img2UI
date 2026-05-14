@@ -261,6 +261,7 @@ export async function mergeElements(
         state_ids: [state.id],
         name,
         type: llm.type === 'code' ? 'code' : 'static',
+        visual_category: 'other',
         bbox,
         z_index: typeof llm.z_index === 'number' ? llm.z_index : 0,
         description: llm.description ?? '',

@@ -1,6 +1,11 @@
 // 数据 schema — 跟 SPEC.md § 数据 schema 完全一致
 // 改这份必须同步改 SPEC.md(参见 AGENTS.md § 8 文档同步规则)
 
+import type { VisualCategory } from '@/lib/visual-category'
+
+// 重新导出 VisualCategory,方便消费方从 types 一次性引入
+export type { VisualCategory } from '@/lib/visual-category'
+
 // =============================================================================
 // Provider 与 Config
 // =============================================================================
@@ -111,6 +116,7 @@ export type Element = {
   state_ids: string[]
   name: string
   type: 'static' | 'code'
+  visual_category: VisualCategory  // 新增,Pass 1 输出(Phase 8b)
   bbox: [number, number, number, number]   // canonical 原图归一化坐标 [x,y,w,h] ∈ [0,1]
   z_index: number
   description: string              // for coding agent + Pass 2 prompt 渲染源, ≤ 80 字
@@ -120,6 +126,7 @@ export type Element = {
   material_spec?: string
 
   cross_state_notes?: string
+  pass1_routes_seen?: string[]     // 新增,debug:此 element 在哪几路 Pass 1 中被识别(Phase 8b)
   reviewed: boolean
   created_at: string
   updated_at: string
@@ -146,7 +153,12 @@ export type Asset = {
 // PipelineRun
 // =============================================================================
 
-export type PipelinePassKind = 'pass1' | 'pass2' | 'validate' | 're_extract'
+export type PipelinePassKind =
+  | 'pass1' | 'pass1_subject' | 'pass1_button' | 'pass1_container'
+  | 'pass1_background' | 'pass1_decoration'
+  | 'pass2' | 'pass2_subject' | 'pass2_button' | 'pass2_container'
+  | 'pass2_background' | 'pass2_decoration' | 'pass2_other'
+  | 'validate' | 're_extract'
 
 export type PipelineRun = {
   id: string                       // nanoid(8),前缀 run_
