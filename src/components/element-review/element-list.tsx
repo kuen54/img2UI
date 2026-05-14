@@ -14,6 +14,7 @@ import {
   type VisualCategory,
 } from '@/lib/visual-category'
 import { VisualCategoryBadge } from './visual-category-badge'
+import { getBboxWarning } from './bbox-warning'
 
 export type ElementListProps = {
   elements: Element[]
@@ -25,9 +26,14 @@ export type ElementListProps = {
 
 type FilterTab = 'all' | 'static' | 'code' | 'unreviewed'
 
+// 0.5% 页面面积阈值——over-include 架构下小碎片是噪声主源
+const SMALL_AREA_THRESHOLD = 0.005
+
 export function ElementList({ elements, states, selectedId, onSelect, onAddManual }: ElementListProps) {
   const [tab, setTab] = useState<FilterTab>('all')
   const [enabled, setEnabled] = useState<Set<VisualCategory>>(new Set(VISUAL_CATEGORIES))
+  const [showOnlyStatic, setShowOnlyStatic] = useState(true)
+  const [hideSmallElements, setHideSmallElements] = useState(true)
 
   const toggleCategory = (cat: VisualCategory, checked: boolean) => {
     const next = new Set(enabled)
@@ -36,13 +42,27 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
     setEnabled(next)
   }
 
+  const resetAllFilters = () => {
+    setShowOnlyStatic(false)
+    setHideSmallElements(false)
+    setEnabled(new Set(VISUAL_CATEGORIES))
+    setTab('all')
+  }
+
   const filtered = elements.filter((el) => {
+    if (showOnlyStatic && el.type !== 'static') return false
+    if (hideSmallElements) {
+      const area = el.bbox[2] * el.bbox[3]
+      if (area < SMALL_AREA_THRESHOLD) return false
+    }
     if (!enabled.has(el.visual_category)) return false
     if (tab === 'static') return el.type === 'static'
     if (tab === 'code') return el.type === 'code'
     if (tab === 'unreviewed') return !el.reviewed
     return true
   })
+
+  const hasFiltered = filtered.length < elements.length
 
   return (
     <div className="flex flex-col h-full">
@@ -55,6 +75,42 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
             <TabsTrigger value="unreviewed">未 review</TabsTrigger>
           </TabsList>
         </Tabs>
+      </div>
+      <div className="border-b px-3 py-2 flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="size-3 cursor-pointer"
+              checked={showOnlyStatic}
+              aria-label="只看静态切图"
+              onChange={(e) => setShowOnlyStatic(e.target.checked)}
+            />
+            <span>只看静态切图</span>
+          </label>
+          <label className="flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="size-3 cursor-pointer"
+              checked={hideSmallElements}
+              aria-label="隐藏小碎片"
+              onChange={(e) => setHideSmallElements(e.target.checked)}
+            />
+            <span>隐藏小碎片(&lt;0.5% 面积)</span>
+          </label>
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground shrink-0">
+          <span>显示 {filtered.length} / {elements.length}</span>
+          {hasFiltered && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="underline hover:text-foreground"
+            >
+              显示全部
+            </button>
+          )}
+        </div>
       </div>
       <div className="border-b px-3 py-2 flex flex-wrap gap-x-3 gap-y-1.5">
         {VISUAL_CATEGORIES.map((cat) => {
@@ -83,6 +139,7 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
           <ul className="divide-y">
             {filtered.map((el) => {
               const isSelected = el.id === selectedId
+              const warning = getBboxWarning(el)
               return (
                 <li
                   key={el.id}
@@ -100,7 +157,27 @@ export function ElementList({ elements, states, selectedId, onSelect, onAddManua
                     )}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{el.name}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-medium truncate">{el.name}</p>
+                      {warning.level === 'error' && (
+                        <span
+                          aria-label={warning.reason}
+                          title={warning.reason}
+                          className="text-rose-600 shrink-0 leading-none"
+                        >
+                          ⚠️
+                        </span>
+                      )}
+                      {warning.level === 'warning' && (
+                        <span
+                          aria-label={warning.reason}
+                          title={warning.reason}
+                          className="text-amber-600 shrink-0 leading-none"
+                        >
+                          ℹ️
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <Badge
                         variant="outline"
