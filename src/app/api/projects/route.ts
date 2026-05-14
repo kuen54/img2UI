@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { listProjects, createProject } from '@/lib/projects'
+import { listPages } from '@/lib/pages'
+import type { Project } from '@/lib/types'
 
 export async function GET() {
-  const projects = await listProjects()
-  return NextResponse.json(projects)
+  const [projects, pages] = await Promise.all([listProjects(), listPages()])
+  // 给每个 project 找一张 thumbnail(优先 created_at 早的)挂到 sample_thumbnail_url
+  // pages 已通过 listPages 拿到全量,内存做映射开销可忽略(MVP 无 pagination)
+  const sortedPages = [...pages].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const decorated: Project[] = projects.map((proj) => {
+    const sample = sortedPages.find((p) => p.project_id === proj.id && p.thumbnail_path)
+    if (sample) {
+      return { ...proj, sample_thumbnail_url: `/api/thumbs/${sample.id}` }
+    }
+    return proj
+  })
+  return NextResponse.json(decorated)
 }
 
 export async function POST(req: NextRequest) {
