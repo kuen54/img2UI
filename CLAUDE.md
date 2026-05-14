@@ -111,6 +111,8 @@ ref/split_elements.py(scipy binary_dilation + connected component, gap=15)→ �
 **Phase 8c(v12)起:Pass 2 喂 [原图, ...crops] 多参考图,prompt 用「参考图 #2 是 X」编号引用。**
 拖框生效路径:用户拖 bbox → crop 改 → 参考图改 → 模型按新 crop 复刻(PoC #1 验证 gpt-image-2-official 接受多张 image_urls 时按 crop 复刻不 regenerate)。Pass 2 改为按 `visual_category` 分组并行,每组一路 image_gen 调用,部分失败容忍(单路失败 → 该路 elements 标 status=failed,其他路正常完成)。
 
+**Phase 8f BUG #2:apimart polling `poll_max_attempts` 默认 60(5 分钟兜底),不是 24**。多路并发下 apimart 单 task 实测 ~150-220s,偶尔 3-15 分钟(队列拥挤);24 × 5s = 120s 太短,4 路并发普遍超时。新建 image_gen provider 时 UI 默认 60,seed 默认 60。如果某路真要等 5 分钟以上,说明 apimart 队列异常,人为干预(切 provider / 重试)而不是继续抬高超时上限。
+
 ### 7. **抠图走本地 chroma green key,不要 koukoutu / rmbg / SAM 任何外部分割模型**(2026-05-13 PoC v11 锁定)
 
 绿幕背景输入下,本地 chroma key 已经 0 噪点 + 0 抠穿:

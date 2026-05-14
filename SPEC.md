@@ -74,7 +74,7 @@ type ProviderConfig = {
   is_async?: boolean               // true: submit + poll(apimart 模式),false: sync(OpenAI 直连模式)
   poll_interval_seconds?: number   // is_async=true 时,轮询间隔,默认 5
   poll_initial_delay_seconds?: number  // is_async=true 时,首次轮询前等待,默认 12
-  poll_max_attempts?: number       // is_async=true 时,最大轮询次数,默认 24(总等待 ~2 分钟)
+  poll_max_attempts?: number       // is_async=true 时,最大轮询次数,默认 60(总等待 ~5 分钟兜底,Phase 8f BUG #2 调高:实测 image_gen 单次 ~150-220s+,4 路并发拥挤)
   default_quality?: 'low' | 'medium' | 'high'  // gpt-image-2-official 必须 'high',否则文字乱码
 
   // for kind=cdn
@@ -1006,7 +1006,7 @@ GET /api/thumbs/[id] 严格校验 id 字符集 `^[a-zA-Z0-9_-]{1,32}$`(nanoid �
   is_async: true,
   poll_interval_seconds: 5,
   poll_initial_delay_seconds: 12,
-  poll_max_attempts: 24,
+  poll_max_attempts: 60,
   default_quality: "high",     // 必须 high,否则文字乱码
   active: true
 }
