@@ -265,6 +265,8 @@ POST /api/config/test
 
 ```
 GET    /api/projects                  → 200 Project[]
+                                       Project 多带 sample_thumbnail_url?:string
+                                       (项目下首个有缩略图 page 的 /api/thumbs/{id};无则缺省)
 POST   /api/projects                  Body: Pick<Project, 'name'|'description'|'tech_stack_hint'|'cdn_provider_id'>
                                        → 201 Project
 GET    /api/projects/[id]             → 200 Project
@@ -272,6 +274,7 @@ PUT    /api/projects/[id]             Body: Partial<Project>  → 200 Project
 DELETE /api/projects/[id]             → 204 (级联删除 pages 与底下所有数据)
 
 GET    /api/projects/[id]/pages       → 200 Page[]
+                                       Page 多带 thumbnail_url?:string,thumbnail_path 字段被剔除
 POST   /api/projects/[id]/pages       Body: { name, route_hint? }  → 201 Page
 GET    /api/pages/[id]                → 200 Page
 PUT    /api/pages/[id]                Body: Partial<Page>  → 200 Page
@@ -283,7 +286,13 @@ POST   /api/pages/[id]/states         Body: multipart
                                             states: [{ filename, name, is_canonical }]
                                           }
                                        → 201 State[]
+                                       服务端在分配 canonical_state_id 后同步生成缩略图
+                                       (失败 console.error 不阻断响应)
 DELETE /api/states/[id]               → 204
+
+GET    /api/thumbs/[id]               → 200 image/png + Cache-Control: public, max-age=86400
+                                       id 必须严格匹配 ^[a-zA-Z0-9_-]{1,32}$,否则 400
+                                       data/thumbs/{id}.png 不存在时 404
 ```
 
 ### Pipeline
@@ -847,6 +856,8 @@ data/
 │   └── {run-id}.json              # PipelineRun
 ├── raw/
 │   └── {state-id}.png             # 用户上传的原图
+├── thumbs/
+│   └── {page-id}.png              # 列表卡片缩略图(canonical state 256px,Phase 8e)
 ├── pass2/
 │   └── {state-id}.png             # Pass 2 输出的绿幕 #00FF00 背景 PNG(留底,debug 用)
 ├── keyed/
@@ -869,6 +880,36 @@ PNG 写直接 `fs.promises.writeFile`(图片大,原子写收益小)
 ### 并发锁
 
 同一 `state_id` 的 Pass 1 / Pass 2 / re-extract 不允许同时跑,用 `lib/run-lock.ts` 维护一个内存 Map(因为单进程 Next.js,内存锁够用)。冲突时返回 `409 Conflict`
+
+---
+
+## 缩略图生成(Phase 8e)
+
+项目列表 / 页面列表卡片需要缩略图,便于「看图找页」。
+
+### 触发时机
+
+- canonical state 上传时(POST /api/pages/[id]/states 中,只在 page 当前 `canonical_state_id` 为空 + 用户标了 `is_canonical` 时同步触发一次)
+- `lib/pages.ts` 暴露 `maybeGenerateThumbnailForPage(pageId)`,任一前置条件缺失(page 不存在 / 无 canonical / canonical PNG 不在盘上)静默返 null
+
+### 生成
+
+`lib/thumbnails.ts.generateThumbnail(pageId, srcBuffer)`:
+- sharp `resize({ width: 256, height: 256, fit: 'inside', withoutEnlargement: true })`
+- `png({ quality: 85, compressionLevel: 9 })`
+- 输出 `data/thumbs/{pageId}.png`,典型 < 50KB
+
+### 已有 page 无缩略图
+
+**不做 lazy-generate**:列表 API GET /api/projects 与 /api/projects/[id]/pages 不会在请求时为缺失缩略图的 page 现场生成。原因:
+1. 列表 API 必须毫秒级响应,不能等 sharp 处理 N 张原图
+2. 上线前已存在的 page,用户重新上传一次 canonical state 即可触发(MVP 不做单独「重新生成缩略图」按钮)
+
+无 thumbnail_path 的 page 在前端走 `<img onError>` fallback 到 lucide icon(`<Folder/>` 项目卡 / `<FileText/>` 页面卡)。
+
+### 安全
+
+GET /api/thumbs/[id] 严格校验 id 字符集 `^[a-zA-Z0-9_-]{1,32}$`(nanoid 字符集 + `page_` 前缀长度上限),非法返 400。Response 加 `Cache-Control: public, max-age=86400`,缩略图变更频率低(只在重新指派 canonical state 时变),24 小时缓存合理。
 
 ---
 
