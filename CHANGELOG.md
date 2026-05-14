@@ -4,7 +4,68 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
-(empty)
+### Added — Phase 8 v12 多路 Pass + 拖框生效化
+
+dogfood 反馈四件套(Pass 1/2 1-shot 不准 / 列表无缩略图 / chroma key 性能担忧 / 拖框无效)的定向修复。一套 v12 架构:Pass 1+2 都按 5 类 visual_category 并行,bbox crop 喂 Pass 2 当多参考图,**拖框终于生效**。
+
+**Pass 1 改造**(PR #13,8 commits):
+- Pass 1 从 1-shot 改为 5 路并行 mllm(subject / button / container / background / decoration),`Promise.allSettled` + `MIN_SUCCESS_ROUTES = 3` 容忍
+- 每路用 over-include + CATEGORY_EXAMPLES 锚定的 prompt 头(PoC #2 v3 锁定)。**反例**:v2 「DO NOT return others」措辞实测召回退化到 69%,**正解**:删 EXCLUSIVE 限制 + 鼓励重叠 + 下游 IoU 0.5 dedup → 召回 12/13 = 92%
+- Element schema 加 `visual_category` + `pass1_routes_seen?`,PipelinePassKind 扩展 sub-kinds
+- 跨 state 合并改用 IoU > 0.5(替代 entity_name)
+- 新增 `lib/visual-category.ts` / `lib/bbox-iou.ts` / `lib/pass1-route-merger.ts` / `lib/prompts/render-pass1-route.ts`
+
+**Pass 2 改造**(PR #14,6 commits):
+- Pass 2 从 1-shot 改为按 visual_category 分组并行 image_gen,每路传 `image_urls = [原图, ...crops]` 多参考图
+- crop 由 `lib/bbox-crop.ts`(sharp.extract + clamp)按当前 element bbox 从原图实时切出
+- prompt 用编号引用「参考图 #2 是 X」(PoC #1 通过验证不会触发 regenerate)
+- **问题 #4 拖框生效路径**:用户拖 bbox → crop 改 → 参考图改 → 模型按新 crop 复刻
+- callImageGen 接口扩展 `reference_image_base64s?: string[]`(向后兼容)
+- 单路 image_gen 失败 → 该路 elements 标 status=failed,其他路正常
+
+**UI 改造**(PR #15,8 commits):
+- Element Review 列表加 6 类彩色 `VisualCategoryBadge` + 顶部 6 checkbox 多选筛选(默认全选)
+- 详情面板加 visual_category select(6 选项,改后 onUpdate 持久化)
+- canvas 顶部加横幅:「拖动框 = 调整位置坐标(进 layout.json)且作为 Pass 2 参考图裁剪边界。改 description / 类别 / 拆合并需要重跑 Pass 2 才生效。」
+- 新增 `PipelineProgress` 组件(三态:全完成 N/N / 部分失败 X failed / running 显进度)
+- `GET /api/pipeline-runs/[id]?include_sub=true` 返回 `{ run, sub_runs }`
+- React 组件测试基建新装(`@testing-library/react` / `jest-dom` / `user-event` / `jsdom`)
+
+**列表缩略图**(PR #16,8 commits):
+- ProjectCard / PageCard 显示 256px 缩略图,加载失败 onError 回退 lucide icon
+- 上传 canonical state 时 `maybeGenerateThumbnailForPage` hook 同步 sharp 缩到 `data/thumbs/{page-id}.png`
+- `GET /api/thumbs/[id]` 静态文件 route + path-traversal 防御 + cache header
+- 列表 API 注入 `thumbnail_url` / `sample_thumbnail_url`,**不外暴**磁盘 `thumbnail_path`
+- 已有 page 显 icon fallback,**不做 lazy-generate**(避免列表 API 阻塞)
+
+### PoC
+
+`poc/v12-multi-route/`(PR #12):
+- PoC #1 多参考图行为:**通过**(B 路完胜 A,模型按 crop 复刻无 regenerate)
+- PoC #2 三轮迭代:v1 EXHAUSTIVE 77% / v2 加 DO NOT return others 退化 69% / **v3 over-include + CATEGORY_EXAMPLES 92%** ✅
+- 关键洞察:删 EXCLUSIVE 限制 + 中文具体物名锚定(decoration 类显式 mention「购买后自动领取」「完单可收藏潮玩」等小文字标签)
+- 完整报告: `poc/v12-multi-route/REPORT.md`
+
+### Changed
+
+- spec(`docs/superpowers/specs/2026-05-14-pass-multi-route-design.md`)+ plan(`docs/superpowers/plans/2026-05-14-pass-multi-route-implementation.md`)落仓
+- SPEC.md(Element schema / Pass 1+2 prompt 模板 / PipelinePassKind / 缩略图生成节)
+- CLAUDE.md(§4 visual_category 是正交维度,新增 §8 Pass 1 5 路并行规则 + over-include 措辞反例清单)
+- PRD.md(Use Case Element Review + 列表缩略图)
+
+### Cost / Latency 影响
+
+| 项 | v0.1.x | v0.2(估算) | 倍数 |
+|---|---|---|---|
+| Pass 1 单页 | 1× mllm ≈ \$0.03 | 5× mllm ≈ \$0.15 | 5× |
+| Pass 2 单页 | 1× image_gen ≈ \$0.17 | N× image_gen ≈ \$0.51-0.85(N=2-5) | 3-5× |
+| Pass 1 时延 | 单次 ≈ 30-60s | 单次(并行) | 不变 |
+| Pass 2 时延 | 单次 60-220s+ | 单次(并行) | 不变 |
+| 单页总成本 | \~\$0.20 | \~\$0.66-1.00 | 3-5× |
+
+### Test
+
+169 vitest tests(原 88 + 81 新增,12 个旧 mergeElements 单测删除因被 mergeWithExisting 替代)。React 组件测试基建新建。
 
 ## [0.1.1] — 2026-05-14 · UX 打磨
 

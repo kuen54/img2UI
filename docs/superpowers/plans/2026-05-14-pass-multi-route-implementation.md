@@ -2,7 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **STATUS: READY — full TDD detail, awaiting user review then execution**
+> **STATUS: COMPLETED — 5/5 phases merged**
+> Phase 8a (PR #12) → 8b (PR #13) → 8c (PR #14) → 8d (PR #15) → 8e (PR #16),全部已 merge 到 main。
+> 38 commits / 169 vitest pass / 五件套全过。
+> v12 architecture(Pass 1+2 多路 + crop 多参考图)落地,dogfood 反馈四件套定向修复完成。
+> QA 端到端 playwright 验证: 见 `qa-screenshots/` (subagent run on 2026-05-14)
 > 嘉锟 2026-05-14 拍板「先大纲后细节」。当前每 phase 已展开完整 5-step TDD task 详情。
 
 **Goal:** 把 dogfood 暴露的四个核心问题(Pass 1/2 不准 / 列表无缩略图 / chroma key 性能 / 拖框无效)用一套 v12 架构解决:Pass 1+2 都按 5 类视觉类别并行,bbox crop 喂 Pass 2 当多参考图,拖框间接生效。
