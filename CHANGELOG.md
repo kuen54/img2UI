@@ -6,6 +6,45 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 (empty)
 
+## [0.1.1] — 2026-05-14 · UX 打磨
+
+v0.1.0 后嘉锟实测 + opus subagent 全流程 dogfood 暴露的 18+ 处 UX 卡点修复。无新能力,纯打磨。一并补 v0.1.0 commit message 描述但实际 diff 漏修的 settings layout pb-24。
+
+### Fixed
+
+**布局 / 滚动**(用户反馈「右侧页面无法滚动到最底部」):
+- 所有 overflow / 主内容容器统一加 `pb-24`,避免内容贴 viewport 底,StickySaveBar 出现时不再遮挡底部按钮 — 涵盖 `/projects` / 项目详情 / page detail / Element Review fallback / Asset Review / Export / Settings layout
+- Dialog overlay `bg-black/10` → `bg-black/50`,移除 backdrop-blur 以提高对比;DialogContent 加 `max-h-[calc(100vh-4rem)]` + 自身 `overflow-y-auto` + `shadow-2xl`
+
+**信息层级 / 一致性**(用户反馈「全空,根本没有 btn」):
+- `/projects`、`/projects/[pid]`、page detail 三处空状态统一加顶部 H1 + 右上「+ 新建 X」按钮(此前空状态只渲染居中 EmptyState,用户初次打开看不到入口)
+- page detail 二级 breadcrumb 删除(已和 H1「页面名」+ 项目级 layout breadcrumb 重复 3 处)
+- page detail 「上传状态图」按钮始终在状态图区右上(此前 states.length=0 时按钮藏在 EmptyState 内)
+
+**Pipeline 进度 stepper**:
+- stepper 步骤改为 Link(状态允许时):step 2 → `/elements`、step 4/5 → `/assets`、step 6 → `/export`,hover 加背景 + cursor pointer + title hint
+- page detail 顶部右上原本的「Element Review / Asset Review / Export」3 个跳转按钮删除(stepper 已承担入口职责)
+- stepper 下加「提示:点击已点亮的步骤可直接跳转」
+
+**Element Review canvas**(用户反馈截图标签互相覆盖):
+- 默认 `showLabels=false`(toolbar 全显示开关保留),只在选中 / hover 元素时浮现该元素标签
+- 标签加蓝/橙底色框 + 白字提高可读性
+- hover 元素 stroke-width 加粗(2 → 3)给视觉反馈
+
+**中文化**(用户反馈「我去哪配置 gemini-3.1-pro 和 gpt-image-2 的 api」):
+- Settings 模型分组标题:「**多模态理解模型** *Multimodal LLM*」/「**生图模型** *Image Generation*」(中文主 + 英文副便于对应 API 文档)
+- Provider 卡片字段标签全中文化:名称 / API 格式 / Base URL / 模型 ID / 默认温度 / 默认最大 token / 支持视觉输入 / 接口类型 / 异步模式 / 默认画质 / Bucket / 区域 / 公网 URL 前缀
+- 「Active」chip → 「使用中」
+- 「Test Connection」按钮 → 「Test Connection 测试连通」
+- Pass 2 confirm dialog 描述:「会调用 image_gen provider」→「会调用生图模型(默认 apimart gpt-image-2-official)」
+
+**已修补但 v0.1.0 commit message 误声明已修的**:
+- `src/app/settings/layout.tsx` 主滚动区 `pb-24`(commit `4ded220`,opus QA verify 发现 round 3 commit message 与 diff 不符)
+
+### Verification
+
+opus subagent 跑 12 项 verify(`qa-screenshots/verify-*.png`)11 项一次通过,1 项发现 commit message vs diff 不符并补修。
+
 ## [0.1.0] — 2026-05-14 · MVP-α
 
 第一个完整可用版本。Phase 0-7 全部完结,端到端跑通 PoC 真实页(Pass 1 119s · Pass 2 221s · 14 asset · spec.md 质量极高)。
@@ -86,5 +125,6 @@ PoC v1-v11 11 轮迭代锁定:
 - 抠图 + 切片:0 API,~1s
 - 总计 **~$0.19/页 + ~6min**
 
-[Unreleased]: https://github.com/kuen54/img2UI/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kuen54/img2UI/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/kuen54/img2UI/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kuen54/img2UI/releases/tag/v0.1.0
