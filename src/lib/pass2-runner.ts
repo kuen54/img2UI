@@ -27,6 +27,12 @@ import { acquireLock, releaseLock, RunLockConflictError } from '@/lib/run-lock'
 import { chromaGreenKey } from '@/lib/alpha-key'
 import { sliceAssets } from '@/lib/slicer'
 import { createOrUpdateAsset, writeAssetBinary } from '@/lib/assets'
+import {
+  writeSlice,
+  saveManifest,
+  assignSliceToElement,
+} from '@/lib/slices'
+import type { SliceManifest, SliceManifestEntry } from '@/lib/types'
 import { renderPass2RoutePrompt } from '@/lib/prompts/render-pass2-route'
 import { cropFromBbox } from '@/lib/bbox-crop'
 import { listMultiRouteFiles } from '@/lib/multi-png-stack'
@@ -257,22 +263,40 @@ async function runRoute(ctx: RouteCtx): Promise<RouteResult> {
       min_opaque_pct: 1,
     })
 
-    // 4. 切片 → element 映射:严格在该路 validElements 范围内匹配,不跨 category 串
-    //    模型多画的切片(超出 elements 数量)直接丢弃
-    //    模型漏画的元素(slices < elements)在该路也无对应 asset(用户在 Asset Review 看到空)
+    // 4a. 写所有 slices 到切片库 + manifest(供用户后续手动改派)
+    //     manifest 先全部 assigned_element_id=null,下面的默认 (y,x) 指派写入后再回填
+    //     宽高直接来自 slicer 的 bbox(slicer 用 sharp.extract 切出来的 PNG 与 bbox 像素尺寸一致),
+    //     不再二次走 sharp metadata,避免在并行 route 下做多余的图像 IO。
+    const manifestEntries: SliceManifestEntry[] = []
+    for (let i = 0; i < slices.length; i++) {
+      const slice = slices[i]!
+      await writeSlice(stateId, category, i, slice.buffer)
+      manifestEntries.push({
+        idx: i,
+        bbox: slice.bbox,
+        opaque_pct: slice.opaque_pct,
+        width: slice.bbox[2],
+        height: slice.bbox[3],
+        assigned_element_id: null,
+      })
+    }
+    const manifest: SliceManifest = {
+      state_id: stateId,
+      category,
+      slices: manifestEntries,
+      created_at: new Date().toISOString(),
+    }
+    await saveManifest(stateId, category, manifest)
+
+    // 4b. 默认 (y,x) 指派(保留旧行为):走 assignSliceToElement,
+    //     它内部会 copy slice → assets-bin/{element-id}.png + 更新 manifest.assigned_element_id +
+    //     createOrUpdateAsset。模型多画的切片(超出 elements 数量)留在切片库,用户可手动选用。
+    //     模型漏画的元素(slices < elements)在该路也无对应 asset(用户在 Asset Review 看到空)
     const limit = Math.min(validElements.length, slices.length)
     for (let i = 0; i < limit; i++) {
       const el = validElements[i]!
-      const slice = slices[i]!
-      await writeAssetBinary(el.id, slice.buffer)
-      const meta = await sharpDims(slice.buffer)
-      await createOrUpdateAsset({
-        id: el.id,
-        element_id: el.id,
+      await assignSliceToElement(stateId, category, i, el.id, {
         page_id: state.page_id,
-        width: meta.width,
-        height: meta.height,
-        alpha_quality: slice.opaque_pct / 100,
       })
     }
 

@@ -1,22 +1,30 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Loader2, UploadCloud, ExternalLink } from 'lucide-react'
+import { RefreshCw, Loader2, UploadCloud, ExternalLink, CheckCircle2, Circle, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Asset, Element } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { reExtractElementApi, uploadAssetApi } from '@/lib/api/assets-client'
+import { reExtractElementApi, uploadAssetApi, updateAssetApi } from '@/lib/api/assets-client'
+import { SlicePickerDialog } from './slice-picker-dialog'
 
 export type AssetDetailPanelProps = {
   asset: Asset
   element: Element | null
+  /** canonical state id,用于「换切图」从切片库选 */
+  canonicalStateId?: string
   onReExtracted: () => void
 }
 
-export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailPanelProps) {
+export function AssetDetailPanel({ asset, element, canonicalStateId, onReExtracted }: AssetDetailPanelProps) {
   const [reExtracting, setReExtracting] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  const isReviewed = asset.status === 'validated' || asset.status === 'uploaded'
+  const canToggle = asset.status === 'extracted' || asset.status === 'validated'
 
   const handleReExtract = async () => {
     setReExtracting(true)
@@ -41,6 +49,20 @@ export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailP
       toast.error('上传失败:' + (e as Error).message)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleToggleReviewed = async () => {
+    setToggling(true)
+    try {
+      const next = isReviewed ? 'extracted' : 'validated'
+      await updateAssetApi(asset.id, { status: next })
+      toast.success(isReviewed ? '已取消 reviewed' : '已标记 reviewed')
+      onReExtracted()
+    } catch (e) {
+      toast.error('更新状态失败:' + (e as Error).message)
+    } finally {
+      setToggling(false)
     }
   }
 
@@ -87,10 +109,38 @@ export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailP
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void handleReExtract()} disabled={reExtracting || uploading} size="sm">
+        {canToggle && (
+          <Button
+            onClick={() => void handleToggleReviewed()}
+            disabled={toggling || reExtracting || uploading}
+            size="sm"
+            variant={isReviewed ? 'outline' : 'default'}
+          >
+            {toggling ? (
+              <Loader2 className="size-3.5 mr-1 animate-spin" />
+            ) : isReviewed ? (
+              <Circle className="size-3.5 mr-1" />
+            ) : (
+              <CheckCircle2 className="size-3.5 mr-1" />
+            )}
+            {isReviewed ? '取消 reviewed' : '标记已 reviewed'}
+          </Button>
+        )}
+        <Button onClick={() => void handleReExtract()} disabled={reExtracting || uploading} size="sm" variant="outline">
           {reExtracting ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <RefreshCw className="size-3.5 mr-1" />}
           {reExtracting ? '重抠中…(60-180s)' : '重抠该元素'}
         </Button>
+        {canonicalStateId && element?.visual_category && (
+          <Button
+            onClick={() => setPickerOpen(true)}
+            disabled={reExtracting || uploading || toggling}
+            size="sm"
+            variant="outline"
+          >
+            <ImageIcon className="size-3.5 mr-1" />
+            换切图
+          </Button>
+        )}
         <Button
           onClick={() => void handleUpload()}
           disabled={reExtracting || uploading}
@@ -111,10 +161,19 @@ export function AssetDetailPanel({ asset, element, onReExtracted }: AssetDetailP
             查看 CDN 链接
           </a>
         )}
-        <p className="text-xs text-muted-foreground self-center">
-          重抠会用当前 element 的 description 重发 Pass 2,覆盖该 asset
-        </p>
       </div>
+
+      {canonicalStateId && element && (
+        <SlicePickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          elementId={element.id}
+          pageId={asset.page_id}
+          stateId={canonicalStateId}
+          category={element.visual_category}
+          onAssigned={onReExtracted}
+        />
+      )}
     </div>
   )
 }

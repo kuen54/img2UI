@@ -155,6 +155,30 @@ export type Asset = {
 }
 
 // =============================================================================
+// Slice library
+// =============================================================================
+// Pass 2 切片落地后,同一 (state, category) 的所有切片先写到切片库。
+// 默认按 (y,x) 顺序自动指派给该 category 的 elements;用户可在 Asset Review
+// 通过 SlicePickerDialog 手动改派(slice_idx ↔ element_id 多对一)。
+// 见 CLAUDE.md § 找东西 § data/slices/。
+
+export type SliceManifestEntry = {
+  idx: number                              // 0-based,与文件名 {idx}.png 对应
+  bbox: [number, number, number, number]   // keyed PNG 上的像素坐标 [x,y,w,h]
+  opaque_pct: number                       // 0-100
+  width: number
+  height: number
+  assigned_element_id: string | null       // 当前指派给的 element id,null = 未指派
+}
+
+export type SliceManifest = {
+  state_id: string
+  category: string                         // VisualCategory 字面量,manifest 用宽 string 容错
+  slices: SliceManifestEntry[]
+  created_at: string
+}
+
+// =============================================================================
 // PipelineRun
 // =============================================================================
 

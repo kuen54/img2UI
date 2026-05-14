@@ -1,4 +1,4 @@
-import type { Asset, Element } from '@/lib/types'
+import type { Asset, AssetStatus, Element } from '@/lib/types'
 
 async function http<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -17,6 +17,13 @@ export const getAssetApi = (id: string) => http<Asset>(`/api/assets/${id}`)
 
 export const deleteAssetApi = (id: string) =>
   http<void>(`/api/assets/${id}`, { method: 'DELETE' })
+
+export const updateAssetApi = (id: string, patch: { status?: AssetStatus }) =>
+  http<Asset>(`/api/assets/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
 
 export const triggerPass2Api = (stateId: string) =>
   http<{ status: string }>(`/api/states/${stateId}/pass2`, { method: 'POST' })
