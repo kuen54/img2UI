@@ -265,4 +265,87 @@ describe('runPass2 multi-route', () => {
     await expect(runPass2('st')).rejects.toThrow(/没有 type=static/)
     expect(callImageGen).not.toHaveBeenCalled()
   })
+
+  it('Phase 8f BUG #1: per-element crop failure marks that element failed, route 继续 with valid crops', async () => {
+    // 某 element 的 bbox 让 cropFromBbox 抛(NaN / 真零面积);该 element 标 failed
+    // 该路其他 elements 的 crop 正常,继续走 image_gen + 切片合并
+    vi.mocked(getElementsByPage).mockResolvedValue([
+      {
+        id: 'e_bad', visual_category: 'subject', type: 'static', bbox: [Number.NaN, 0, 0.1, 0.1],
+        name: 'bad', description: 'd', state_ids: ['st'], page_id: 'pg', z_index: 0,
+        reviewed: true, created_at: '', updated_at: '',
+      },
+      {
+        id: 'e_ok', visual_category: 'subject', type: 'static', bbox: [0.1, 0.1, 0.2, 0.2],
+        name: 'ok', description: 'd', state_ids: ['st'], page_id: 'pg', z_index: 0,
+        reviewed: true, created_at: '', updated_at: '',
+      },
+    ] as never)
+
+    // cropFromBbox 在 NaN bbox 时抛(模拟 bbox-crop 真实行为)
+    const { cropFromBbox } = await import('@/lib/bbox-crop')
+    vi.mocked(cropFromBbox).mockImplementation(async (_buf: Buffer, bbox: number[]) => {
+      if (!bbox.every((v) => Number.isFinite(v))) {
+        throw new Error('zero-area bbox')
+      }
+      return Buffer.from(`crop-${bbox.join(',')}`)
+    })
+    vi.mocked(sliceAssets).mockResolvedValue([
+      { buffer: Buffer.from('s1'), opaque_pct: 50, bbox: [0, 0, 10, 10] },
+    ] as never)
+
+    await runPass2('st')
+
+    // image_gen 仍被调一次(只用 1 个 valid crop)
+    expect(callImageGen).toHaveBeenCalledTimes(1)
+    const opts = vi.mocked(callImageGen).mock.calls[0]![1]
+    expect(opts.reference_image_base64s).toHaveLength(1)
+
+    // e_bad 标 failed
+    const failedCalls = vi
+      .mocked(createOrUpdateAsset)
+      .mock.calls.filter(([input]) => input.status === 'failed' && input.id === 'e_bad')
+    expect(failedCalls.length).toBe(1)
+
+    // e_ok 写入 asset(非 failed)
+    const okCalls = vi
+      .mocked(createOrUpdateAsset)
+      .mock.calls.filter(([input]) => input.id === 'e_ok' && input.status !== 'failed')
+    expect(okCalls.length).toBeGreaterThan(0)
+  })
+
+  it('Phase 8f BUG #1: 整路所有 elements 都 crop 失败时 fail 该路,不阻断其他路', async () => {
+    vi.mocked(getElementsByPage).mockResolvedValue([
+      {
+        id: 'e_bad1', visual_category: 'subject', type: 'static', bbox: [Number.NaN, 0, 0.1, 0.1],
+        name: 'b1', description: 'd', state_ids: ['st'], page_id: 'pg', z_index: 0,
+        reviewed: true, created_at: '', updated_at: '',
+      },
+      {
+        id: 'e_ok', visual_category: 'decoration', type: 'static', bbox: [0.1, 0.1, 0.2, 0.2],
+        name: 'ok', description: 'd', state_ids: ['st'], page_id: 'pg', z_index: 0,
+        reviewed: true, created_at: '', updated_at: '',
+      },
+    ] as never)
+    const { cropFromBbox } = await import('@/lib/bbox-crop')
+    vi.mocked(cropFromBbox).mockImplementation(async (_buf: Buffer, bbox: number[]) => {
+      if (!bbox.every((v) => Number.isFinite(v))) {
+        throw new Error('zero-area bbox')
+      }
+      return Buffer.from(`crop-${bbox.join(',')}`)
+    })
+    vi.mocked(sliceAssets).mockResolvedValue([
+      { buffer: Buffer.from('s1'), opaque_pct: 50, bbox: [0, 0, 10, 10] },
+    ] as never)
+
+    await expect(runPass2('st')).resolves.toBeDefined()
+
+    // subject 路全坏 → image_gen 只被 decoration 路调一次
+    expect(callImageGen).toHaveBeenCalledTimes(1)
+    // e_bad1 标 failed
+    const failedCalls = vi
+      .mocked(createOrUpdateAsset)
+      .mock.calls.filter(([input]) => input.status === 'failed' && input.id === 'e_bad1')
+    expect(failedCalls.length).toBe(1)
+  })
 })

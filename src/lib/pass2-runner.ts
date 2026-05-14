@@ -188,17 +188,46 @@ async function runRoute(ctx: RouteCtx): Promise<RouteResult> {
 
   try {
     // 1. 生成 crops(顺序与 elements 一致)
+    //    Phase 8f BUG #1:单 element crop 失败 → 标 failed asset + skip,不阻断该路其他 elements
     const crops: string[] = []
+    const validElements: Element[] = []
     for (const el of elements) {
-      const cropBuf = await cropFromBbox(rawBuf, el.bbox, {
-        width: state.width,
-        height: state.height,
-      })
-      crops.push(`data:image/png;base64,${cropBuf.toString('base64')}`)
+      try {
+        const cropBuf = await cropFromBbox(rawBuf, el.bbox, {
+          width: state.width,
+          height: state.height,
+        })
+        crops.push(`data:image/png;base64,${cropBuf.toString('base64')}`)
+        validElements.push(el)
+      } catch (cropErr) {
+        // 该 element 的 bbox 让 cropFromBbox 抛(NaN / 真零面积)— 标 failed,继续下一个
+        console.warn(
+          `[pass2-runner] skip ${el.id} (${el.name}) crop: ${(cropErr as Error).message}`,
+        )
+        await createOrUpdateAsset({
+          id: el.id,
+          element_id: el.id,
+          page_id: state.page_id,
+          width: 0,
+          height: 0,
+          alpha_quality: 0,
+          status: 'failed',
+        })
+      }
     }
 
-    // 2. 调 image_gen(主图 + crops)
-    const promptText = renderPass2RoutePrompt(category, elements, pageDesc)
+    if (validElements.length === 0) {
+      // 该路所有 element 的 bbox 都坏 — fail 该路 sub-run,不抛(允许其他路完成)
+      await failRun(subRun.id, {
+        code: `PASS2_ROUTE_${category.toUpperCase()}_NO_VALID_CROPS`,
+        message: '该路所有 element bbox 都无效',
+        retryable: false,
+      })
+      return { ok: false, category, error: 'no valid crops' }
+    }
+
+    // 2. 调 image_gen(主图 + valid crops)
+    const promptText = renderPass2RoutePrompt(category, validElements, pageDesc)
     const { image: greenScreenPng, cost } = await callImageGen(provider, {
       prompt: promptText,
       reference_image_base64: rawDataUrl,
@@ -226,12 +255,12 @@ async function runRoute(ctx: RouteCtx): Promise<RouteResult> {
       min_opaque_pct: 1,
     })
 
-    // 4. 切片 → element 映射:严格在该路 elements 范围内匹配,不跨 category 串
+    // 4. 切片 → element 映射:严格在该路 validElements 范围内匹配,不跨 category 串
     //    模型多画的切片(超出 elements 数量)直接丢弃
     //    模型漏画的元素(slices < elements)在该路也无对应 asset(用户在 Asset Review 看到空)
-    const limit = Math.min(elements.length, slices.length)
+    const limit = Math.min(validElements.length, slices.length)
     for (let i = 0; i < limit; i++) {
-      const el = elements[i]!
+      const el = validElements[i]!
       const slice = slices[i]!
       await writeAssetBinary(el.id, slice.buffer)
       const meta = await sharpDims(slice.buffer)
@@ -249,12 +278,12 @@ async function runRoute(ctx: RouteCtx): Promise<RouteResult> {
       llm_response: { cost: cost ?? null },
       parsed_result: {
         category,
-        element_count: elements.length,
+        element_count: validElements.length,
         slice_count: slices.length,
         created_assets: limit,
       },
     })
-    return { ok: true, category, sliced: limit, expected: elements.length }
+    return { ok: true, category, sliced: limit, expected: validElements.length }
   } catch (err) {
     const errMsg = (err as Error).message
     await failRun(subRun.id, {
