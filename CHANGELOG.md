@@ -4,30 +4,31 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
-### dogfood round 5 — Pass 1 触发改异步 + 上传合并 + 批量 reviewed
+## [0.2.1] — 2026-05-14 · 服务端真异步触发 + Phase 8f Pass 2 修复 + dogfood round 5
 
-嘉锟 v0.2.0 上线后实测又抓 3 处:无法看到 Pass 1 进行中状态、新建页面 → 上传图片要分两步、布局分析完了不知道怎么"确认完成"。
+v0.2.0 tag 后端到端 dogfood 暴露的服务端 P0(Pass 1/2 触发同步阻塞)+ Pass 2 多路并发 P0 bugs + 3 处 UX 卡点修复。无能力变化。
 
-- **服务端真异步触发**(`/api/states/[id]/pass{1,2}/route.ts`):此前 `await runPass{1,2}(stateId)` 阻塞 60-220s 才返回 202,语义错误。改成 fire-and-forget(`void runner(...).catch(log)` + 立即 `202 { status: accepted }`)。前端 `triggerPass{1,2}Api` 立即拿到响应,upload dialog 立即关闭,page detail 立即看到 `pass{1,2}_running` 卡片 + stepper 蓝色 hint「布局分析中…」。受影响:`triggerPass1Api` 返回类型 `{ run_id }` → `{ status }`;`triggerPass2Api` 返回类型 `{ run_id, created_assets }` → `{ status }`,Asset Review 的「Run Pass 2」toast 文案改成「已触发,后台跑约 60-220s」
-- **新建页面 + 上传合并**(`new-page-dialog.tsx`):dialog 加文件 picker + 状态名/canonical 行内编辑(复用 `upload-states-dialog` 结构),一次提交先 createPage → 再 uploadStates → fire-and-forget 触发 Pass 1 → 跳详情页。`upload-states-dialog` 保留作为详情页「补传更多设计稿」入口
-- **Element Review 批量 reviewed + 完成引导**(`elements/page.tsx`):顶部 nav 常驻「已 review N / M」+「全部标记 reviewed」按钮(一键标 draft 触发 dirty);全部 reviewed 且非 dirty 时显示 `→ 去「资产 Review」触发 Pass 2` 链接
+### Fixed — 服务端真异步触发(根因级 bug)
+
+`/api/states/[id]/pass{1,2}/route.ts` 此前 `await runPass{1,2}(stateId)` 阻塞 60-220s 才返回 202(语义错误,状态码已经是 Accepted)。前端 `Promise.all(triggerPass1Api...)` 把整个上传 + Pass 1 串成同步链,upload dialog 转一分钟才关。
+
+改成 fire-and-forget(`void runner(...).catch(log)` + 立即 `202 { status: accepted }`)。runner 内部已用 `setPipelineStatus` 维护状态,前端 page detail 现成 2s 轮询能感知。本地 Node 进程长驻,fire-and-forget 不会被 kill。
+
+**API 不兼容**:`triggerPass1Api` 返回类型 `{ run_id }` → `{ status }`;`triggerPass2Api` 返回类型 `{ run_id, created_assets }` → `{ status }`。Asset Review 的「Run Pass 2」toast 文案改成「已触发,后台跑约 60-220s」(此前显示「Pass 2 完成产出 N 个 asset」是骗人的,根本没等到完成)。
 
 ### Fixed — Phase 8f Pass 2 P0 bugs(QA 阻断级)
 
-QA playwright 全流程实测出来 2 个 P0 bug:Pass 2 完全跑不出 asset。定向修复。
+QA playwright 全流程实测出来 2 个 P0 bug:Pass 2 完全跑不出 asset。定向修复(PR #18)。
 
 - **BUG #1:零面积 / 越界 bbox 让整路 Pass 2 全军覆没**(`bbox-crop.ts` + `pass2-runner.ts` + `render-pass1-route.ts`)。Pass 1 偶尔回 status_bar bbox=`[1, 0.113, 0.237, 0.068]`(x=1.0 越界),`cropFromBbox` clamp 后 width=0 throw → subject 路 10 个元素都没产出。修 3 处:(a) `cropFromBbox` 激进 clamp 把 x/y 限到 [0, 1-1px),width/height 至少 1 像素,只有 NaN/真零面积才抛;(b) `pass2-runner` 单 element crop 失败标 `failed` asset + 用剩下 valid elements 继续走 image_gen,不阻断该路;(c) Pass 1 prompt 头加 `x + w ≤ 1 / y + h ≤ 1` 约束 + 全屏元素正确写法举例
 - **BUG #2:apimart `poll_max_attempts: 24` 不够,Pass 2 多路并发普遍超时**(`seeds/default-providers.ts` + `llm-client.ts` + `settings/models/page.tsx`)。实测 image_gen 单次 ~150-220s+,4 路并发拥挤可能 3-15 分钟,24 × 5s = 120s 太短。修 3 处:(a) 默认 seed 24 → 60(5 分钟兜底);(b) UI 新建 image_gen provider 默认 60;(c) `llm-client.ts` apimart polling 现在读 `provider.poll_max_attempts / poll_interval_seconds / poll_initial_delay_seconds`(此前完全忽略),fallback 60 / 5s / 12s
 
-### dogfood round 4 — 用户实测后的 4 处 UX 卡点
+### dogfood round 5(PR #19)
 
-嘉锟实测 v0.2 / 0.1.1 后反馈的 4 处「乍看不影响功能,但持续干扰」的 UX 问题修复。无能力变化,纯打磨。
+- **新建页面 + 上传合并**(`new-page-dialog.tsx`):dialog 加文件 picker + 状态名/canonical 行内编辑(复用 `upload-states-dialog` 结构),一次提交先 createPage → 再 uploadStates → fire-and-forget 触发 Pass 1 → 跳详情页。`upload-states-dialog` 保留作为详情页「补传更多设计稿」入口
+- **Element Review 批量 reviewed + 完成引导**(`elements/page.tsx`):顶部 nav 常驻「已 review N / M」+「全部标记 reviewed」按钮(一键标 draft 触发 dirty);全部 reviewed 且非 dirty 时显示 `→ 去「资产 Review」触发 Pass 2` 链接
 
-- **缩略图清晰度 + 卡片占比**:`thumbnails.ts` 最长边 256 → 512(retina 1:1 显示);ProjectCard / PageCard `aspect-square` → `aspect-[4/3]`,`object-cover` → `object-contain`(设计稿不是照片,裁切反而损失信息)
-- **创建后跳转**:新建项目 → `/projects/{id}`、新建页面 → `/projects/{pid}/pages/{id}`,不再停在列表
-- **Pipeline stepper 加当前步骤 hint 行**:`PipelineStepper` 内部按 6 步状态推断「正在做什么 / 大概多久 / 完成后下一步」一行文案,running/info/success/failed 4 种 tone 配色
-- **术语「状态图」→「设计稿」**:UI 文案全替换(dialogs / cards / empty states / toasts)。`State` 类型 / `/api/states/*` 路径 / `data/states/` 目录**不动**(技术契约)。Export spec.md 里 `## 状态: canonical` / `## 跨状态变化` 的 markdown 也不动(coding agent 消费契约)。CLAUDE.md 顶部加术语映射表
-
+## [0.2.0] — 2026-05-14 · Phase 8 v12 多路 Pass + 拖框生效化 + dogfood round 4
 
 ### Added — Phase 8 v12 多路 Pass + 拖框生效化
 
@@ -91,6 +92,15 @@ dogfood 反馈四件套(Pass 1/2 1-shot 不准 / 列表无缩略图 / chroma key
 ### Test
 
 169 vitest tests(原 88 + 81 新增,12 个旧 mergeElements 单测删除因被 mergeWithExisting 替代)。React 组件测试基建新建。
+
+### dogfood round 4(PR #17)
+
+嘉锟实测 v0.2 / 0.1.1 后反馈的 4 处「乍看不影响功能,但持续干扰」的 UX 问题修复。
+
+- **缩略图清晰度 + 卡片占比**:`thumbnails.ts` 最长边 256 → 512(retina 1:1 显示);ProjectCard / PageCard `aspect-square` → `aspect-[4/3]`,`object-cover` → `object-contain`(设计稿不是照片,裁切反而损失信息)
+- **创建后跳转**:新建项目 → `/projects/{id}`、新建页面 → `/projects/{pid}/pages/{id}`,不再停在列表
+- **Pipeline stepper 加当前步骤 hint 行**:`PipelineStepper` 内部按 6 步状态推断「正在做什么 / 大概多久 / 完成后下一步」一行文案,running/info/success/failed 4 种 tone 配色
+- **术语「状态图」→「设计稿」**:UI 文案全替换(dialogs / cards / empty states / toasts)。`State` 类型 / `/api/states/*` 路径 / `data/states/` 目录**不动**(技术契约)。Export spec.md 里 `## 状态: canonical` / `## 跨状态变化` 的 markdown 也不动(coding agent 消费契约)。CLAUDE.md 顶部加术语映射表
 
 ## [0.1.1] — 2026-05-14 · UX 打磨
 
