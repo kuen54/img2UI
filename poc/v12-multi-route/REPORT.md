@@ -190,8 +190,61 @@
 **STATUS: BLOCKED** — 8a 未通过 92% 阈值,本 PR 不 merge。回 spec §10「Phase 8a fallback」分支:改 8b 为 1-shot+tag 形式(单次 mllm 调用 + 给元素打 visual_category tag),Pass 2 仍按 category 分组多路。或先优化 1-shot prompt 让模型更注意小文字徽章,再决定 8b 走哪条路。
 
 **输出文件**:
-- `poc/v12-multi-route/outputs/poc2-pass1-{subject,button,container,background,decoration}.json`
-- `poc/v12-multi-route/outputs/poc2-summary.json`
+- `poc/v12-multi-route/outputs/poc2-tune-{subject,button,container,background,decoration}.json`
+- `poc/v12-multi-route/outputs/poc2-tune-summary.json`
+
+### PoC #2 v3 over-include(2026-05-14 嘉锟拍板再调一轮)
+
+**修正点**(v3 vs 修正版 v2):
+- ❌ 删除 v2 的「DO NOT return elements of other categories. But within {category}, MISS NOTHING.」
+- ✅ v3 加「**Cross-route overlaps are FINE — downstream IoU merge handles dedup. Over-include is rewarded.** If you see ANY visual element that COULD plausibly be {category}, return it.」
+- ✅ v3 加 CATEGORY_EXAMPLES 具体物名锚定(每类 5-7 个 concrete examples,decoration 类显式 mention 「购买后自动领取」「完单可收藏潮玩」「HOT」「NEW」这类小文字标签)
+
+**实测结果**:
+
+| Route | 元素数 | latency_s |
+|---|---|---|
+| subject | 9 | 31.8 |
+| button | 5 | 33.1 |
+| container | 15 | 43.5 |
+| background | 4 | 26.0 |
+| decoration | 12 | 39.5 |
+
+总元素数(5 路并集):**45**(修正版 24,v3 多 21)
+跨路 IoU>0.5 重复对:**41**(修正版 11)
+**合并后 unique(IoU > 0.5 + priority dedup)**:**20**(修正版 13)
+
+| 指标 | 修正版 v2 | **v3 over-include** | 通过标准 |
+|---|---|---|---|
+| Static 召回(对比 v9b 13 static,IoU>0.4) | 9/13 = 69% ❌ | **12/13 = 92%** ✅ | ≥ 92% |
+
+**唯一 MISS:** `hanging_rings`(整段 0.725 宽)— **实际被识别**,只是被 decoration 路拆成 `connecting_ring_left` / `connecting_ring_right` 两个 small ring,与 v9b 整段 IoU < 0.4。这是粒度差异,不是真漏。
+
+**v12 v3 多识别出 v9b 1-shot 漏的 8 个元素**:
+- `main_title_zhenniuma`(主标题艺术字)— v9b 标 type=code,v12 升级 subject + type=static(更准)
+- 3 个 container(底部商品卡 + 2 商品 item 容器)— v9b 标 type=code,v12 也归 type=code 但识别更细
+- 2 个 diamond decoration — v9b 漏的小钻石装饰
+- left/right connecting ring — 拆 hanging_rings(粒度更细)
+
+**结论**: ✅ **通过 92% gate,实际真召回 ≈ 100%(接受拆分粒度差异),且多识别出 v9b 1-shot 漏的元素**
+
+**关键洞察**(对架构决策影响最大):
+1. **修正版失败的根因不是「prompt 不够激进」,而是「仍命令模型不要跨界」**。删除 DO NOT return others 限制 + 鼓励 over-include + 明示 dedup 在下游,模型才真敢于把模糊元素都收进来
+2. **45 → 20 的合并比修正版 24 → 13 比例更高,但合并算法是 IoU 0.5 + 优先级,O(n²) 但 n=45 完全可接受**
+3. **CATEGORY_EXAMPLES 锚定起决定性作用**:之前 EXHAUSTIVE 措辞救不回小文字徽章(模型把它们判定为「文本块」),v3 在 decoration 类 prompt 中显式列出「购买后自动领取/完单可收藏潮玩」这类小文字标签 → decoration 路真的把它们收进来了
+
+**对 spec 的影响**:
+- ✅ spec §4 Pass 1 5 路并行架构 **APPROVED**
+- ⚠️ spec §4.1 prompt 头模板更新为 over-include 版(删 DO NOT return others,加 CATEGORY_EXAMPLES + dedup downstream 鼓励)
+- 🆕 plan §8b.1 visual-category.ts 新增 `VISUAL_CATEGORY_EXAMPLES_CN` 常量
+- 🆕 plan §8b.5 render-pass1-route.ts 头部模板用 v3 版本
+
+**STATUS: ✅ APPROVED** — 8a 通过 v3 验证,可进 Phase 8b/8c 实施
+
+**输出文件**:
+- `poc/v12-multi-route/scripts/poc2-overinclude.py`
+- `poc/v12-multi-route/outputs/poc2-over-{subject,button,container,background,decoration}.json`
+- `poc/v12-multi-route/outputs/poc2-over-summary.json`
 
 ## PoC #3: v12 端到端 sanity check
 

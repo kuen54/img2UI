@@ -1,0 +1,950 @@
+{
+  "image": "/Users/lijiakun/Documents/img2UI/poc/inputs/canonical-512.png",
+  "routes": {
+    "background": {
+      "ok": true,
+      "elapsed_s": 26.0,
+      "element_count": 4,
+      "elements": [
+        {
+          "entity_name": "global_pink_starry_background",
+          "type": "static",
+          "bbox": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "entity_name": "3d_pink_display_box",
+          "type": "static",
+          "bbox": [
+            0.03,
+            0.05,
+            0.94,
+            0.57
+          ]
+        },
+        {
+          "entity_name": "arch_backdrop_halo",
+          "type": "static",
+          "bbox": [
+            0.17,
+            0.19,
+            0.66,
+            0.31
+          ]
+        },
+        {
+          "entity_name": "bottom_white_card_background",
+          "type": "code",
+          "bbox": [
+            0.04,
+            0.63,
+            0.92,
+            0.37
+          ]
+        }
+      ]
+    },
+    "subject": {
+      "ok": true,
+      "elapsed_s": 31.8,
+      "element_count": 9,
+      "elements": [
+        {
+          "entity_name": "3d_character_zhenniuma",
+          "type": "static",
+          "bbox": [
+            0.25,
+            0.22,
+            0.5,
+            0.28
+          ]
+        },
+        {
+          "entity_name": "main_title_zhenniuma",
+          "type": "static",
+          "bbox": [
+            0.3,
+            0.14,
+            0.4,
+            0.05
+          ]
+        },
+        {
+          "entity_name": "badge_super",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.11,
+            0.17,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "chip_black_sugar_pearl",
+          "type": "static",
+          "bbox": [
+            0.07,
+            0.27,
+            0.22,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "chip_q_bouncy_milk",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.21,
+            0.22,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "chip_classic_milk_tea",
+          "type": "static",
+          "bbox": [
+            0.64,
+            0.38,
+            0.27,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "seal_jieqian",
+          "type": "static",
+          "bbox": [
+            0.1,
+            0.51,
+            0.17,
+            0.05
+          ]
+        },
+        {
+          "entity_name": "product_image_1",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.69,
+            0.25,
+            0.12
+          ]
+        },
+        {
+          "entity_name": "product_image_2",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.84,
+            0.25,
+            0.12
+          ]
+        }
+      ]
+    },
+    "button": {
+      "ok": true,
+      "elapsed_s": 33.1,
+      "element_count": 5,
+      "elements": [
+        {
+          "entity_name": "super_badge_button",
+          "type": "static",
+          "bbox": [
+            0.68,
+            0.11,
+            0.22,
+            0.08
+          ]
+        },
+        {
+          "entity_name": "feature_chip_1",
+          "type": "static",
+          "bbox": [
+            0.07,
+            0.27,
+            0.22,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "feature_chip_2",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.21,
+            0.22,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "feature_chip_3",
+          "type": "static",
+          "bbox": [
+            0.65,
+            0.38,
+            0.27,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "decode_fortune_label",
+          "type": "static",
+          "bbox": [
+            0.1,
+            0.51,
+            0.18,
+            0.06
+          ]
+        }
+      ]
+    },
+    "decoration": {
+      "ok": true,
+      "elapsed_s": 39.5,
+      "element_count": 12,
+      "elements": [
+        {
+          "entity_name": "left_diamond_decoration",
+          "type": "static",
+          "bbox": [
+            0.3,
+            0.15,
+            0.04,
+            0.03
+          ]
+        },
+        {
+          "entity_name": "right_diamond_decoration",
+          "type": "static",
+          "bbox": [
+            0.66,
+            0.15,
+            0.04,
+            0.03
+          ]
+        },
+        {
+          "entity_name": "super_badge",
+          "type": "static",
+          "bbox": [
+            0.69,
+            0.1,
+            0.19,
+            0.07
+          ]
+        },
+        {
+          "entity_name": "callout_chip_1",
+          "type": "static",
+          "bbox": [
+            0.06,
+            0.26,
+            0.23,
+            0.05
+          ]
+        },
+        {
+          "entity_name": "callout_chip_2",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.2,
+            0.21,
+            0.05
+          ]
+        },
+        {
+          "entity_name": "callout_chip_3",
+          "type": "static",
+          "bbox": [
+            0.64,
+            0.37,
+            0.28,
+            0.05
+          ]
+        },
+        {
+          "entity_name": "seal_stamp",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.51,
+            0.2,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "connecting_ring_left",
+          "type": "static",
+          "bbox": [
+            0.13,
+            0.59,
+            0.03,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "connecting_ring_right",
+          "type": "static",
+          "bbox": [
+            0.83,
+            0.59,
+            0.03,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "auto_receive_tag",
+          "type": "code",
+          "bbox": [
+            0.36,
+            0.65,
+            0.22,
+            0.03
+          ]
+        },
+        {
+          "entity_name": "collectible_tag_1",
+          "type": "code",
+          "bbox": [
+            0.64,
+            0.78,
+            0.26,
+            0.03
+          ]
+        },
+        {
+          "entity_name": "collectible_tag_2",
+          "type": "code",
+          "bbox": [
+            0.64,
+            0.93,
+            0.26,
+            0.03
+          ]
+        }
+      ]
+    },
+    "container": {
+      "ok": true,
+      "elapsed_s": 43.5,
+      "element_count": 15,
+      "elements": [
+        {
+          "entity_name": "Pink_3D_Display_Box",
+          "type": "static",
+          "bbox": [
+            0.03,
+            0.05,
+            0.94,
+            0.58
+          ]
+        },
+        {
+          "entity_name": "Inner_Stage_Arch",
+          "type": "static",
+          "bbox": [
+            0.1,
+            0.2,
+            0.8,
+            0.3
+          ]
+        },
+        {
+          "entity_name": "Calligraphic_Seal_Container",
+          "type": "static",
+          "bbox": [
+            0.08,
+            0.51,
+            0.22,
+            0.06
+          ]
+        },
+        {
+          "entity_name": "Feature_Tag_Container_Left",
+          "type": "static",
+          "bbox": [
+            0.07,
+            0.27,
+            0.22,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "Feature_Tag_Container_TopRight",
+          "type": "static",
+          "bbox": [
+            0.72,
+            0.2,
+            0.21,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "Feature_Tag_Container_BottomRight",
+          "type": "static",
+          "bbox": [
+            0.65,
+            0.38,
+            0.27,
+            0.04
+          ]
+        },
+        {
+          "entity_name": "Super_Badge_Container",
+          "type": "static",
+          "bbox": [
+            0.7,
+            0.1,
+            0.21,
+            0.08
+          ]
+        },
+        {
+          "entity_name": "Bottom_Store_List_Card",
+          "type": "code",
+          "bbox": [
+            0.03,
+            0.63,
+            0.94,
+            0.37
+          ]
+        },
+        {
+          "entity_name": "List_Header_Tag_Container",
+          "type": "code",
+          "bbox": [
+            0.36,
+            0.66,
+            0.21,
+            0.025
+          ]
+        },
+        {
+          "entity_name": "Store_Item_Container_1",
+          "type": "code",
+          "bbox": [
+            0.08,
+            0.7,
+            0.84,
+            0.13
+          ]
+        },
+        {
+          "entity_name": "Store_Item_Image_Container_1",
+          "type": "code",
+          "bbox": [
+            0.08,
+            0.71,
+            0.22,
+            0.1
+          ]
+        },
+        {
+          "entity_name": "Item_Action_Tag_Container_1",
+          "type": "code",
+          "bbox": [
+            0.65,
+            0.79,
+            0.23,
+            0.025
+          ]
+        },
+        {
+          "entity_name": "Store_Item_Container_2",
+          "type": "code",
+          "bbox": [
+            0.08,
+            0.84,
+            0.84,
+            0.14
+          ]
+        },
+        {
+          "entity_name": "Store_Item_Image_Container_2",
+          "type": "code",
+          "bbox": [
+            0.08,
+            0.85,
+            0.22,
+            0.1
+          ]
+        },
+        {
+          "entity_name": "Item_Action_Tag_Container_2",
+          "type": "code",
+          "bbox": [
+            0.65,
+            0.93,
+            0.23,
+            0.025
+          ]
+        }
+      ]
+    }
+  },
+  "cross_route_duplicates": [
+    {
+      "iou": 0.55,
+      "a": {
+        "category": "background",
+        "name": "global_pink_starry_background"
+      },
+      "b": {
+        "category": "container",
+        "name": "Pink_3D_Display_Box"
+      }
+    },
+    {
+      "iou": 0.98,
+      "a": {
+        "category": "background",
+        "name": "3d_pink_display_box"
+      },
+      "b": {
+        "category": "container",
+        "name": "Pink_3D_Display_Box"
+      }
+    },
+    {
+      "iou": 0.68,
+      "a": {
+        "category": "background",
+        "name": "arch_backdrop_halo"
+      },
+      "b": {
+        "category": "subject",
+        "name": "3d_character_zhenniuma"
+      }
+    },
+    {
+      "iou": 0.8,
+      "a": {
+        "category": "background",
+        "name": "arch_backdrop_halo"
+      },
+      "b": {
+        "category": "container",
+        "name": "Inner_Stage_Arch"
+      }
+    },
+    {
+      "iou": 0.98,
+      "a": {
+        "category": "background",
+        "name": "bottom_white_card_background"
+      },
+      "b": {
+        "category": "container",
+        "name": "Bottom_Store_List_Card"
+      }
+    },
+    {
+      "iou": 0.58,
+      "a": {
+        "category": "subject",
+        "name": "3d_character_zhenniuma"
+      },
+      "b": {
+        "category": "container",
+        "name": "Inner_Stage_Arch"
+      }
+    },
+    {
+      "iou": 0.58,
+      "a": {
+        "category": "subject",
+        "name": "badge_super"
+      },
+      "b": {
+        "category": "button",
+        "name": "super_badge_button"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "subject",
+        "name": "badge_super"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "super_badge"
+      }
+    },
+    {
+      "iou": 0.61,
+      "a": {
+        "category": "subject",
+        "name": "badge_super"
+      },
+      "b": {
+        "category": "container",
+        "name": "Super_Badge_Container"
+      }
+    },
+    {
+      "iou": 1.0,
+      "a": {
+        "category": "subject",
+        "name": "chip_black_sugar_pearl"
+      },
+      "b": {
+        "category": "button",
+        "name": "feature_chip_1"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "subject",
+        "name": "chip_black_sugar_pearl"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "callout_chip_1"
+      }
+    },
+    {
+      "iou": 1.0,
+      "a": {
+        "category": "subject",
+        "name": "chip_black_sugar_pearl"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_Left"
+      }
+    },
+    {
+      "iou": 1.0,
+      "a": {
+        "category": "subject",
+        "name": "chip_q_bouncy_milk"
+      },
+      "b": {
+        "category": "button",
+        "name": "feature_chip_2"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "subject",
+        "name": "chip_q_bouncy_milk"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "callout_chip_2"
+      }
+    },
+    {
+      "iou": 0.54,
+      "a": {
+        "category": "subject",
+        "name": "chip_q_bouncy_milk"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_TopRight"
+      }
+    },
+    {
+      "iou": 0.93,
+      "a": {
+        "category": "subject",
+        "name": "chip_classic_milk_tea"
+      },
+      "b": {
+        "category": "button",
+        "name": "feature_chip_3"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "subject",
+        "name": "chip_classic_milk_tea"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "callout_chip_3"
+      }
+    },
+    {
+      "iou": 0.93,
+      "a": {
+        "category": "subject",
+        "name": "chip_classic_milk_tea"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_BottomRight"
+      }
+    },
+    {
+      "iou": 0.79,
+      "a": {
+        "category": "subject",
+        "name": "seal_jieqian"
+      },
+      "b": {
+        "category": "button",
+        "name": "decode_fortune_label"
+      }
+    },
+    {
+      "iou": 0.71,
+      "a": {
+        "category": "subject",
+        "name": "seal_jieqian"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "seal_stamp"
+      }
+    },
+    {
+      "iou": 0.64,
+      "a": {
+        "category": "subject",
+        "name": "seal_jieqian"
+      },
+      "b": {
+        "category": "container",
+        "name": "Calligraphic_Seal_Container"
+      }
+    },
+    {
+      "iou": 0.73,
+      "a": {
+        "category": "subject",
+        "name": "product_image_1"
+      },
+      "b": {
+        "category": "container",
+        "name": "Store_Item_Image_Container_1"
+      }
+    },
+    {
+      "iou": 0.73,
+      "a": {
+        "category": "subject",
+        "name": "product_image_2"
+      },
+      "b": {
+        "category": "container",
+        "name": "Store_Item_Image_Container_2"
+      }
+    },
+    {
+      "iou": 0.58,
+      "a": {
+        "category": "button",
+        "name": "super_badge_button"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "super_badge"
+      }
+    },
+    {
+      "iou": 0.69,
+      "a": {
+        "category": "button",
+        "name": "super_badge_button"
+      },
+      "b": {
+        "category": "container",
+        "name": "Super_Badge_Container"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "button",
+        "name": "feature_chip_1"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "callout_chip_1"
+      }
+    },
+    {
+      "iou": 1.0,
+      "a": {
+        "category": "button",
+        "name": "feature_chip_1"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_Left"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "button",
+        "name": "feature_chip_2"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "callout_chip_2"
+      }
+    },
+    {
+      "iou": 0.54,
+      "a": {
+        "category": "button",
+        "name": "feature_chip_2"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_TopRight"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "button",
+        "name": "feature_chip_3"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "callout_chip_3"
+      }
+    },
+    {
+      "iou": 1.0,
+      "a": {
+        "category": "button",
+        "name": "feature_chip_3"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_BottomRight"
+      }
+    },
+    {
+      "iou": 0.9,
+      "a": {
+        "category": "button",
+        "name": "decode_fortune_label"
+      },
+      "b": {
+        "category": "decoration",
+        "name": "seal_stamp"
+      }
+    },
+    {
+      "iou": 0.82,
+      "a": {
+        "category": "button",
+        "name": "decode_fortune_label"
+      },
+      "b": {
+        "category": "container",
+        "name": "Calligraphic_Seal_Container"
+      }
+    },
+    {
+      "iou": 0.72,
+      "a": {
+        "category": "decoration",
+        "name": "super_badge"
+      },
+      "b": {
+        "category": "container",
+        "name": "Super_Badge_Container"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "decoration",
+        "name": "callout_chip_1"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_Left"
+      }
+    },
+    {
+      "iou": 0.67,
+      "a": {
+        "category": "decoration",
+        "name": "callout_chip_2"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_TopRight"
+      }
+    },
+    {
+      "iou": 0.77,
+      "a": {
+        "category": "decoration",
+        "name": "callout_chip_3"
+      },
+      "b": {
+        "category": "container",
+        "name": "Feature_Tag_Container_BottomRight"
+      }
+    },
+    {
+      "iou": 0.91,
+      "a": {
+        "category": "decoration",
+        "name": "seal_stamp"
+      },
+      "b": {
+        "category": "container",
+        "name": "Calligraphic_Seal_Container"
+      }
+    },
+    {
+      "iou": 0.55,
+      "a": {
+        "category": "decoration",
+        "name": "auto_receive_tag"
+      },
+      "b": {
+        "category": "container",
+        "name": "List_Header_Tag_Container"
+      }
+    },
+    {
+      "iou": 0.51,
+      "a": {
+        "category": "decoration",
+        "name": "collectible_tag_1"
+      },
+      "b": {
+        "category": "container",
+        "name": "Item_Action_Tag_Container_1"
+      }
+    },
+    {
+      "iou": 0.74,
+      "a": {
+        "category": "decoration",
+        "name": "collectible_tag_2"
+      },
+      "b": {
+        "category": "container",
+        "name": "Item_Action_Tag_Container_2"
+      }
+    }
+  ],
+  "total_elements_across_routes": 45,
+  "unique_elements_estimated": 4,
+  "baseline": {
+    "path": "/Users/lijiakun/Documents/img2UI/poc/outputs/v9b-pass1.json",
+    "element_count": 36,
+    "v12_recall_ratio": 0.11
+  }
+}

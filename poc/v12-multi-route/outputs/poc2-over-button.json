@@ -1,0 +1,89 @@
+{
+  "elements": [
+    {
+      "entity_name": "super_badge_button",
+      "type": "static",
+      "type_reasoning": "A highly stylized, tilted sticker-like badge with outline and glow. Could plausibly be a clickable element to view rarity info. Treated as static due to complex text-as-graphic styling.",
+      "bbox": [
+        0.68,
+        0.11,
+        0.22,
+        0.08
+      ],
+      "z_index": 20,
+      "description": "Tilted 'SUPER' badge sticker in pink with white outline and sparkles.",
+      "extraction_prompt": "Extract the pink sticker-like badge with the text 'SUPER' and its white outline, keeping it transparent.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "feature_chip_1",
+      "type": "static",
+      "type_reasoning": "A stylized floating chip with a custom gradient, custom icon, and a pointer tail. Might be a clickable hotspot in this gamified 3D view.",
+      "bbox": [
+        0.07,
+        0.27,
+        0.22,
+        0.04
+      ],
+      "z_index": 20,
+      "description": "Stylized white pill-shaped chip pointing to the character, containing a small icon and text '黑糖珍珠'.",
+      "extraction_prompt": "Extract the white pill-shaped tag containing a small cup icon and text '黑糖珍珠', along with its pointing tail, keeping the background transparent.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "feature_chip_2",
+      "type": "static",
+      "type_reasoning": "A stylized floating chip with a custom gradient, custom icon, and a pointer tail. Might be a clickable hotspot.",
+      "bbox": [
+        0.7,
+        0.21,
+        0.22,
+        0.04
+      ],
+      "z_index": 20,
+      "description": "Stylized white pill-shaped chip pointing to the character, containing a small icon and text 'Q弹厚乳'.",
+      "extraction_prompt": "Extract the white pill-shaped tag containing a small cup icon and text 'Q弹厚乳', along with its pointing tail, keeping the background transparent.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "feature_chip_3",
+      "type": "static",
+      "type_reasoning": "A stylized floating chip with a custom gradient, custom icon, and a pointer tail. Might be a clickable hotspot.",
+      "bbox": [
+        0.65,
+        0.38,
+        0.27,
+        0.04
+      ],
+      "z_index": 20,
+      "description": "Stylized white pill-shaped chip pointing to the character, containing a small icon and text '经典奶茶底'.",
+      "extraction_prompt": "Extract the white pill-shaped tag containing a small cup icon and text '经典奶茶底', along with its pointing tail, keeping the background transparent.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    },
+    {
+      "entity_name": "decode_fortune_label",
+      "type": "static",
+      "type_reasoning": "A stylized calligraphic text element '解签' inside a decorative sticker shape. Plausibly a button to reveal a fortune.",
+      "bbox": [
+        0.1,
+        0.51,
+        0.18,
+        0.06
+      ],
+      "z_index": 20,
+      "description": "Stylized label with large calligraphic text '解签' on a white sticker-like background.",
+      "extraction_prompt": "Extract the stylized text label '解签' on its white background with sparkles, keeping the surrounding background transparent.",
+      "appears_in_states": [
+        "canonical"
+      ]
+    }
+  ]
+}

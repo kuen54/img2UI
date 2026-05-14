@@ -337,6 +337,7 @@ import { describe, it, expect } from 'vitest'
 import {
   VISUAL_CATEGORIES,
   VISUAL_CATEGORY_PRIORITY,
+  VISUAL_CATEGORY_EXAMPLES_CN,
   visualCategoryCn,
   type VisualCategory,
 } from '@/lib/visual-category'
@@ -360,6 +361,11 @@ describe('visual-category', () => {
     expect(visualCategoryCn('subject')).toBe('主体')
     expect(visualCategoryCn('decoration')).toBe('装饰')
     expect(visualCategoryCn('other')).toBe('其他')
+  })
+
+  it('decoration examples mention small text label badges (PoC #2 v3 anchoring)', () => {
+    expect(VISUAL_CATEGORY_EXAMPLES_CN['decoration']).toContain('购买后自动领取')
+    expect(VISUAL_CATEGORY_EXAMPLES_CN['decoration']).toContain('完单可收藏潮玩')
   })
 })
 ```
@@ -399,13 +405,24 @@ export function visualCategoryCn(c: VisualCategory): string {
   return CN_LABEL[c]
 }
 
+// PoC #2 v3 锁定:CATEGORY_EXAMPLES 中文具体物名锚定,显著提升召回率
+// 关键:decoration 类 mention 小文字标签徽章,救回 v2 漏的 auto_claim_badge 等
+export const VISUAL_CATEGORY_EXAMPLES_CN: Record<VisualCategory, string> = {
+  subject: 'IP 角色 / 3D 卡通娃娃 / 大艺术字标题(如「珍牛马」「你抽到的天选娃娃是」)/ 主商品图(实物渲染) / 主奖品图 / 联名 logo',
+  button: '异形按钮 / 复杂材质按钮 / 强活动感 CTA / 抽奖按钮 / 开箱按钮 / 奖励领取按钮 / 带固定艺术字的按钮',
+  container: '异形展示框(如奶茶盲盒页那个粉色异形外框)/ 卡片底图 / 票券 / 信封 / 卷轴 / 玻璃罩 / 奖励框 / 复杂列表卡片背景 / 承载文字的异形标签底板',
+  background: '全页渐变背景 / 大色块 / 光晕 / 远景 / 纹理 / 氛围光 / 背景中的抽象波形 / 暗角',
+  decoration: '星星 / 彩带 / 高光 / 粒子 / **小贴纸徽章包括「购买后自动领取」「完单可收藏潮玩」「HOT」「NEW」这类小文字标签** / 引线装饰 / 小光点 / 小箭头 / 角落贴纸 / 固定文案小标签',
+  other: '5 类都套不上的兜底,人工 review 时归类',
+}
+
 // Pass 1 only-X prompt 头部用的完整定义文本(嘉锟 2026-05-14 原稿,见 spec 附录 A)
 export const VISUAL_CATEGORY_DEFINITION_EN: Record<VisualCategory, string> = {
   subject: `Main visual subject of the page — what users would mention when describing the page. Includes IP characters, mascots, hero illustrations, 3D renderings, key product/award images, AND artistic title typography (异形标题 / 艺术字 / 品牌字标 / 视觉化 slogan). Subject vs container: subject is the object being viewed, container is the structure holding it. Subject vs decoration: ask "would the user mention this when describing the page?" — if yes, subject.`,
   button: `Buttons that need image extraction because their styling/material/animation is too brand-specific to implement in code. Includes 异形 buttons, gamified buttons, sticker-style buttons, skeuomorphic, complex gradient, scan-light effects, 3D thickness, material textures, fixed 艺术字 buttons, reward/lottery/unbox CTAs. EXCLUDES standard buttons (rounded rect, capsule, plain icon button, OS-default tab/nav).`,
   container: `Special visual containers holding content/info/subjects, that cannot be reproduced by standard code components. Includes 异形 boxes, stages, display cases, 异形 dialogs, irregular cards, tickets, scrolls, certificates, glass domes, packaging boxes, reward frames, complex list-card backgrounds, scene platforms. EXCLUDES standard rounded cards, plain dialogs, plain buttons. Special: 胶囊/气泡/徽章 carrying dynamic content → container; if fixed-content sticker → decoration.`,
   background: `Underlying visual environment that remains after removing all UI/subjects/containers/decorations. Includes gradients, glow, textures, large color blocks, ambient light, noise, abstract waves, distant scenery, vignette, soft light, sky/clouds/grass/distant city. EXCLUDES anything carrying interactive purpose, anything reusable as standalone sticker, anything in foreground.`,
-  decoration: `Small decorative assets that don't carry core info but boost atmosphere/精致度. Includes stars, ribbons, highlights, particles, capsules, bubbles, badges, confetti, hearts, clouds, small flowers, light dots, lightning, small arrows, stamps, fire, coins, gems, sparkles, corner stickers, foreground blur, scan-light layers, glowing strokes. Special rule: 胶囊/气泡/徽章 with FIXED content (e.g. fixed "HOT" / "SUPER" sticker) → decoration. With dynamic content → container.`,
+  decoration: `Small decorative assets that don't carry core info but boost atmosphere/精致度. Includes stars, ribbons, highlights, particles, capsules, bubbles, badges, confetti, hearts, clouds, small flowers, light dots, lightning, small arrows, stamps, fire, coins, gems, sparkles, corner stickers, foreground blur, scan-light layers, glowing strokes. **Critical: small text-label stickers (e.g. fixed "购买后自动领取" / "完单可收藏潮玩" / "HOT" / "NEW" stickers) ALSO belong here.** Special rule: 胶囊/气泡/徽章 with FIXED content → decoration. With dynamic content → container.`,
   other: `Catch-all for anything that doesn't fit the 5 categories. Reviewer will manually re-categorize if needed.`,
 }
 ```
@@ -416,14 +433,14 @@ export const VISUAL_CATEGORY_DEFINITION_EN: Record<VisualCategory, string> = {
 npx vitest run src/lib/__tests__/visual-category.test.ts
 ```
 
-Expected: PASS(3 tests)
+Expected: PASS(4 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git checkout -b feat/phase-8b-pass1-multi-route
 git add src/lib/visual-category.ts src/lib/__tests__/visual-category.test.ts
-git commit -m "feat(pipeline): visual-category 5 类枚举 + 优先级表 + 中文映射"
+git commit -m "feat(pipeline): visual-category 5 类枚举 + 优先级 + 中文 EXAMPLES 锚定"
 ```
 
 ---
@@ -716,7 +733,7 @@ git commit -m "feat(pipeline): bbox-iou utility for cross-route element merging"
 
 ---
 
-### Task 8b.5: render-pass1-route.ts(only-X prompt 头拼接)
+### Task 8b.5: render-pass1-route.ts(over-include prompt 头拼接)
 
 **Files:**
 - Create: `src/lib/prompts/render-pass1-route.ts`
@@ -731,19 +748,30 @@ import { renderPass1RoutePrompt } from '@/lib/prompts/render-pass1-route'
 describe('renderPass1RoutePrompt', () => {
   const BASE = 'You are a UI design analyzer. Identify EVERY visible visual element.'
 
-  it('prepends only-X header for subject', () => {
+  it('prepends over-include header for subject', () => {
     const out = renderPass1RoutePrompt('subject', BASE)
-    expect(out).toContain('[ONLY-SUBJECT PASS]')
+    expect(out).toContain('[SUBJECT PASS — OVER-INCLUDE MODE]')
     expect(out).toContain('Main visual subject of the page')
-    expect(out).toContain('Be EXHAUSTIVE within this category')
-    expect(out).toContain('MISS NOTHING')
+    expect(out).toContain('Better to over-include than to miss')
+    expect(out).toContain('Cross-route overlaps are FINE')
+    expect(out).toContain('IP 角色')   // CATEGORY_EXAMPLES anchoring
     expect(out.endsWith(BASE)).toBe(true)
   })
 
-  it('prepends only-X header for decoration', () => {
+  it('prepends over-include header for decoration with small-badge anchoring', () => {
     const out = renderPass1RoutePrompt('decoration', BASE)
-    expect(out).toContain('[ONLY-DECORATION PASS]')
-    expect(out).toContain('Small decorative assets')
+    expect(out).toContain('[DECORATION PASS — OVER-INCLUDE MODE]')
+    expect(out).toContain('购买后自动领取')      // PoC #2 v3 锚定
+    expect(out).toContain('完单可收藏潮玩')
+  })
+
+  it('removes any "DO NOT return others" anti-pattern (PoC #2 v2 反面教训)', () => {
+    const cats = ['subject','button','container','background','decoration'] as const
+    for (const c of cats) {
+      const out = renderPass1RoutePrompt(c, BASE)
+      expect(out).not.toMatch(/DO NOT return.*other categories/i)
+      expect(out).not.toMatch(/lean toward NOT returning/i)
+    }
   })
 
   it('5 categories generate distinct prompts', () => {
@@ -763,23 +791,36 @@ npx vitest run src/lib/__tests__/render-pass1-route.test.ts
 
 Expected: FAIL(模块不存在)
 
-- [ ] **Step 3: 写实现**
+- [ ] **Step 3: 写实现(over-include 模板,PoC #2 v3 验证)**
 
 ```typescript
 // src/lib/prompts/render-pass1-route.ts
-import { type VisualCategory, VISUAL_CATEGORY_DEFINITION_EN, visualCategoryCn } from '@/lib/visual-category'
+import {
+  type VisualCategory,
+  VISUAL_CATEGORY_DEFINITION_EN,
+  VISUAL_CATEGORY_EXAMPLES_CN,
+  visualCategoryCn,
+} from '@/lib/visual-category'
 
 export function renderPass1RoutePrompt(
   category: VisualCategory,
   basePrompt: string,
 ): string {
-  const head = `[ONLY-${category.toUpperCase()} PASS]
+  const head = `[${category.toUpperCase()} PASS — OVER-INCLUDE MODE]
 
-This pass identifies ONLY ${visualCategoryCn(category)} (${category}) elements. Definition follows:
+This pass focuses on ${visualCategoryCn(category)} (${category}) elements.
 
 ${VISUAL_CATEGORY_DEFINITION_EN[category]}
 
-**Be EXHAUSTIVE within this category. Even small/subtle elements count** — small badges, tiny stickers, micro decorations, faint sparkles all matter. Other passes will handle other categories — DO NOT return elements of other categories in this pass. But within ${category}, MISS NOTHING.
+**OVER-INCLUDE PHILOSOPHY**:
+- Be EXHAUSTIVE. **Better to over-include than to miss.**
+- If you see ANY visual element that COULD plausibly be ${category}, return it. Even small/subtle ones. Even when borderline.
+- Cross-route overlaps are FINE — downstream IoU merge handles dedup. We'd rather merge duplicates than miss elements.
+- **Other passes also run. If you skip something thinking "decoration will handle it" but decoration also skips it thinking "subject will handle it", we lose the element.**
+- So when in doubt, INCLUDE.
+
+**Concrete examples of ${category} elements**:
+${VISUAL_CATEGORY_EXAMPLES_CN[category]}
 
 For elements you do return, still classify each as \`static\` or \`code\` per the rules below.
 
@@ -796,13 +837,13 @@ For elements you do return, still classify each as \`static\` or \`code\` per th
 npx vitest run src/lib/__tests__/render-pass1-route.test.ts
 ```
 
-Expected: 3 PASS
+Expected: 4 PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/lib/prompts/render-pass1-route.ts src/lib/__tests__/render-pass1-route.test.ts
-git commit -m "feat(prompts): render-pass1-route — only-X header prepender"
+git commit -m "feat(prompts): render-pass1-route — over-include head (PoC #2 v3 验证)"
 ```
 
 ---

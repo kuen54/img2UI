@@ -177,26 +177,39 @@ N 张绿幕 PNG → 各 chroma key → 各切片 → 合并到 element list
 
 ### 4.1 5 个 prompt 变体
 
-复用现有 `prompts.pass1_layout` 作为 base,在 system message 顶部加一段「only-X」头:
+复用现有 `prompts.pass1_layout` 作为 base,在 system message 顶部加一段 over-include 头:
 
 ```
-[ONLY-{CATEGORY} PASS]
+[{CATEGORY} PASS — OVER-INCLUDE MODE]
 
-This pass identifies ONLY {category_chinese} ({category_english}) elements.
+This pass focuses on {category_chinese} ({category_english}) elements.
 
 {category 完整定义见附录 A 对应小节,直接 copy 进 prompt}
 
-**Be EXHAUSTIVE within this category. Even small/subtle elements count** —
-small badges, tiny stickers, micro decorations, faint sparkles all matter.
-Other passes will handle other categories — DO NOT return elements of other
-categories in this pass. But within {category_english}, MISS NOTHING.
+**OVER-INCLUDE PHILOSOPHY**:
+- Be EXHAUSTIVE. **Better to over-include than to miss.**
+- If you see ANY visual element that COULD plausibly be {category_english}, return it. Even small/subtle ones. Even when borderline.
+- Cross-route overlaps are FINE — downstream IoU merge handles dedup. We'd rather merge duplicates than miss elements.
+- **Other passes also run. If you skip something thinking "decoration will handle it" but decoration also skips it thinking "subject will handle it", we lose the element.**
+- So when in doubt, INCLUDE.
+
+**Concrete examples of {category_english} elements**:
+{CATEGORY_EXAMPLES[category_english]}
+
+For elements you do return, still classify each as `static` or `code` per the rules below.
 
 [原 Pass 1 prompt 体]
 ```
 
-5 个变体共享 base,顶部头部不同。`config.prompts.pass1_layout` 仍是单 string,不拆 5 份(避免 schema 破坏);头部由 `lib/prompts/render-pass1.ts` 在运行时拼接。
+5 个变体共享 base,顶部头部不同。`config.prompts.pass1_layout` 仍是单 string,不拆 5 份(避免 schema 破坏);头部由 `lib/prompts/render-pass1-route.ts` 在运行时拼接。
 
-**🆕 PoC #2 修正**:首版 only-X prompt 头使用「If unsure, lean toward NOT returning」,实测 decoration 路漏 3 个小徽章(`auto_claim_badge`/`product_claim_badge_1/2`),static 召回率仅 77%。修正为「Be EXHAUSTIVE within this category. Even small/subtle elements count.」。需在实施时再跑一次 PoC #2 单类验证修正版召回率 ≥ 90%。
+**🆕 PoC #2 v3 实测**(2026-05-14):
+- 修正版 v2(EXHAUSTIVE within category + DO NOT return others)→ 召回退化到 9/13 = 69%,5 路抢类目失败
+- v3 over-include(删除 DO NOT return others + 加 CATEGORY_EXAMPLES + 鼓励 dedup downstream)→ **召回 12/13 = 92%**,合并 45 → 20 unique,多识别出 v9b 1-shot 漏的 8 个元素
+
+**关键 finding**:删除「DO NOT return others」是核心。把跨路重叠从「禁止」改为「鼓励 + 下游处理」,模型才真敢收边缘元素(尤其小文字徽章在 decoration 路被锚定 example 救回)。
+
+`CATEGORY_EXAMPLES` 文本写死在 `lib/visual-category.ts`,中文,包含每类 5-7 个 concrete 物名 + 边缘 case 显式 mention。例:`decoration` 类列出「星星 / 彩带 / 高光 / 粒子 / **小贴纸徽章包括「购买后自动领取」「完单可收藏潮玩」「HOT」「NEW」这类小文字标签** / 引线装饰 / 角落贴纸 / 固定文案小标签」。
 
 ### 4.2 Routes 并行调度
 
