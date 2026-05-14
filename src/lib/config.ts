@@ -10,6 +10,10 @@ import {
   DEFAULT_PASS2_VALIDATE,
   DEFAULT_CODING_AGENT_INTRO,
 } from '@/lib/seeds/default-prompts'
+import { maskKey, isMasked } from '@/lib/mask'
+
+// 重新导出,旧调用点不破
+export { maskKey, isMasked } from '@/lib/mask'
 
 const CONFIG_PATH = path.join(DATA_ROOT, 'config.json')
 const SCHEMA_VERSION = '0.1.0'
@@ -47,20 +51,8 @@ export async function saveConfig(config: AppConfig): Promise<void> {
 
 // =============================================================================
 // API key 双向 mask(直接复用 evalyst 模式)
+// 纯字符串变换在 @/lib/mask;这里只放需要 fs 的「从磁盘还原」逻辑
 // =============================================================================
-
-// mask 字符串形如 `sk-***xxxx` / `***xx`,前缀几位 + ★ + 末尾几位
-const MASK_RE = /^[\w-]{1,8}\*{3,}[\w-]{1,8}$|^\*{3,}[\w-]{1,8}$/
-
-export function maskKey(raw: string): string {
-  if (!raw) return ''
-  if (raw.length <= 8) return '***' + raw.slice(-2)
-  return raw.slice(0, 3) + '***' + raw.slice(-4)
-}
-
-export function isMasked(s: string): boolean {
-  return MASK_RE.test(s)
-}
 
 // GET /api/config 用:把所有 api_key 替换成 mask
 export function maskConfig(config: AppConfig): AppConfig {
