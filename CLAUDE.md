@@ -64,6 +64,8 @@ GPT-image-2 / 等价 image_edit 模型必须**接受原图作为输入**,做语�
 
 下次又有人想加 `hybrid` / `mixed` / `partial-static` 这种第三类,**先看能不能让 LLM 一次性处理掉,99% 情况下能**
 
+**Phase 8b 补充**:`visual_category`(subject / button / container / background / decoration / other)是**正交于 type 的元数据维度**,**不是第三类 type**。它只用于 Pass 1 5 路并行调度 + Pass 2 按类分组(Phase 8c),不影响 type=static/code 的二分类。同一个 element 既有 `type: 'static' | 'code'`,也有 `visual_category: VisualCategory`,两者独立。下次想再加分类维度前,先问:能不能挂在 `visual_category` 下?如果能,扩展枚举即可,**不要**再加新维度。
+
 ### 5. Pass 1 **只出 bbox**,**不要** polygon outline
 
 Pass 1 的 LLM 输出每个元素的 `bbox: [x,y,w,h]`,**不要**让它输出 polygon 顶点。理由:polygon 对 Pass 2 提取质量没有功能贡献(image-edit 模型不接受 polygon-aware 条件输入),纯 UX 辅助(让 Element Review canvas 描虚线贴合异形元素)。MVP 接受 bbox 描边在异形元素上不贴合——这是 review 阶段的视觉精修,不影响产出。
@@ -121,12 +123,36 @@ UI 提供 slider 让用户调阈值,Asset Review 提供「edge clean」按钮做
 
 **SPEC 之前预留的 `kind: 'segmenter'` provider 已删除**,不再有任何 fallback。如果某页面元素恰好用了纯 #00FF00(罕见,UI 设计稿几乎不存在),处理方式:用户在 Asset Review 单元素重抠 + 手动覆盖,不引入新模型。
 
+### 8. **Pass 1 走 5 路并行 only-X mllm,合并用 IoU > 0.5 + 优先级**(2026-05-14 Phase 8b 锁定)
+
+Pass 1 不是 1-shot,是 5 路 `Promise.allSettled`(subject / button / container / background / decoration),每路独立 callMllm + 独立 sub-run(`pass: 'pass1_subject'` 等)。**`Phase 8b 之前的 1-shot 路径已删除`**,不要回退。
+
+**关键约束**:
+
+1. **每路 prompt 必须 over-include**——头部用「Be EXHAUSTIVE. **Better to over-include than to miss.**」措辞,**严禁** `EXCLUSIVE` 措辞如 `DO NOT return others` / `lean toward NOT returning` / `only return X, skip everything else`。PoC #2 v2 实测 EXCLUSIVE 会让模型在边界 case 普遍丢元素(decoration 路丢小贴纸徽章 / subject 路丢艺术字),over-include + IoU 合并去重才是正解
+2. **路次合并阈值是 IoU > 0.5**(在 `lib/pass1-route-merger.ts`),冲突时按 `subject(1) < button(2) < container(3) < background(4) < decoration(5) < other(6)` 优先级取胜出 category,被丢弃的路把 category 加到 `pass1_routes_seen` 数组(debug 用)
+3. **跨 state 合并改用 IoU,不再用 entity_name**(`mergeWithExisting` in pass1-runner)。理由:over-include 模式下同一物理元素在不同 state 的 entity_name 可能不一致(LLM 注意力分散),bbox 重叠才是更稳的对齐信号
+4. **≥3/5 才算成功**——`MIN_SUCCESS_ROUTES = 3`,< 3 抛 `PASS1_ERROR`。理由:某一路偶发超时 / JSON 解析失败可容忍,但跑通 < 60% 就是质量信号,直接报错让用户重试
+5. **想加新 category 维度?** 直接扩展 `VisualCategory` enum + `VISUAL_CATEGORIES` 数组 + `VISUAL_CATEGORY_PRIORITY`,5 处同步,**不要**新加正交分类维度(参考 §4 反对第三类的逻辑)
+
+**OVER-INCLUDE 措辞反例(写 prompt 时绝对不要出现)**:
+- ❌ `Return ONLY {category} elements, skip others`
+- ❌ `Do NOT return decoration / subject / ...`
+- ❌ `If you're not sure, lean toward NOT returning`
+- ❌ `Be conservative, only return clear-cut cases`
+
+**OVER-INCLUDE 措辞正例(see `lib/prompts/render-pass1-route.ts`)**:
+- ✅ `Be EXHAUSTIVE. Better to over-include than to miss.`
+- ✅ `If you see ANY visual element that COULD plausibly be {category}, return it.`
+- ✅ `Cross-route overlaps are FINE — downstream IoU merge handles dedup.`
+- ✅ `When in doubt, INCLUDE.`
+
 ## 注意事项(pinpoint)
 
 ### 与 LLM 交互
 
 - **Pass 1 返回必须是严格 JSON**,不接受 markdown code fence 包裹的 JSON。Prompt 里写「output strict JSON, no prose」并设置 `response_format: { type: "json_object" }`(OpenAI)或 prefill `[` (Anthropic)
-- **跨状态对齐靠 entity_name**(英文小写下划线如 `cute_doll_main`),不靠 bbox 相似度。LLM 在 Pass 1 prompt 里被显式要求「同一物理实体在多个状态截图中必须使用同一 entity_name」
+- **跨状态对齐靠 IoU > 0.5**(Phase 8b 后)。Phase 8b 之前是 entity_name 字符串匹配,现已改为 bbox IoU(over-include 模式下 entity_name 不稳)。LLM 仍被要求输出 entity_name 但只用于展示,不参与对齐
 - **Pass 2 输出尺寸 = 原图尺寸**。如果模型支持指定输出尺寸,显式传入;不支持时在切片前 resize
 - **API key 永远不出现在前端**:GET /api/config 返回 `sk-***xxxx`(`maskKey`),用户编辑时 mask 字符串视为「未改动」,PUT 时服务端 `unmaskApiKeys` 还原
 - **endpoint_kind 字段**(在 ProviderConfig 中)区分 chat / image_generation / image_edit。`mllm` kind 必须 chat;`image_gen` kind 走 image_edit(GPT-image-2);加新 provider 时正确设置
