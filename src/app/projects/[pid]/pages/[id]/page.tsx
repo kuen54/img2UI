@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { ChevronRight, Plus, Image as ImageIcon } from 'lucide-react'
+import { ChevronRight, Plus, Image as ImageIcon, ListChecks } from 'lucide-react'
 import { toast } from 'sonner'
 
 import type { Page, State } from '@/lib/types'
@@ -89,7 +89,17 @@ export default function PageDetailPage({ params }: PageProps) {
 
       {/* Pipeline 进度 */}
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Pipeline 进度</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Pipeline 进度</h2>
+          {states.some((s) => ['pass1_done', 'pass2_running', 'pass2_done', 'validating', 'validated'].includes(s.pipeline_status)) && (
+            <Link href={`/projects/${pid}/pages/${pageId}/elements`}>
+              <Button size="sm" variant="outline">
+                <ListChecks className="size-3.5 mr-1" />
+                Element Review
+              </Button>
+            </Link>
+          )}
+        </div>
         <PipelineStepper states={states} />
       </section>
 

@@ -1,0 +1,208 @@
+'use client'
+
+import { use, useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
+import { toast } from 'sonner'
+
+import type { Element, Page, State } from '@/lib/types'
+import { newElementId } from '@/lib/id'
+import { getPageApi, listStatesApi } from '@/lib/api/projects-client'
+import { listElementsApi, saveElementsApi } from '@/lib/api/elements-client'
+import { ElementCanvas, type CanvasViewOptions } from '@/components/element-review/canvas'
+import { CanvasToolbar } from '@/components/element-review/canvas-toolbar'
+import { ElementList } from '@/components/element-review/element-list'
+import { ElementDetailPanel } from '@/components/element-review/element-detail-panel'
+import { StickySaveBar } from '@/components/ui/sticky-save-bar'
+
+type PageProps = { params: Promise<{ pid: string; id: string }> }
+
+const DEFAULT_VIEW: CanvasViewOptions = {
+  showOutlines: true,
+  showLabels: true,
+  imageOpacity: 1,
+  filter: 'all',
+}
+
+export default function ElementReviewPage({ params }: PageProps) {
+  const { pid, id: pageId } = use(params)
+
+  const [page, setPage] = useState<Page | null>(null)
+  const [states, setStates] = useState<State[]>([])
+  const [savedElements, setSavedElements] = useState<Element[]>([])
+  const [draftElements, setDraftElements] = useState<Element[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [currentStateId, setCurrentStateId] = useState<string>('')
+  const [view, setView] = useState<CanvasViewOptions>(DEFAULT_VIEW)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const loadAll = useCallback(async () => {
+    try {
+      setLoading(true)
+      const [p, s, e] = await Promise.all([
+        getPageApi(pageId),
+        listStatesApi(pageId),
+        listElementsApi(pageId),
+      ])
+      setPage(p)
+      setStates(s)
+      setSavedElements(e)
+      setDraftElements(e)
+      // 默认选 canonical
+      if (p.canonical_state_id) setCurrentStateId(p.canonical_state_id)
+      else if (s[0]) setCurrentStateId(s[0].id)
+    } catch (err) {
+      toast.error('加载失败:' + (err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }, [pageId])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadAll()
+  }, [loadAll])
+
+  const dirty = useMemo(
+    () => JSON.stringify(savedElements) !== JSON.stringify(draftElements),
+    [savedElements, draftElements],
+  )
+
+  const updateElement = (next: Element) => {
+    setDraftElements((curr) => curr.map((el) => (el.id === next.id ? next : el)))
+  }
+
+  const deleteElement = (id: string) => {
+    setDraftElements((curr) => curr.filter((el) => el.id !== id))
+    if (selectedId === id) setSelectedId(null)
+  }
+
+  const handleCreateRequest = ({ bbox }: { bbox: [number, number, number, number] }) => {
+    if (!currentStateId) return
+    const now = new Date().toISOString()
+    const newEl: Element = {
+      id: newElementId(),
+      page_id: pageId,
+      state_ids: [currentStateId],
+      name: `新元素 ${draftElements.length + 1}`,
+      type: 'static',
+      bbox,
+      z_index: 0,
+      description: '',
+      reviewed: false,
+      created_at: now,
+      updated_at: now,
+    }
+    setDraftElements([...draftElements, newEl])
+    setSelectedId(newEl.id)
+    toast.info('在右侧详情区填写名字 / 描述,完成后点底部保存')
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const updated = await saveElementsApi(pageId, draftElements)
+      setSavedElements(updated)
+      setDraftElements(updated)
+      toast.success(`已保存 ${updated.length} 个元素`)
+    } catch (err) {
+      toast.error('保存失败:' + (err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading || !page) {
+    return <p className="p-6 text-sm text-muted-foreground">加载中…</p>
+  }
+
+  if (!currentStateId || states.length === 0) {
+    return (
+      <div className="p-6 space-y-4">
+        <p className="text-sm text-muted-foreground">该页面尚未上传状态图,无法 Element Review。</p>
+        <Link
+          href={`/projects/${pid}/pages/${pageId}`}
+          className="text-sm text-primary hover:underline"
+        >
+          ← 回到页面详情上传
+        </Link>
+      </div>
+    )
+  }
+
+  const currentState = states.find((s) => s.id === currentStateId)
+  const selected = draftElements.find((el) => el.id === selectedId) ?? null
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 二级面包屑 */}
+      <nav className="px-6 py-3 border-b flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link href={`/projects/${pid}/pages/${pageId}`} className="hover:text-foreground transition-colors">
+          {page.name}
+        </Link>
+        <ChevronRight className="size-3.5" />
+        <span className="text-foreground font-medium">Element Review</span>
+      </nav>
+
+      {/* 主区:Canvas + 列表 */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_320px] min-h-0">
+        <div className="flex flex-col min-h-0 border-r">
+          <CanvasToolbar
+            view={view}
+            onViewChange={setView}
+            states={states}
+            currentStateId={currentStateId}
+            onStateChange={setCurrentStateId}
+            canonicalStateId={page.canonical_state_id}
+          />
+          <div className="flex-1 min-h-0">
+            {currentState && (
+              <ElementCanvas
+                imageSrc={`/api/states/${currentState.id}/raw`}
+                imageDims={{ width: currentState.width, height: currentState.height }}
+                currentStateId={currentStateId}
+                elements={draftElements}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onChange={updateElement}
+                onCreateRequest={handleCreateRequest}
+                view={view}
+              />
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col min-h-0">
+          <ElementList
+            elements={draftElements}
+            states={states}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onAddManual={() =>
+              toast.info('在左侧 Canvas 空白区按住鼠标拖出 bbox 即可创建')
+            }
+          />
+        </div>
+      </div>
+
+      {/* 详情面板 */}
+      {selected && (
+        <ElementDetailPanel
+          element={selected}
+          states={states}
+          onChange={updateElement}
+          onDelete={() => deleteElement(selected.id)}
+        />
+      )}
+
+      {/* 整批保存条 */}
+      <StickySaveBar
+        dirty={dirty}
+        saving={saving}
+        onSave={handleSave}
+        onCancel={() => setDraftElements(savedElements)}
+        dirtyText={`${draftElements.length} 个元素(其中 ${draftElements.length - savedElements.length >= 0 ? draftElements.length - savedElements.length : 0} 个新增 / 修改)`}
+      />
+    </div>
+  )
+}

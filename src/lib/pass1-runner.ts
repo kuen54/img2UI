@@ -4,7 +4,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-import type { Element, Page, ProviderConfig, State } from '@/lib/types'
+import type { Element, Page, State } from '@/lib/types'
 import { DATA_ROOT } from '@/lib/fs-utils'
 import { loadConfig } from '@/lib/config'
 import { callMllm } from '@/lib/llm-client'
