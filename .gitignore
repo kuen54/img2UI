@@ -37,6 +37,8 @@ Thumbs.db
 phase-*-final.png
 asset-review*.png
 element-review*.png
+test-results/
+playwright-report/
 
 # Editor
 .vscode/
