@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useState } from 'react'
 import { Plus, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -18,19 +18,19 @@ export default function ProjectDetailPage({ params }: PageProps) {
   const [pages, setPages] = useState<Page[] | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const list = await listPagesApi(pid)
       setPages(list)
     } catch (e) {
       toast.error('加载失败:' + (e as Error).message)
     }
-  }
+  }, [pid])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
-  }, [pid])
+  }, [load])
 
   if (pages === null) {
     return <p className="p-6 text-sm text-muted-foreground">加载中…</p>
