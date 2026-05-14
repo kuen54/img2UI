@@ -4,6 +4,19 @@ All notable changes to img2UI are documented here. Format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added — 切片库 + 用户手动指派切图
+
+dogfood 反馈:**Pass 2 切图和 element name 对不上**(自动匹配靠 `slices[i] ↔ elements[i]` 数组下标,scipy (y,x) 切片顺序 vs Pass 1 element 输出顺序两个不同坐标系必然错位)。修法是引入「切片库」中间层 + UI 让用户手动选切图。
+
+- 切片库存储:Pass 2 跑完后所有切片落到 `data/slices/{state-id}-{category}/`,manifest.json 记录每 slice 的 idx/bbox/opaque_pct/当前 assigned_element_id。默认按 (y,x) 自动指派(保留 first-guess),用户随时可改
+- 新 API:`GET /api/states/[id]/slices?category=X` / `GET /api/slices/[s]/[c]/[i]`(切片 PNG + path-traversal 防御 + cache header)/ `POST /api/elements/[id]/assign-slice`
+- UI:Asset Detail Panel 加「换切图」按钮 → SlicePickerDialog 弹该路所有切片缩略图 grid → 蓝边框=当前指派 / 黄边框=已指派给其他 element / 灰色=未指派 → 点选指派后端原子覆写 + auto refresh
+- 向后兼容:asset.id == element.id 不动,assignSliceToElement 内部仍写 `assets-bin/{element-id}.png`,旧 reader / export 路径不受影响
+
+### Fixed — patchAsset status undefined 类型严格(P3)
+
+`PATCH /api/assets/[id]` 之前在 body.status === undefined 时仍调 `patchAsset(id, { status: undefined })`,触发 `exactOptionalPropertyTypes: true` 类型错误。改为条件性传入 `{ status }`。无行为改动,纯类型 fix。
+
 ### Fixed — 测试隔离 P0(用户 data/ 被五件套清空)
 
 **根因**:`src/lib/fs-utils.ts` 把 `DATA_ROOT` 永远指向 `process.cwd() + /data`,vitest 跑测试时 cwd = 项目根目录 → 测试中的 `DATA_ROOT` 直接指向用户**真实** data/。8 个测试文件(`pages-thumbnail` / `pages` / `projects` / `pipelines` / `thumbnails` / `list-thumbnail-urls` / `states` / `thumbs-route`)都有 `afterEach(async () => { await fs.rm(DATA_ROOT, { recursive: true, force: true }) })`,所以**每次跑 `npm test` 都会把用户真实 data/(projects / pages / states / raw / thumbs / pipelines / config.json / ...) 整个 rm -rf**。dogfood round 4/5 期间被五件套删了 4+ 次。vitest.config.ts 注释明确说「多个测试文件共享 data/ 目录,afterEach 清理会互相干扰 → 串行跑」,但完全没意识到"共享 data/" 是用户真实数据。
