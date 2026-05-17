@@ -7,9 +7,11 @@ import Box from '@mui/material/Box'
 import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 import Card from '@mui/material/Card'
+import CardActionArea from '@mui/material/CardActionArea'
+import CardMedia from '@mui/material/CardMedia'
+import CardContent from '@mui/material/CardContent'
 import Stack from '@mui/material/Stack'
 import Skeleton from '@mui/material/Skeleton'
-import Divider from '@mui/material/Divider'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -70,11 +72,11 @@ export default function HomePage(): React.ReactElement {
         {projects && projects.length > 0 && <StatsStrip projects={projects} />}
 
         {projects === null ? (
-          <LoadingList />
+          <LoadingGrid />
         ) : projects.length === 0 ? (
           <EmptyInline onCreate={() => setDialogOpen(true)} />
         ) : (
-          <ProjectList projects={projects} />
+          <ProjectCardGrid projects={projects} />
         )}
       </Container>
 
@@ -128,25 +130,27 @@ function StatsStrip({
   )
 }
 
-// ─── Project list ───────────────────────────────────────────────────────────
+// ─── Project card grid ─────────────────────────────────────────────────────
 
-function ProjectList({
+function ProjectCardGrid({
   projects,
 }: {
   projects: ProjectListItem[]
 }): React.ReactElement {
   return (
-    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
-      <Stack divider={<Divider flexItem />}>
-        {projects.map((p) => (
-          <ProjectRow key={p.id} project={p} />
-        ))}
-      </Stack>
-    </Card>
+    <Stack
+      direction="row"
+      useFlexGap
+      sx={{ flexWrap: 'wrap', gap: 2.5 }}
+    >
+      {projects.map((p) => (
+        <ProjectCard key={p.id} project={p} />
+      ))}
+    </Stack>
   )
 }
 
-function ProjectRow({
+function ProjectCard({
   project: p,
 }: {
   project: ProjectListItem
@@ -161,117 +165,92 @@ function ProjectRow({
       : null,
   ].filter((s): s is string => s !== null)
 
-  const subtitleParts: string[] = []
-  if (p.description) subtitleParts.push(p.description)
-  subtitleParts.push(metaParts.join(' · '))
-
   return (
-    <Box
-      component={Link}
-      href={`/projects/${p.id}`}
+    <Card
       sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        px: 2.5,
-        py: 1.75,
-        textDecoration: 'none',
-        color: 'inherit',
+        width: 280,
         outline: '1px solid transparent',
         outlineOffset: -1,
         transition:
-          'background-color 0.15s ease, outline-color 0.15s ease',
+          'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, outline-color 0.18s ease',
         '&:hover': {
-          bgcolor: alpha('#0d99ff', 0.04),
+          boxShadow: 3,
+          transform: 'translateY(-2px)',
           outline: `1px solid ${alpha('#0d99ff', 0.4)}`,
         },
       }}
     >
-      <Thumbnail url={p.sample_thumbnail_url} alt={p.name} />
-
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack
-          direction="row"
-          alignItems="baseline"
-          gap={2}
-          sx={{ minWidth: 0 }}
-        >
-          <Typography
-            variant="h5"
-            noWrap
-            sx={{ minWidth: 0, flex: 1 }}
+      <CardActionArea component={Link} href={`/projects/${p.id}`}>
+        {p.sample_thumbnail_url ? (
+          <CardMedia
+            component="img"
+            image={p.sample_thumbnail_url}
+            alt={p.name}
+            sx={{
+              height: 180,
+              objectFit: 'cover',
+              bgcolor: 'background.default',
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              height: 180,
+              bgcolor: 'background.default',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'text.disabled',
+              fontSize: 12,
+            }}
           >
+            (无设计稿)
+          </Box>
+        )}
+        <CardContent sx={{ pb: '16px !important' }}>
+          <Typography variant="h5" noWrap>
             {p.name}
+          </Typography>
+          {p.description && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              noWrap
+              sx={{ mt: 0.25 }}
+            >
+              {p.description}
+            </Typography>
+          )}
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            noWrap
+            sx={{ mt: 0.5 }}
+          >
+            {metaParts.join(' · ')}
           </Typography>
           <Stack
             direction="row"
             alignItems="center"
             gap={0.875}
-            sx={{ flexShrink: 0 }}
+            sx={{ mt: 1 }}
           >
             <StatusDot status={kind} />
             <Typography
               variant="caption"
+              noWrap
               sx={{
                 color: kind === 'idle' ? 'text.disabled' : 'text.secondary',
+                minWidth: 0,
+                flex: 1,
               }}
             >
               {label}
             </Typography>
           </Stack>
-        </Stack>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          noWrap
-          sx={{ mt: 0.25 }}
-        >
-          {subtitleParts.join(' · ')}
-        </Typography>
-      </Box>
-    </Box>
-  )
-}
-
-function Thumbnail({
-  url,
-  alt,
-}: {
-  url: string | undefined
-  alt: string
-}): React.ReactElement {
-  return (
-    <Box
-      sx={{
-        width: 64,
-        height: 40,
-        borderRadius: 1.5,
-        overflow: 'hidden',
-        bgcolor: 'background.default',
-        flexShrink: 0,
-        border: '1px solid',
-        borderColor: 'divider',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {url ? (
-        <Box
-          component="img"
-          src={url}
-          alt={alt}
-          sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-      ) : (
-        <Typography
-          variant="caption"
-          sx={{ fontSize: 11, color: 'text.disabled' }}
-        >
-          —
-        </Typography>
-      )}
-    </Box>
+        </CardContent>
+      </CardActionArea>
+    </Card>
   )
 }
 
@@ -297,33 +276,23 @@ function EmptyInline({
   )
 }
 
-function LoadingList(): React.ReactElement {
+function LoadingGrid(): React.ReactElement {
   return (
-    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
-      <Stack divider={<Divider flexItem />}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Stack
-            key={i}
-            direction="row"
-            alignItems="center"
-            gap={2}
-            sx={{ px: 2.5, py: 1.75 }}
-          >
-            <Skeleton
-              variant="rounded"
-              width={64}
-              height={40}
-              sx={{ borderRadius: 1.5, flexShrink: 0 }}
-            />
-            <Box sx={{ flex: 1 }}>
-              <Skeleton width="40%" height={20} />
-              <Skeleton width="65%" height={16} sx={{ mt: 0.5 }} />
-            </Box>
-            <Skeleton width={120} height={16} />
-          </Stack>
-        ))}
-      </Stack>
-    </Card>
+    <Stack
+      direction="row"
+      useFlexGap
+      sx={{ flexWrap: 'wrap', gap: 2.5 }}
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton
+          key={i}
+          variant="rounded"
+          width={280}
+          height={310}
+          sx={{ borderRadius: 3 }}
+        />
+      ))}
+    </Stack>
   )
 }
 
