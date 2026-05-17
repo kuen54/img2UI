@@ -19,6 +19,7 @@
     "@mui/icons-material": "^6.2.0",
     "@mui/material": "^6.2.0",
     "@mui/material-nextjs": "^6.2.0",
+    "geist": "^1.7.0",
     "nanoid": "^5.0.9",
     "next": "^15.1.0",
     "react": "^19.0.0",
