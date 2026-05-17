@@ -143,11 +143,6 @@ function ProjectCard({ project: p }: { project: ProjectListItem }): React.ReactE
           <Typography variant="body2" color="text.secondary" noWrap>
             {p.pages_count} 页 · {new Date(p.created_at).toLocaleDateString('zh-CN')}
           </Typography>
-          {p.tech_stack_hint && (
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.5, display: 'block' }}>
-              {p.tech_stack_hint}
-            </Typography>
-          )}
         </CardContent>
       </CardActionArea>
     </Card>
@@ -187,7 +182,6 @@ function NewProjectDialog({
 }): React.ReactElement {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [techStack, setTechStack] = useState('Next.js + Tailwind + shadcn')
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async (): Promise<void> => {
@@ -200,7 +194,6 @@ function NewProjectDialog({
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || undefined,
-          tech_stack_hint: techStack.trim() || undefined,
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -234,13 +227,7 @@ function NewProjectDialog({
             multiline
             rows={2}
             fullWidth
-          />
-          <TextField
-            label="技术栈 hint(写入 spec.md)"
-            value={techStack}
-            onChange={(e) => setTechStack(e.target.value)}
-            fullWidth
-            helperText="给 coding agent 用的提示,如 'Next.js + Tailwind + shadcn'"
+            helperText="一句话说明这是什么页面 / 活动,会写入 Pass 1 prompt 帮助 LLM 理解上下文"
           />
         </Stack>
       </DialogContent>

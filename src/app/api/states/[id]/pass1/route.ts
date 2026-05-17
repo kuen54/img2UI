@@ -74,9 +74,6 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
             state,
             pageName: page.name,
             ...(project.description !== undefined ? { pageDescription: project.description } : {}),
-            ...(project.tech_stack_hint !== undefined
-              ? { techStackHint: project.tech_stack_hint }
-              : {}),
           })
           await updatePipelineRun(auditRun.id, {
             status: 'completed',

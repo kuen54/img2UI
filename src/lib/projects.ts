@@ -18,7 +18,6 @@ import path from 'node:path'
 export async function createProject(input: {
   name: string
   description?: string
-  tech_stack_hint?: string
   cdn_provider_id?: string
 }): Promise<Project> {
   await ensureDataRoot()
@@ -27,9 +26,6 @@ export async function createProject(input: {
     id: newId(),
     name: input.name,
     ...(input.description !== undefined ? { description: input.description } : {}),
-    ...(input.tech_stack_hint !== undefined
-      ? { tech_stack_hint: input.tech_stack_hint }
-      : {}),
     ...(input.cdn_provider_id !== undefined
       ? { cdn_provider_id: input.cdn_provider_id }
       : {}),

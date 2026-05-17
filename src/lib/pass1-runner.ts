@@ -79,7 +79,6 @@ export async function runPass1MultiRoute(input: {
   state: StateRecord
   pageName: string
   pageDescription?: string
-  techStackHint?: string
 }): Promise<Pass1MultiResult> {
   const { state } = input
 
@@ -97,7 +96,6 @@ export async function runPass1MultiRoute(input: {
   const userHeader = renderPass1UserHeader({
     pageName: input.pageName,
     ...(input.pageDescription !== undefined ? { pageDescription: input.pageDescription } : {}),
-    ...(input.techStackHint !== undefined ? { techStackHint: input.techStackHint } : {}),
     stateCount: 1,
   })
 
@@ -361,7 +359,6 @@ export async function runPass1SingleRoute(input: {
   category: VisualCategory
   pageName: string
   pageDescription?: string
-  techStackHint?: string
 }): Promise<Pass1RouteResult> {
   const { state, category } = input
 
@@ -379,7 +376,6 @@ export async function runPass1SingleRoute(input: {
   const userHeader = renderPass1UserHeader({
     pageName: input.pageName,
     ...(input.pageDescription !== undefined ? { pageDescription: input.pageDescription } : {}),
-    ...(input.techStackHint !== undefined ? { techStackHint: input.techStackHint } : {}),
     stateCount: 1,
   })
 

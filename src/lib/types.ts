@@ -69,8 +69,6 @@ export interface Project {
   id: string
   name: string
   description?: string
-  /** "Next.js + Tailwind + shadcn" 之类的 hint,写进 spec.md */
-  tech_stack_hint?: string
   /** 覆盖默认 CDN */
   cdn_provider_id?: string
   created_at: string
