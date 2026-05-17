@@ -12,6 +12,7 @@ import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 import Collapse from '@mui/material/Collapse'
+import Divider from '@mui/material/Divider'
 import LinearProgress from '@mui/material/LinearProgress'
 import CircularProgress from '@mui/material/CircularProgress'
 import Dialog from '@mui/material/Dialog'
@@ -264,6 +265,8 @@ export function AssetReviewClient({
             sx={{ height: 'calc(100vh - 120px)' }}
           >
             <SliceGrid
+              stateId={state.id}
+              elements={elements}
               slices={slices}
               selectedElementId={selectedElementId}
               currentAssignment={
@@ -328,11 +331,15 @@ export function AssetReviewClient({
 // ─── SliceGrid (left) ──────────────────────────────────────────────────────
 
 function SliceGrid({
+  stateId,
+  elements,
   slices,
   selectedElementId,
   currentAssignment,
   onSubCrop,
 }: {
+  stateId: string
+  elements: LayoutElement[]
   slices: SliceWithAssign[]
   selectedElementId: string | null
   currentAssignment: { state_id: string; category: VisualCategory; idx: number } | null
@@ -344,6 +351,17 @@ function SliceGrid({
     for (const s of slices) m.get(s.category)!.push(s)
     return m
   }, [slices])
+
+  // 哪些 category 有元素 → Pass 2 跑过 → keyed PNG 存在
+  const categoriesWithElements = useMemo(() => {
+    const counts = new Map<VisualCategory, number>()
+    for (const cat of ALL_VISUAL_CATEGORIES) counts.set(cat, 0)
+    for (const e of elements) counts.set(e.visual_category, counts.get(e.visual_category)! + 1)
+    return ALL_VISUAL_CATEGORIES.filter((c) => counts.get(c)! > 0).map((c) => ({
+      category: c,
+      count: counts.get(c)!,
+    }))
+  }, [elements])
 
   return (
     <Box
@@ -358,6 +376,15 @@ function SliceGrid({
         bgcolor: 'background.paper',
       }}
     >
+      {categoriesWithElements.length > 0 && (
+        <>
+          <KeyedImagesPanel
+            stateId={stateId}
+            categoriesWithElements={categoriesWithElements}
+          />
+          <Divider sx={{ my: 1.5 }} />
+        </>
+      )}
       <Typography variant="h5" sx={{ mb: 1.5 }}>
         切片库 ({slices.length})
       </Typography>
@@ -386,6 +413,118 @@ function SliceGrid({
         <Box>· 蓝 = 当前选中 element 已用</Box>
         <Box>· 橙 = 别的 element 已用(允许重复)</Box>
       </Box>
+    </Box>
+  )
+}
+
+// ─── KeyedImagesPanel ─────────────────────────────────────────────────────
+// Pass 2 输出的 per-category 透明 PNG(`data/keyed/{state}-{cat}.png`)。
+// 顶层 toggle 默认闭合,展开后 N 个 category 子 toggle,每个独立懒加载。
+
+function KeyedImagesPanel({
+  stateId,
+  categoriesWithElements,
+}: {
+  stateId: string
+  categoriesWithElements: Array<{ category: VisualCategory; count: number }>
+}): React.ReactElement {
+  const [topOpen, setTopOpen] = useState(false)
+
+  return (
+    <Box>
+      <Button
+        size="small"
+        fullWidth
+        startIcon={topOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+        onClick={() => setTopOpen((v) => !v)}
+        sx={{
+          justifyContent: 'flex-start',
+          color: 'text.primary',
+          fontWeight: 600,
+        }}
+      >
+        Pass 2 完整拆分图 ({categoriesWithElements.length})
+      </Button>
+      <Collapse in={topOpen}>
+        <Stack spacing={0.5} sx={{ pl: 1, mt: 0.5 }}>
+          {categoriesWithElements.map(({ category, count }) => (
+            <KeyedCategoryRow
+              key={category}
+              stateId={stateId}
+              category={category}
+              count={count}
+            />
+          ))}
+        </Stack>
+      </Collapse>
+    </Box>
+  )
+}
+
+function KeyedCategoryRow({
+  stateId,
+  category,
+  count,
+}: {
+  stateId: string
+  category: VisualCategory
+  count: number
+}): React.ReactElement {
+  const [open, setOpen] = useState(false)
+  const [imgError, setImgError] = useState(false)
+
+  return (
+    <Box>
+      <Button
+        size="small"
+        fullWidth
+        startIcon={open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+        onClick={() => setOpen((v) => !v)}
+        sx={{ justifyContent: 'flex-start', color: 'text.primary' }}
+      >
+        {VISUAL_CATEGORY_CN[category]} ({count} 元素)
+      </Button>
+      <Collapse in={open} unmountOnExit>
+        <Box
+          sx={{
+            mt: 0.5,
+            mb: 0.5,
+            p: 1,
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 1.5,
+            bgcolor: 'background.default',
+            // 棋盘格背景表示透明区域
+            backgroundImage:
+              'linear-gradient(45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.04) 75%)',
+            backgroundSize: '12px 12px',
+            backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 80,
+          }}
+        >
+          {imgError ? (
+            <Typography variant="caption" color="text.disabled">
+              该 category 暂无 Pass 2 输出
+            </Typography>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/states/${stateId}/keyed/${category}`}
+              alt={`Pass 2 输出 - ${category}`}
+              style={{
+                maxWidth: '100%',
+                maxHeight: 360,
+                objectFit: 'contain',
+                display: 'block',
+              }}
+              onError={() => setImgError(true)}
+            />
+          )}
+        </Box>
+      </Collapse>
     </Box>
   )
 }
