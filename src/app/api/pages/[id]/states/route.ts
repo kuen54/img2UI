@@ -1,106 +1,72 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import {
+  getPage,
+  updatePage,
+  listStatesByPage,
+  createState,
+} from '@/lib/projects'
+import { generateThumbnail, getImageDimensions } from '@/lib/thumbnails'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
 
-import { getPage, updatePage, maybeGenerateThumbnailForPage } from '@/lib/pages'
-import { listStatesByPage, createState, writeStateRawImage } from '@/lib/states'
-import { readImageDimensions, isPng } from '@/lib/image-meta'
-import { acquireLock, releaseLock, RunLockConflictError } from '@/lib/run-lock'
-import type { State } from '@/lib/types'
-
-export const runtime = 'nodejs'
-export const maxDuration = 60
-
-type RouteCtx = { params: Promise<{ id: string }> }
-
-type UploadMeta = {
-  states: Array<{ filename: string; name: string; is_canonical: boolean }>
+interface RouteParams {
+  params: Promise<{ id: string }>
 }
 
-export async function GET(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const page = await getPage(id)
-  if (!page) return NextResponse.json({ error: 'page not found' }, { status: 404 })
-  const states = await listStatesByPage(id)
-  return NextResponse.json(states)
-}
-
-export async function POST(req: NextRequest, ctx: RouteCtx) {
-  const { id: pageId } = await ctx.params
-  const page = await getPage(pageId)
-  if (!page) return NextResponse.json({ error: 'page not found' }, { status: 404 })
-
-  const lockKey = `page:${pageId}:upload`
+export async function POST(req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    acquireLock(lockKey, `upload-${Date.now()}`)
-  } catch (e) {
-    if (e instanceof RunLockConflictError) {
-      return NextResponse.json({ error: '该页面正在上传中,请稍候' }, { status: 409 })
-    }
-    throw e
-  }
+    const { id: pageId } = await params
+    if (!isValidId(pageId))
+      return jsonResponse({ error: 'invalid id' }, { status: 400 })
 
-  try {
-    const form = await req.formData()
-    const files = form.getAll('files').filter((v): v is File => v instanceof File)
-    const metaRaw = form.get('meta')
-    if (typeof metaRaw !== 'string') {
-      return NextResponse.json({ error: 'meta 字段缺失' }, { status: 400 })
-    }
-    let meta: UploadMeta
-    try {
-      meta = JSON.parse(metaRaw) as UploadMeta
-    } catch {
-      return NextResponse.json({ error: 'meta 不是合法 JSON' }, { status: 400 })
-    }
-    if (!Array.isArray(meta.states) || meta.states.length !== files.length) {
-      return NextResponse.json(
-        { error: `meta.states.length(${meta.states?.length ?? 0})不匹配 files.length(${files.length})` },
-        { status: 400 },
+    const page = await getPage(pageId)
+    if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
+
+    // MVP S1:每 page 只允许 1 个 state。已有 state 时拒,前端走 DELETE + POST 流程
+    const existing = await listStatesByPage(pageId)
+    if (existing.length > 0) {
+      return jsonResponse(
+        {
+          error: 'page already has a state',
+          message: '该页面已有上传图,请先删除再重新上传',
+          existing_state_id: existing[0]!.id,
+        },
+        { status: 409 },
       )
     }
 
-    const created: State[] = []
-    const errors: Array<{ filename: string; error: string }> = []
-    let canonicalAssigned: string | null = null
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]!
-      const stateMeta = meta.states[i]!
-      try {
-        const buffer = Buffer.from(await file.arrayBuffer())
-        if (!isPng(buffer)) {
-          errors.push({ filename: stateMeta.filename, error: '不是 PNG 文件(magic bytes 校验失败)' })
-          continue
-        }
-        const dims = await readImageDimensions(buffer)
-        const state = await createState({
-          page_id: pageId,
-          name: stateMeta.name,
-          width: dims.width,
-          height: dims.height,
-        })
-        await writeStateRawImage(state.id, buffer)
-        created.push(state)
-        if (stateMeta.is_canonical && !canonicalAssigned) {
-          canonicalAssigned = state.id
-        }
-      } catch (e) {
-        errors.push({ filename: stateMeta.filename, error: (e as Error).message })
-      }
+    const form = await req.formData()
+    const file = form.get('file')
+    if (!(file instanceof File)) {
+      return jsonResponse({ error: 'file required' }, { status: 400 })
+    }
+    if (!file.type.includes('png') && !file.name.toLowerCase().endsWith('.png')) {
+      return jsonResponse({ error: 'PNG only' }, { status: 400 })
     }
 
-    // 设 canonical(只在 page 当前为空 + 用户标了 is_canonical 时才覆盖)
-    if (canonicalAssigned && !page.canonical_state_id) {
-      await updatePage(pageId, { canonical_state_id: canonicalAssigned })
-      // canonical state 上传后同步生成缩略图(Phase 8e)。失败不阻断。
-      try {
-        await maybeGenerateThumbnailForPage(pageId)
-      } catch (e) {
-        console.error('[thumbnail] generate failed for', pageId, e)
-      }
+    const buf = Buffer.from(await file.arrayBuffer())
+    const { width, height } = await getImageDimensions(buf)
+
+    const state = await createState({
+      page_id: pageId,
+      name: 'canonical',
+      imageBuffer: buf,
+      width,
+      height,
+    })
+
+    // 缩略图失败不阻断(HANDOFF §4.2)
+    try {
+      await generateThumbnail(buf, state.id)
+    } catch (err) {
+      console.error('[states POST] thumbnail gen failed', err)
     }
 
-    return NextResponse.json({ created, errors }, { status: 201 })
-  } finally {
-    releaseLock(lockKey)
+    // 更新 page.canonical_state_id
+    await updatePage(pageId, { canonical_state_id: state.id })
+
+    return jsonResponse(state, { status: 201 })
+  } catch (err) {
+    return errorToResponse(err)
   }
 }

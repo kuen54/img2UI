@@ -1,43 +1,45 @@
-// 从原图按归一化 bbox 用 sharp.extract 切出 sub-region
-// Phase 8c:Pass 2 多参考图所需,每个 element 一张 crop 喂给 image_gen
-// Phase 8f:激进 clamp——x=1.0 / y=1.0 越界 case 也救活到 1×1,只对 NaN/真零面积抛错
+// HANDOFF §6.2:Pass 2 多参考图,从原图按 element bbox crop 出每个 element 的特写
 
 import sharp from 'sharp'
-import type { Bbox } from '@/lib/bbox-iou'
+import type { BBox } from './types'
 
+/**
+ * 按归一化 bbox 从 raw buffer crop 出像素图。
+ * 失败抛错(NaN bbox / 真零面积),caller 决定跳过该 element。
+ */
 export async function cropFromBbox(
-  rawBuffer: Buffer,
-  bbox: Bbox,
-  imgSize: { width: number; height: number },
-): Promise<Buffer> {
-  const [x, y, w, h] = bbox
+  rawBuf: Buffer,
+  bbox: BBox,
+): Promise<{ buffer: Buffer; width: number; height: number }> {
+  const meta = await sharp(rawBuf).metadata()
+  const W = meta.width ?? 0
+  const H = meta.height ?? 0
+  if (W <= 0 || H <= 0) throw new Error('invalid raw image dimensions')
 
-  // NaN/Infinity 拦在前面——sharp.extract 会抛 cryptic error,不如自己抛 zero
-  if (![x, y, w, h].every((v) => Number.isFinite(v))) {
-    throw new Error(
-      `cropFromBbox: zero-area bbox ${JSON.stringify(bbox)} on ${imgSize.width}x${imgSize.height}`,
-    )
+  const [bx, by, bw, bh] = bbox
+  if ([bx, by, bw, bh].some((v) => !Number.isFinite(v))) {
+    throw new Error(`invalid bbox: ${JSON.stringify(bbox)}`)
   }
+  let left = Math.round(bx * W)
+  let top = Math.round(by * H)
+  let width = Math.round(bw * W)
+  let height = Math.round(bh * H)
 
-  // Clamp x/y 到 [0, 1 - 1px) — 留至少 1 像素给 width/height,避免 left=imgSize.width
-  const epsW = 1 / imgSize.width
-  const epsH = 1 / imgSize.height
-  const cx = Math.max(0, Math.min(1 - epsW, x))
-  const cy = Math.max(0, Math.min(1 - epsH, y))
+  // clamp
+  if (left < 0) { width += left; left = 0 }
+  if (top < 0) { height += top; top = 0 }
+  if (left >= W || top >= H) throw new Error('bbox starts outside image')
+  if (left + width > W) width = W - left
+  if (top + height > H) height = H - top
+  if (width < 1 || height < 1) throw new Error(`bbox produces zero-area crop`)
 
-  const left = Math.floor(cx * imgSize.width)
-  const top = Math.floor(cy * imgSize.height)
-  // width/height 至少 1 像素;不超过图片右/下边界
-  const rawWidth = Math.max(1, Math.ceil(w * imgSize.width))
-  const rawHeight = Math.max(1, Math.ceil(h * imgSize.height))
-  const width = Math.min(imgSize.width - left, rawWidth)
-  const height = Math.min(imgSize.height - top, rawHeight)
+  const buffer = await sharp(rawBuf)
+    .extract({ left, top, width, height })
+    .png()
+    .toBuffer()
+  return { buffer, width, height }
+}
 
-  if (width <= 0 || height <= 0) {
-    // 理论不应触发——clamp 已保证至少 1 像素
-    throw new Error(
-      `cropFromBbox: zero-area after clamp ${JSON.stringify(bbox)} on ${imgSize.width}x${imgSize.height}`,
-    )
-  }
-  return sharp(rawBuffer).extract({ left, top, width, height }).png().toBuffer()
+export async function bufferToDataUrl(buf: Buffer): Promise<string> {
+  return `data:image/png;base64,${buf.toString('base64')}`
 }

@@ -1,23 +1,36 @@
-// Pass 1 多路:为某一 category 渲染 over-include prompt 头(PoC #2 v3 验证)
-// 关键反面教训:不要写 "DO NOT return others" / "lean toward NOT returning"——
-// PoC #2 v2 实测这种 EXCLUSIVE 措辞会让 model 在边界 case 普遍丢元素。
-// 改为 over-include + 让下游 IoU 合并去重。
+// HANDOFF §5.3.2 over-include 头部模板逐字。
+// 5 路 Pass 1 prompt 渲染时拼到 base prompt 之前。
+
+import type { VisualCategory } from '../types'
 import {
-  type VisualCategory,
   VISUAL_CATEGORY_DEFINITION_EN,
   VISUAL_CATEGORY_EXAMPLES_CN,
-  visualCategoryCn,
-} from '@/lib/visual-category'
+  VISUAL_CATEGORY_UPPER,
+  VISUAL_CATEGORY_CN,
+} from '../visual-category'
 
+/**
+ * 拼 over-include 头部 + base prompt(系统消息内容)。
+ * HANDOFF §5.3.2 模板逐字,$ 变量运行时替换。
+ *
+ * 措辞硬约束(违反必回归):
+ * - 严禁 EXCLUSIVE 措辞(`Return ONLY` / `Do NOT return others`)
+ * - 必须 over-include + IoU 合并
+ */
 export function renderPass1RoutePrompt(
   category: VisualCategory,
   basePrompt: string,
 ): string {
-  const head = `[${category.toUpperCase()} PASS — OVER-INCLUDE MODE]
+  const upper = VISUAL_CATEGORY_UPPER[category]
+  const cn = VISUAL_CATEGORY_CN[category]
+  const definition = VISUAL_CATEGORY_DEFINITION_EN[category]
+  const examples = VISUAL_CATEGORY_EXAMPLES_CN[category]
 
-This pass focuses on ${visualCategoryCn(category)} (${category}) elements.
+  const header = `[${upper} PASS — OVER-INCLUDE MODE]
 
-${VISUAL_CATEGORY_DEFINITION_EN[category]}
+This pass focuses on ${cn} (${category}) elements.
+
+${definition}
 
 **OVER-INCLUDE PHILOSOPHY**:
 - Be EXHAUSTIVE. **Better to over-include than to miss.**
@@ -27,7 +40,7 @@ ${VISUAL_CATEGORY_DEFINITION_EN[category]}
 - So when in doubt, INCLUDE.
 
 **Concrete examples of ${category} elements**:
-${VISUAL_CATEGORY_EXAMPLES_CN[category]}
+${examples}
 
 **BBox format**: \`[x, y, w, h]\` all NORMALIZED 0-1 floats. CONSTRAINT: \`x + w ≤ 1\` AND \`y + h ≤ 1\`. If an element extends to the right/bottom edge, set the start coord smaller (e.g. status bar across the top: \`[0, 0, 1.0, 0.04]\` not \`[1.0, 0, 0.04, 1.0]\`; full-width footer: \`[0, 0.96, 1.0, 0.04]\`).
 
@@ -36,5 +49,25 @@ For elements you do return, still classify each as \`static\` or \`code\` per th
 ---
 
 `
-  return head + basePrompt
+
+  return header + basePrompt
 }
+
+/** Pass 1 user message 头部(每个 sub-run 都一致) */
+export function renderPass1UserHeader(input: {
+  pageName: string
+  pageDescription?: string
+  techStackHint?: string
+  stateCount: number
+}): string {
+  return [
+    `Page name: ${input.pageName}`,
+    `Page description: ${input.pageDescription ?? '(no description)'}`,
+    `Tech stack hint: ${input.techStackHint ?? '(unspecified)'}`,
+    '',
+    `States (${input.stateCount} total, canonical first):`,
+  ].join('\n')
+}
+
+export const PASS1_USER_TAIL = `
+Be EXHAUSTIVE per the OVER-INCLUDE PHILOSOPHY in the system prompt. Return JSON.`

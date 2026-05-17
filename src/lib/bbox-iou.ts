@@ -1,20 +1,37 @@
-// IoU(intersection over union)— 用于 Phase 8b 多路 Pass 1 元素合并去重
-// bbox 格式: [x, y, w, h](归一化或像素均可,只要两边一致)
-// 退化输入(零面积)直接返回 0,避免下游除 0
-export type Bbox = [number, number, number, number]
+import type { BBox } from './types'
 
-export function bboxIoU(a: Bbox, b: Bbox): number {
+/** HANDOFF §5.2:bbox 重叠度 IoU(归一化坐标) */
+export function iou(a: BBox, b: BBox): number {
   const [ax, ay, aw, ah] = a
   const [bx, by, bw, bh] = b
-  if (aw <= 0 || ah <= 0 || bw <= 0 || bh <= 0) return 0
-
-  const ix1 = Math.max(ax, bx)
-  const iy1 = Math.max(ay, by)
-  const ix2 = Math.min(ax + aw, bx + bw)
-  const iy2 = Math.min(ay + ah, by + bh)
-  if (ix2 <= ix1 || iy2 <= iy1) return 0
-
-  const inter = (ix2 - ix1) * (iy2 - iy1)
+  const x1 = Math.max(ax, bx)
+  const y1 = Math.max(ay, by)
+  const x2 = Math.min(ax + aw, bx + bw)
+  const y2 = Math.min(ay + ah, by + bh)
+  if (x2 <= x1 || y2 <= y1) return 0
+  const inter = (x2 - x1) * (y2 - y1)
   const union = aw * ah + bw * bh - inter
-  return union > 0 ? inter / union : 0
+  return inter / union
+}
+
+/** clamp 单个分量到 [0, 1] */
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v))
+}
+
+/** clamp bbox 让 x+w ≤ 1 / y+h ≤ 1 */
+export function clampBbox01(box: BBox): BBox {
+  let [x, y, w, h] = box
+  x = clamp01(x)
+  y = clamp01(y)
+  w = clamp01(w)
+  h = clamp01(h)
+  if (x + w > 1) w = 1 - x
+  if (y + h > 1) h = 1 - y
+  return [x, y, w, h] as const
+}
+
+/** bbox 相对面积(归一化坐标) */
+export function bboxArea(box: BBox): number {
+  return box[2] * box[3]
 }

@@ -1,10 +1,8 @@
-// 默认 prompt 模板,首启动写入 AppConfig.prompts。用户可在 Settings/Prompts 改
-// 内容跟 SPEC.md § Pass 1 / Pass 2 prompt 模板 保持一致(改这份要同步改 SPEC)
+// HANDOFF §5.3.1 / §6.3.2 / §6.4 / §10.6 + §12.1 逐字照抄。
+// 这些是产品契约,prompt 文本任何"觉得更合理"的改动都会回归到 PoC v1-v12 之前的失败状态。
+// 改动需要走 PoC 验证,不能直接改这里。
 
-// =============================================================================
-// Pass 1: 布局分析(发给 mllm,system message)
-// =============================================================================
-
+/** HANDOFF §5.3.1 Pass 1 base prompt(系统消息,5 路共享) */
 export const DEFAULT_PASS1_LAYOUT = `You are a UI design analyzer. Identify EVERY visible visual element in the design mockup. Be EXHAUSTIVE — typical pages have 15-30 elements.
 
 For each element, classify:
@@ -59,17 +57,7 @@ Common element types:
 - Product cards / list items — code
 - Product images / thumbnails — static`
 
-// =============================================================================
-// Pass 2: 资产提取(发给 image-edit / gpt-image-2-official)
-// =============================================================================
-//
-// 模板含 3 个占位符:
-//   {{page_description}}  — 用户填的页面描述
-//   {{element_summary}}   — 由 lib/prompts/render-element-summary.ts 渲染(按 name 分组数量)
-//   {{element_count}}     — type=static 元素总数
-//
-// 渲染规则详见 SPEC.md § Pass 2 prompt 模板
-
+/** HANDOFF §6.3.2 re_extract 单元素重抠模板,占位符 {{page_description}} / {{element_summary}} / {{element_count}} */
 export const DEFAULT_PASS2_EXTRACT = `我们来尝试一下，再把这张图详细地拆解。这张图是 {{page_description}}，请把这张图里的装饰性图片元素提取出来,单独放在一张鲜亮的纯绿色 #00FF00 背景画布上,作为后期抠像的绿幕。元素本身不要使用这个绿色。
 
 画布上要出现这些元素,一个都不能少:
@@ -77,10 +65,7 @@ export const DEFAULT_PASS2_EXTRACT = `我们来尝试一下，再把这张图详
 
 共 {{element_count}} 个元素,记得每个都画到。元素之间留出至少一整个元素宽度的空隙,宁可画布留白多也不要挤在一起。保持原图的风格、颜色、文字内容,不要重新设计任何元素,每个都要跟原图里完全一致。`
 
-// =============================================================================
-// Pass 2 反向校验(发给 mllm,system message)
-// =============================================================================
-
+/** HANDOFF §6.4 反向校验 prompt */
 export const DEFAULT_PASS2_VALIDATE = `You are a quality validator. Given an extracted transparent PNG and the
 expected element list, evaluate each element's extraction quality.
 
@@ -97,10 +82,7 @@ Output strict JSON:
   }]
 }`
 
-// =============================================================================
-// Coding agent 指令(写入 spec.md 顶部,告诉 coding agent 怎么消费这套素材)
-// =============================================================================
-
+/** HANDOFF §12.1 coding_agent_intro 默认值,写入 spec.md 末尾 */
 export const DEFAULT_CODING_AGENT_INTRO = `## Coding agent 指令
 
 - 优先使用项目现有组件库({tech_stack_hint})

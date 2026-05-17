@@ -1,69 +1,56 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import path from 'node:path'
 import os from 'node:os'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
+import { getPage } from '@/lib/projects'
+import { exportPageToFolder } from '@/lib/exporter'
+import { getActiveProvider } from '@/lib/config'
 
-import { loadExportPayload, writeExportFolder, streamExportZip } from '@/lib/exporter'
-
-type RouteCtx = { params: Promise<{ id: string }> }
-
-type ExportBody = {
-  format: 'folder' | 'zip'
-  output_dir?: string
+interface RouteParams {
+  params: Promise<{ id: string }>
 }
 
-export async function POST(req: NextRequest, ctx: RouteCtx) {
-  const { id: pageId } = await ctx.params
-
-  let body: ExportBody
+/**
+ * POST /api/pages/[id]/export
+ * Body { output_dir?: string }
+ * 写文件到 output_dir/{project-name}/pages/{page-name}/...,返回 path。
+ */
+export async function POST(req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    body = (await req.json()) as ExportBody
-  } catch {
-    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
-  }
+    const { id: pageId } = await params
+    if (!isValidId(pageId))
+      return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const page = await getPage(pageId)
+    if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
 
-  if (body.format !== 'folder' && body.format !== 'zip') {
-    return NextResponse.json(
-      { error: 'format must be "folder" or "zip"' },
-      { status: 400 },
-    )
-  }
+    const body = (await req.json().catch(() => ({}))) as { output_dir?: string }
+    const outputDir = body.output_dir
+      ? expandHome(body.output_dir)
+      : path.join(os.homedir(), 'img2ui-out')
 
-  let payload
-  try {
-    payload = await loadExportPayload(pageId)
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 404 })
-  }
+    const cdn = await getActiveProvider('cdn')
+    const cdnBase = cdn?.public_url_prefix ?? undefined
 
-  if (body.format === 'folder') {
-    if (!body.output_dir) {
-      return NextResponse.json(
-        { error: 'output_dir 必填(format=folder)' },
-        { status: 400 },
-      )
-    }
-    // 展开 ~
-    const expanded = body.output_dir.startsWith('~')
-      ? path.join(os.homedir(), body.output_dir.slice(1))
-      : body.output_dir
-    if (!path.isAbsolute(expanded)) {
-      return NextResponse.json({ error: 'output_dir 必须是绝对路径(或以 ~ 开头)' }, { status: 400 })
-    }
-    try {
-      const result = await writeExportFolder(payload, expanded)
-      return NextResponse.json(result)
-    } catch (e) {
-      return NextResponse.json({ error: (e as Error).message }, { status: 500 })
-    }
-  }
+    await exportPageToFolder({
+      outputDir,
+      projectId: page.project_id,
+      pageId,
+      ...(cdnBase ? { assetCdnBase: cdnBase } : {}),
+    })
 
-  // zip
-  const { stream, filename } = streamExportZip(payload)
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
-    },
-  })
+    return jsonResponse({
+      ok: true,
+      path: outputDir,
+    })
+  } catch (err) {
+    return errorToResponse(err)
+  }
+}
+
+function expandHome(p: string): string {
+  if (p.startsWith('~/') || p === '~') {
+    return path.join(os.homedir(), p.slice(1))
+  }
+  return p
 }

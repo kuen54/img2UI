@@ -1,814 +1,849 @@
-# img2UI Implementation Plan
+# img2UI v2 — 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
-**Goal:** 把 AI 生图设计稿(GPT-image-2 输出)转成 coding agent 可消费的素材包(透明 PNG + layout.json + spec.md)的本地 web app
-
-**Architecture:** Next.js 16 单进程,App Router + Route Handlers,数据存 `data/*.json`,无独立后端。两条独立 pass(布局分析 + 资产提取)解耦,每步用户可 review/重跑。Provider 抽象用 `kind` discriminator 统一管理 mllm / image_gen / cdn 三类外部接口(PoC v11 验证后绿幕 chroma key 已 0 API,segmenter 类已删除)
-
-**Tech Stack:** Next.js 16.2 / React 19 / TypeScript 6 (strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes) / shadcn v4 (style: base-nova) / Tailwind v4 / sonner / base-ui / lucide-react / nanoid / sharp(图像处理) / @aws-sdk/client-s3(CDN) / vitest + Playwright
-
-**配套文档**: [PRD.md](./PRD.md)(产品定位) · [SPEC.md](./SPEC.md)(技术契约) · [CLAUDE.md](./CLAUDE.md)(反直觉强约束) · [AGENTS.md](./AGENTS.md)(开发流程)
+> 配套阅读:`/Users/lijiakun/Documents/img2UI-archive/HANDOFF.md`(下文简称 HANDOFF)。本 plan 不复述 HANDOFF,只列**决策点**、**每 phase 的可执行动作**、**与 HANDOFF 的偏离**。
+>
+> 目的:在 `/Users/lijiakun/Documents/img2UI/` 从 0 重建一个 img2UI,后端按 HANDOFF 重写,UI 用 Material Design,丢弃所有老 UI。
 
 ---
 
-## Phase 路线图
+## 0. 范围与边界
 
-| Phase | 目标 | 进入条件 | 退出条件 | 工作量(粗估) |
+### 0.1 不复用老代码,但 spec 化产物**逐字照抄**
+
+明确边界(避免再问):
+
+| 来源 | 处理方式 |
+|---|---|
+| `archive/src/lib/*` | **不 copy、不 import、不参考结构**——按 HANDOFF spec 自己重写 |
+| `archive/src/app/*`(老 UI) | **完全丢弃**,UI 从 0 用 MUI 重做 |
+| HANDOFF §5.3.1 base prompt(英文) | **逐字照抄**到 `seeds/default-prompts.ts` 的 `DEFAULT_PASS1_LAYOUT` |
+| HANDOFF §5.3.2 over-include 头部模板 | **逐字照抄**到 `prompts/render-pass1-route.ts` |
+| HANDOFF §6.3.1 全量 Pass 2 中文模板 | **逐字照抄**到 `prompts/render-pass2-route.ts` |
+| HANDOFF §6.3.2 re_extract 单元素模板 | **逐字照抄**到 `seeds/default-prompts.ts` 的 `DEFAULT_PASS2_EXTRACT` |
+| HANDOFF §6.4 反向校验 prompt | **逐字照抄**到 `seeds/default-prompts.ts` 的 `DEFAULT_PASS2_VALIDATE` |
+| HANDOFF §10.6 / §12.1 `coding_agent_intro` | **逐字照抄** |
+| HANDOFF 附录 A 视觉分类 EN/CN 定义 | **逐字照抄**到 `lib/visual-category.ts` |
+| `archive/ref/split_elements.py`(89 行) | **算法对照移植到 TS**(HANDOFF §9.1 明确"不要重新设计") |
+| `archive/ref/generate_images_apimart.py` | 仅作 apimart task polling 协议 fallback 参考(HANDOFF §7.2 已写清楚,默认无需读) |
+
+### 0.2 实测收敛、不许动的参数
+
+`seeds/default-providers.ts` 里这些都是 PoC v1-v12 调出来的,直接照搬:
+
+- mllm: `model='gemini-3.1-pro-preview'`、`temperature=1`、`max_tokens=32000`、`thinking_budget=4096`、`api_format='sankuai'`(无 Bearer 前缀)
+- image_gen: `model='gpt-image-2-official'`(**不**是 `gpt-image-2`)、`quality='high'`、`poll_max_attempts=60`、`poll_initial_delay=12s`、`poll_interval=5s`
+- chroma key: `full_alpha_threshold=60`、`full_opaque_threshold=25`、spill suppression on
+- slicer: `gap=15`、`padding=5`、`min_size=30`、`min_opaque_pct=1.0`
+- Pass 1 路次合并: `IoU > 0.5`、优先级 `subject < button < container < background < decoration < other`、`≥3/5` 路成功才算 `pass1_done`
+
+### 0.3 §13 反直觉硬约束 — 全条照守
+
+实施前先读 HANDOFF §13。最容易踩的两条:
+
+- **§13.7**:pipeline 不要自动 fallback koukoutu;只有 `re-key-via-api` 路由才 import matting client
+- **§13.8**:Pass 1 prompt 严禁 EXCLUSIVE 措辞(`Return ONLY {category}` / `Do NOT return others`);over-include + IoU 合并是正解
+
+### 0.4 ★ MVP 简化决策(对 HANDOFF 的三处偏离)
+
+经讨论敲定的 3 条 MVP 简化,跟 HANDOFF spec 不一致,以本节为准:
+
+| # | 简化项 | HANDOFF 原方案 | MVP 实际方案 | 影响章节 |
 |---|---|---|---|---|
-| **Phase 0**:PoC 技术验证 | ✅ **2026-05-13 完成 (v11 锁定)** | 详见 `poc/V10-PLAN.md` 与 `poc/EXPLORATION-HISTORY.md` | 详见同上 | 实际 2 天 / 11 轮 PoC |
-| **Phase 1**:项目骨架 | Next.js + shadcn + 文件存储 + Sidebar + 顶层 layout + 中文文案 | Phase 0 通过 | `npm run dev` 起服务,Sidebar 显示空 Projects / Settings 入口,无 console error | 2-3 天 |
-| **Phase 2**:Provider 配置 | Settings 页 3 类 provider(mllm/image_gen/cdn)CRUD + 双向 mask + Test Connection | Phase 1 完成 | 新建 / 编辑 / 测试 / 删除 一个 OpenAI mllm provider 端到端,API key 不泄漏到前端 | 3-4 天 |
-| **Phase 3**:Project-Page-State CRUD + 上传 | 项目-页面 navigation,页面下上传多张状态图,触发 Pass 1 占位 | Phase 2 完成 | 创建项目→新建页面→上传 3 张状态图→自动触发 Pass 1(目前只是模拟数据)→ Pipeline 进度区显示状态 | 3-4 天 |
-| **Phase 4**:Pass 1 + Element Review | 真实接 mllm,跨状态对齐,Element Review canvas(bbox 拖拽 + 叠加层 + 选中详情)+ 整批保存 | Phase 3 完成,Phase 0 PoC 验证 Pass 1 prompt 稳定 | 用真实图跑 Pass 1,在 Element Review 修正/确认所有元素,保存后状态可恢复 | 5-7 天 |
-| **Phase 5**:Pass 2 + Asset Review | 真实接 image_gen,**绿幕 #00FF00 输出 + 本地 chroma green key + scipy split_elements 切片**,反向校验,Asset Review(Batch PNG 预览 + 切片 grid + 单元素重抠 + 拆分工具 / chroma 阈值调节 / edge clean) | Phase 4 完成,Phase 0 PoC v11 验证 Pass 2 prompt 稳定 | 用真实图跑 Pass 2 → chroma key → 切片,得到 N 个透明 PNG,Review 中处理少量边缘 case,产出全部为 validated 状态 | 5-7 天 |
-| **Phase 6**:CDN + Export | S3 兼容 CDN 上传,Export 文件夹生成,spec.md 渲染,zip 下载 | Phase 5 完成 | Export 出文件夹,丢给 Claude Code 能直接读 spec.md 并生成贴合代码 | 3-4 天 |
-| **Phase 7**:打磨 + dogfood | 端到端跑 1 个真实活动页(嘉锟提供),修关键问题,补单测,写 README | Phase 6 完成 | MVP-α 退出准则达成(参见 PRD § 上线/灰度策略) | 3-5 天 |
+| S1 | **每 page 只支持 1 张图** | Page 下可有多 state(canonical / hover / empty)+ 跨 state 合并 | UI 限制每 page 只能 1 个 state(自动 canonical),数据模型 State 保留不动以备后续扩展 | §4 Phase 2 / §6 Phase 4 |
+| S2 | **过滤 mllm 幻觉小元素** | 无显式过滤(HANDOFF §5.4 只列 strip fence + normalizeBboxes) | Pass 1 后处理加 `filterTinyElements`:相对面积 `bbox.w * bbox.h < 0.001` 的丢弃,被过滤 element 写到 PipelineRun.parsed_result 留底,不进 Element[] | §5 Phase 3 |
+| S3 | **切片库去自动指派,全手动** | Pass 2 完成默认 (y, x) 指派 + SliceManifest 独立文件 + 「换切图」改派 | Pass 2 不创建 Asset,切片落 `data/slices/{state}-{cat}/{idx}.png`;Asset Review 左切片 grid + 右 element 列表,用户手动拖拽指派;指派关系存在 Asset 自身(`asset.slice_source = {state, cat, idx}`),无独立 manifest | §9 Phase 7 / §14.2 |
 
-总预估:**24-36 天**(纯专注开发,不含等待 / 中断)
+**S1 删掉的逻辑**:
+- HANDOFF §5.5 跨 state 合并(单 state 不需要)
+- Pass 1 prompt 输出的 `appears_in_states` 字段渲染、`cross_state_notes` 持久化
+- Element Review UI 多 state 切换、Export `spec.md` 状态 diff 段
+- 文件路径仍带 `{state-id}`(后端不动),Element 的 `state_ids` 始终 = `[唯一 state.id]`
+
+**S2 默认值**:相对面积 `< 0.001`(1024² 上约 32×32 px)。Element Review 加折叠"已过滤的 N 个小元素",用户能展开恢复(罕见 case 防误删)。
+
+**S3 收益**:消除"默认指派带来的隐藏错误";Pass 2 完成后切片 grid 一眼能看出"哪一路 chroma 出问题"(模型多画 / 漏画 / 切碎都直接展示)。代价是 30 元素页用户要手动指派 30 次,但跟 Element Review 的 30 次同量级,可接受。
 
 ---
 
-## File Structure(实施前规划)
+## 1. 与 HANDOFF 的偏离点(等你 review 拍板)
+
+### 1.1 ★ UI 技术栈:MUI v6 + Material Design 3 + Figma 蓝主色(已敲定)
+
+HANDOFF §2 推荐 shadcn v4 + Tailwind v4。改为 MUI v6,保留 Material Design 3 视觉语言(大圆角 / ripple / elevation / 系统化 token),**主色用 Figma 蓝替换 MD3 baseline 紫**,其他 MD3 token 保留。
+
+**确定方案**:Next.js 15 + React 19 + TS strict + **MUI v6 + Emotion** + sonner(toast)+ Tailwind 不引 + base-ui 不引(MUI 内置 dialog/popover)。
+
+**关于"MUI 默认主题丑"的应对**:MUI v6 视觉跟 v4/v5 时代的"老 MD2 感"已经差很多——v6 默认更贴 MD3。但默认 baseline purple 配色和 default Roboto 排版在 C 端工具感重,要靠 theme 调到位:
+
+- **主色**:`palette.primary.main = '#0d99ff'`(Figma 蓝),让 MUI 自动派生 light / dark / contrastText
+- **typography**:仍 Roboto + 中文 fallback(`PingFang SC`, `Microsoft YaHei`),但行高 / 字号节奏用 MD3 type scale
+- **shape**:`borderRadius: 16`(MD3 大圆角,Card 用)+ `Button` / `Chip` / `TextField` 局部 `shape: 12`(MD3 中圆角)
+- **elevation**:用 MD3 elevation tokens(`elevation 0/1/3/6`)代替 MUI 默认的 `0..24` 渐变
+- **保留**:ripple、`Fade/Grow/Collapse` 默认动效、MD3 ripple 容器(`<ButtonBase>`)
+- **不做**:不引 framer-motion / 不做深色模式(MVP)
+
+实际生成 MD3 完整 palette 用 [Material Theme Builder](https://material-foundation.github.io/material-theme-builder/) 喂 `#0d99ff` 即可,把生成的 12 色 tokens 塞进 `src/theme/index.ts`。
+
+**Figma 风格的吸收**(超出 MD3 spec 的部分,可选):
+- 项目 / 页面列表 Card 的 hover 用 `elevation 1 → 3`(MD3)+ `transform: translateY(-2px)`(Figma 风微动效)
+- Pipeline 状态指示用细条 chip 而不是粗框(Figma 工具栏感觉)
+- spacing 偏紧凑(8 / 16 / 24 三档,不上 32+),不像 MD3 默认的 ` 24 起跳`
+
+### 1.2 后端不需要"额外的代码质量重构"
+
+HANDOFF spec 已经够细了,按它写出来的代码结构上不会有质量问题。守:
+
+- TS strict、`fs/promises`、`writeAtomic`(20 行)、内存 lock(单进程 Next.js 够用)
+- 每个 lib 文件单一职责,跟 HANDOFF 附录 B 文件清单一一对应
+- **不引入额外抽象层**(无 DI / repository / event bus);Route Handler 直接调 lib 函数
+
+### 1.3 Phase 顺序按 HANDOFF §14 不改
+
+10 个 phase 已经被实测验证过依赖关系合理(Phase 5 单 category 通链路 → Phase 6 才加并发,踩坑成本低)。**不合并、不跳过、不重排**。
+
+---
+
+## 2. 仓库初始结构
 
 ```
 img2UI/
-├── README.md                      # 用户文档
+├── PLAN.md                         ← 本文件
+├── CLAUDE.md                       ← Phase 1 创建,见 §13
 ├── package.json
+├── tsconfig.json                   ← strict: true
 ├── next.config.ts
-├── tsconfig.json (strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes)
 ├── eslint.config.mjs
-├── playwright.config.ts
-├── vitest.config.ts
-├── components.json                # shadcn config (style: base-nova)
-├── PRD.md / SPEC.md / CLAUDE.md / AGENTS.md / PLAN.md   # 已有
-├── data/                          # gitignored,运行时生成
-├── e2e/                           # Playwright 测试
-├── public/
-└── src/
-    ├── app/
-    │   ├── layout.tsx             # 顶层:Sidebar + main + providers
-    │   ├── page.tsx               # 首页(快捷:跳到 projects)
-    │   ├── globals.css            # tailwind + shadcn 主题变量
-    │   ├── settings/
-    │   │   ├── layout.tsx
-    │   │   ├── page.tsx           # redirect to /settings/models
-    │   │   ├── models/page.tsx
-    │   │   ├── cdn/page.tsx
-    │   │   └── prompts/page.tsx
-    │   ├── projects/
-    │   │   ├── page.tsx           # 项目列表 + 新建
-    │   │   └── [pid]/
-    │   │       ├── layout.tsx     # 项目级面包屑
-    │   │       ├── page.tsx       # 项目详情(页面列表)
-    │   │       └── pages/[id]/
-    │   │           ├── page.tsx   # 页面详情(states + pipeline)
-    │   │           ├── elements/page.tsx   # Element Review
-    │   │           ├── assets/page.tsx     # Asset Review
-    │   │           └── export/page.tsx
-    │   └── api/
-    │       ├── config/route.ts
-    │       ├── config/test/route.ts
-    │       ├── projects/route.ts
-    │       ├── projects/[id]/route.ts
-    │       ├── projects/[id]/pages/route.ts
-    │       ├── pages/[id]/route.ts
-    │       ├── pages/[id]/states/route.ts
-    │       ├── pages/[id]/elements/route.ts
-    │       ├── pages/[id]/upload-all-assets/route.ts
-    │       ├── pages/[id]/export/route.ts
-    │       ├── states/[id]/route.ts
-    │       ├── states/[id]/pass1/route.ts
-    │       ├── states/[id]/pass2/route.ts
-    │       ├── states/[id]/validate/route.ts
-    │       ├── elements/[id]/re-extract/route.ts
-    │       ├── assets/[id]/upload/route.ts
-    │       └── pipeline-runs/[id]/route.ts
-    ├── middleware.ts              # CSRF gate
-    ├── components/
-    │   ├── ui/                    # shadcn components
-    │   ├── sidebar.tsx
-    │   ├── sticky-save-bar.tsx
-    │   ├── confirm-dialog.tsx
-    │   ├── settings/
-    │   │   ├── provider-card.tsx           # 通用 provider 卡(按 kind 切字段)
-    │   │   └── prompt-editor.tsx
-    │   ├── pipeline/
-    │   │   └── pipeline-stepper.tsx
-    │   ├── upload/
-    │   │   └── states-uploader.tsx
-    │   ├── element-review/
-    │   │   ├── canvas.tsx                  # bbox 叠加 + 拖拽
-    │   │   ├── element-list.tsx
-    │   │   └── element-detail-panel.tsx
-    │   └── asset-review/
-    │       ├── batch-png-viewer.tsx
-    │       ├── assets-grid.tsx
-    │       └── asset-detail-panel.tsx
-    ├── lib/
-    │   ├── fs-utils.ts            # writeAtomic
-    │   ├── run-lock.ts            # 同 state 互斥锁
-    │   ├── id.ts                  # nanoid wrappers
-    │   ├── config.ts              # AppConfig CRUD + maskKey/unmaskApiKeys
-    │   ├── llm-client.ts          # OpenAI/Anthropic dispatch + retry/timeout
-    │   ├── image-gen-client.ts    # GPT-image-2 image-edit 封装
-    │   ├── cdn-client.ts          # S3 兼容上传
-    │   ├── projects.ts            # CRUD + cascade delete
-    │   ├── pages.ts
-    │   ├── states.ts
-    │   ├── elements.ts
-    │   ├── assets.ts
-    │   ├── pipelines.ts           # PipelineRun CRUD
-    │   ├── pipeline-runner.ts     # Pass 1 / Pass 2 / validate orchestration
-    │   ├── slicer.ts              # connected component 切片
-    │   ├── alpha-clean.ts         # 边缘清理工具
-    │   ├── image-utils.ts         # sharp 封装(resize, encode, alpha 检测)
-    │   ├── exporter.ts            # 生成 Export 文件夹 / zip
-    │   ├── prompts/               # Pass 1/2/validate prompt 模板
-    │   │   ├── pass1.ts
-    │   │   ├── pass2.ts
-    │   │   └── validate.ts
-    │   ├── seeds/                 # 种子 prompt 模板,首启动写入 config.json
-    │   │   └── default-prompts.ts
-    │   └── types.ts               # 全局 TypeScript 类型
-    └── __tests__/                 # 单测,跟源码同目录或集中放
+├── data/                           ← gitignore;首启动自动创建
+│   └── (HANDOFF §11 完整布局)
+├── src/
+│   ├── app/
+│   │   ├── api/                    ← Phase 1-10 逐步加路由
+│   │   ├── layout.tsx              ← MUI ThemeProvider + AppRouterCacheProvider
+│   │   ├── page.tsx                ← 项目列表(Phase 2 起)
+│   │   ├── projects/[id]/page.tsx
+│   │   ├── projects/[id]/pages/[pageId]/page.tsx
+│   │   ├── projects/[id]/pages/[pageId]/states/[stateId]/element-review/page.tsx
+│   │   ├── projects/[id]/pages/[pageId]/states/[stateId]/asset-review/page.tsx
+│   │   ├── settings/providers/page.tsx
+│   │   └── settings/prompts/page.tsx
+│   ├── lib/                        ← HANDOFF §附录 B 文件清单一一对应
+│   ├── theme/index.ts              ← MUI MD3 主题 token
+│   ├── components/                 ← UI 组件,见 §14
+│   └── middleware.ts               ← CSRF gate
+└── public/
 ```
 
 ---
 
-## Phase 0:PoC 技术验证 ✅ 已完成 (v11 锁定 — 2026-05-13)
+## 3. Phase 1 — 骨架 + Provider 配置
 
-**结果摘要:** 11 轮 PoC 迭代,架构在 v11 锁定。详见 [`poc/V10-PLAN.md`](./poc/V10-PLAN.md)(短摘要)+ [`poc/EXPLORATION-HISTORY.md`](./poc/EXPLORATION-HISTORY.md)(完整历史)
+> **退出准则**:Test Connection 对 sankuai mllm + apimart image_gen + S3 cdn 都能 200。
 
-**最终架构(v11 锁定):**
+### 动作
 
-```
-[原图 1-N 张]
-   ↓
-[Pass 1: sankuai/gemini-3.1-pro-preview, temperature=1]
-  - api_format='sankuai',auth header 不带 Bearer
-  - 二分类 static/code,bbox 归一化 0-1,description 中文(同时是 Pass 2 prompt 渲染源)
-  - CJK 100% 准确(gpt-4o 多处误读)
-  - ~50s,$~0.02
-   ↓
-[用户 Element Review]
-   ↓
-[Pass 2: apimart/gpt-image-2-official, quality=high, resolution=1k, size=1:1]
-  - api_format='apimart',async task polling(initial 12s + 5s/次)
-  - prompt 会话式自然中文 + 绿幕 #00FF00 背景 + 自然语言数量明示清单
-  - 11/11 元素全画到,CJK 完美保留,风格高保真
-  - ~3min,$0.17
-   ↓
-[本地 chroma green key (lib/alpha-key.ts)]
-  - g_excess = G - max(R, B);> 60 全透 / < 25 全不透 / ramp + spill suppression
-  - 0 API,~1s
-  - 76.7% 透明 / 23.2% 不透明 / 0.2% 半透
-  - 元素内部白色 / 浅色 / 半透 / 玻璃质感全部保留(判别色是绿色,不抠穿)
-   ↓
-[scipy ndimage 切片 (lib/slicer.ts,移植自 ref/split_elements.py)]
-  - binary_dilation(iter=15) 桥接同元素内部小断裂 + connected component
-  - min_size=30 + min_opaque_pct=1% 二级过滤(剔除噪点)
-  - 11/11 元素一一对应,无碎片化无融合
-   ↓
-[用户 Asset Review → CDN 上传 → Export]
-```
+1. `pnpm create next-app` Next.js 15 + App Router + TS strict + ESLint(skip Tailwind)
+2. 装依赖:
+   ```
+   @mui/material @emotion/react @emotion/styled
+   @mui/material-nextjs/v15-appRouter   # SSR cache
+   @mui/icons-material
+   sonner
+   sharp
+   nanoid
+   @aws-sdk/client-s3
+   ```
+3. `src/lib/types.ts`(HANDOFF §3 全部类型,逐字)、`fs-utils.ts`(`writeAtomic`)、`run-lock.ts`(内存 Map)、`id.ts`(`nanoid` 包装)、`mask.ts`(maskKey + unmaskApiKeys)、`config.ts`(AppConfig 读写)
+4. `src/lib/llm-client.ts`:
+   - `callMllm` 三种 `api_format` 分发(openai / anthropic / sankuai),Bearer / x-api-key / raw token
+   - `callImageGen` 同步(openai)+ 异步(apimart)两条路径,异步含 12s initial delay + 5s interval + 60 max attempts + UA header
+   - 3 次 exp backoff(1s/4s/9s),只在 5xx/429 上重试
+5. `src/lib/seeds/default-providers.ts`(HANDOFF §12 5 个 provider seed 逐字)+ `default-prompts.ts`(4 份 prompt 逐字)
+6. `src/lib/visual-category.ts`(枚举 + DEFINITION_EN + EXAMPLES_CN + PRIORITY,HANDOFF 附录 A 逐字)
+7. `src/middleware.ts` CSRF gate(`Sec-Fetch-Site === 'same-origin'` 才放行 `/api/*`)
+8. `src/app/api/config/route.ts`(GET / PUT)+ `src/app/api/config/test/route.ts`(POST):mllm 5-token ping / image_gen 单像素生成 / cdn HeadBucket
+9. UI:`/settings/providers`(MUI Card 列每个 provider,可改 base_url / api_key / model;有 Test Connection 按钮)— **首个 UI,作为 MUI 风格的奠基**
+10. 启动时检测 `data/config.json` 不存在 → 写入 default seed
 
-**v1-v10 → v11 演化(可作为反面案例,记录在 CLAUDE.md 反直觉强约束):**
+### 关键陷阱
 
-| 维度 | 早期(错的) | v11(对的) |
+- `api_format='sankuai'` auth header **不带** `Bearer` 前缀(HANDOFF §7.1)
+- `unmaskApiKeys` 必须在 PUT handler 里跑(HANDOFF §7.5)。漏掉会把 key 变成字符串 `sk-***xxxx`,不可逆
+
+---
+
+## 4. Phase 2 — Project / Page / State CRUD + 上传
+
+> **退出准则**:能新建项目→新建页面→上传 1 张设计稿→列表 / 详情看到缩略图;删项目级联删干净。
+
+### 动作
+
+1. `src/lib/projects.ts` / `pages.ts` / `states.ts` / `pipelines.ts`:文件读写 + 校验
+2. `src/lib/thumbnails.ts`:`sharp(buf).resize(256, 256, { fit: 'cover' }).png()` 落盘 `data/thumbs/{id}.png`
+3. API:HANDOFF §4.2 全部端点。**新增约束**:`POST /api/pages/[id]/states` 检查该 page 已有 state 时返回 409(MVP S1)
+4. `/api/thumbs/[id]` route:严格 ID 正则 `^[a-zA-Z0-9_-]{1,32}$`,Cache-Control: max-age=86400
+5. UI:
+   - `/`(项目列表):MUI Grid + Card,缩略图 / 项目名 / 创建时间 / FAB 新建
+   - `/projects/[id]`:页面列表(同上)+ FAB 新建页面
+   - `/projects/[id]/pages/[pageId]`:**单图上传区**(原生 input + drag,multipart,只接受 1 张 PNG);上传后立即创建 state 并设为该 page 的 `canonical_state_id`;state 已存在时上传按钮变"重新上传"(替换)
+
+### 关键陷阱
+
+- 缩略图生成失败不阻断 state 创建(`console.error` 即可,HANDOFF §4.2)
+- `state.pipeline_status` 创建时 `'idle'`(HANDOFF §3.2 状态机)
+- MVP S1:多 state 接口保留(后端不动),仅 UI 层把"新增第 2 个 state"按钮藏掉
+
+---
+
+## 5. Phase 3 — Pass 1 单路调用(打通 mllm 链路)
+
+> **退出准则**:上传一张设计稿,触发 pass1,**5-15 个** subject 元素的 bbox + description 落盘到 `data/elements/{page-id}.json`;失败时 PipelineRun 留底完整。
+
+### 动作
+
+1. `src/lib/pass1-runner.ts`:**只跑 1 路**(`category='subject'`),走通 prompt 渲染 → callMllm → 解析 JSON → 写 Element[]
+2. `src/lib/prompts/render-pass1-route.ts`:模板拼接(over-include 头部 + base prompt),HANDOFF §5.3.2 逐字
+3. 解析后处理流水线(顺序固定):
+   - `stripMarkdownJsonFence`:剥 ` ```json ... ``` ` fence(HANDOFF §5.4)
+   - `normalizeBboxes`:任一分量 > 1.5 视为像素坐标,按 state.{w,h} 归一化(HANDOFF §5.4)
+   - `clampBbox01`:保 `x+w ≤ 1` / `y+h ≤ 1`
+   - **`filterTinyElements`**(MVP S2):`bbox.w * bbox.h < 0.001` 的元素丢弃。被过滤的 element 完整保留到 `PipelineRun.parsed_result.filtered_tiny[]`,**不**进 `data/elements/{page-id}.json`
+4. `src/lib/elements.ts`:整文件原子覆写
+5. `src/lib/pipelines.ts`:PipelineRun 持久化,`llm_request` / `llm_response` 完整留底
+6. API:`POST /api/states/[id]/pass1` + `GET /api/pipeline-runs/[id]`(2s 轮询)
+7. UI:state 详情页加"运行 Pass 1"按钮 + 状态指示(idle / pass1_running / pass1_done)+ PipelineRun 进度展示
+
+### 关键陷阱
+
+- gemini 偶尔包 ` ```json ... ``` ` fence,务必 strip
+- `max_tokens: 32000`,**不**是 12000(HANDOFF §5.4 实测教训)
+- `extra_body.google.thinking_config` 透传到 body,call layer 不解释
+
+---
+
+## 6. Phase 4 — Pass 1 5 路并行 + 合并
+
+> **退出准则**:同一张设计稿,5 路并行后 Element 总数 > Phase 3 单路;肉眼无重复(IoU 合并生效)。故意把 sankuai key 改坏 1 路 → 其他 4 路成功,pass1 仍 done。
+
+### 动作
+
+1. `pass1-runner.ts` 改造为 `Promise.allSettled` 5 路 sub-runs(subject / button / container / background / decoration);每路独立 PipelineRun(`pass: 'pass1_${category}'`),总 audit run `pass: 'pass1'` 记 `successful_routes` / `failed_routes`
+2. `src/lib/bbox-iou.ts`(HANDOFF §5.2 公式逐字)
+3. `src/lib/pass1-route-merger.ts`:两两 IoU > 0.5 → 同一物理元素;冲突按优先级取胜出 category;`element.pass1_routes_seen[]` 累计 debug
+4. **跨 state 合并跳过**(MVP S1:单 state per page,无需对齐)。HANDOFF §5.5 这块代码不写
+5. `< 3/5` 路成功 → 整个 pass1 status='failed' 抛 PASS1_ERROR
+6. Element Review UI 加折叠区"已过滤的小元素 (N)",展开后用户可单点"恢复"把某个被 filterTinyElements 丢的 element 加回 Element[]
+
+### 关键陷阱
+
+- **OVER-INCLUDE 措辞硬约束**(HANDOFF §5.3.2 表格)。违反必回归到 v12 PoC #2 之前 69% 召回率
+- 5 路用同一个 active mllm provider,不要拆 provider
+- `bbox` 必须满足 `x+w ≤ 1` / `y+h ≤ 1`;prompt 已约束,但 mllm 偶尔违反 — `clamp01` + `normalizeBboxes` 兜底
+
+---
+
+## 7. Phase 5 — Pass 2 单 category 调用(打通 image_gen 链路)
+
+> **退出准则**:Pass 2 输出 `data/pass2/{state}-{cat}.png` 是 #00FF00 绿幕 + 元素分散;chroma key 后 `data/keyed/...` 内部白色保留;slicer 切出 N 个 PNG,Asset Review 列表显示。
+
+### 动作
+
+1. `src/lib/bbox-crop.ts`:`cropFromBbox(rawBuf, bbox)` 用 sharp `extract`,归一化坐标 → 像素坐标
+2. `src/lib/pass2-runner.ts`(简版):**所有 type=static 元素扔一路**,不分 category;**单参考图**(只传原图)
+3. `src/lib/prompts/render-pass2-route.ts`:HANDOFF §6.3.1 模板逐字;`renderElementSummary` 按 name 分组(HANDOFF §6.3.2)
+4. `src/lib/alpha-key.ts`:chroma green key(HANDOFF §8.1 完整);测试:绿幕 PNG → 透明 PNG
+5. `src/lib/slicer.ts`:**移植 `archive/ref/split_elements.py`**,逐函数对照:
+   - alpha mask: `alpha > 10`
+   - `binary_dilation`(3×3 8-connectivity 结构元,~30 行 JS)
+   - `connected_component_label`(two-pass union-find,~50 行)
+   - bbox + padding + min_size + min_opaque_pct 过滤
+   - **不引** OpenCV / scipy
+6. API:`POST /api/states/[id]/pass2`、`GET /api/states/[id]/slices/...`
+7. UI:state 详情页"运行 Pass 2"按钮(前置 pass1_done && 所有 element.reviewed),完成后跳 Asset Review
+
+### 关键陷阱
+
+- §6.3.2 prompt 措辞硬约束:**严禁** `pixel-faithfully` / `MUST` / 直接出 transparent / 塞 entity_name+JSON
+- §13.6:**严禁**让 model 出 transparent / 白底 — 必须绿幕
+- §13.2:**不**要求保持原坐标 — prompt 必须明示"元素之间留出至少一整个元素宽度的空隙"
+- slicer **从原 RGBA buffer crop**,不从 dilated mask crop
+
+---
+
+## 8. Phase 6 — Pass 2 多参考图 + 按 category 分组并行
+
+> **退出准则**:Element Review 拖框改 bbox → 重跑 Pass 2 → **该 element 的 crop 复刻新位置**(image-edit 按新 crop 工作,不 regenerate)。故意 button 路 timeout(改 max_attempts=2)→ 其他 5 路完成,button 路 elements 全标 failed,UI 提示重抠。
+
+### 动作
+
+1. `pass2-runner.ts` 改造:按 `visual_category` 分组,`Promise.allSettled` 6 路;每路独立 sub-run
+2. 每路传多参考图 `[原图, ...el_crops]`(HANDOFF §6.2);prompt 用「参考图 #N」编号引用,**不**用 entity_name
+3. `image_urls` 数组:index 0 = 主图,1..N = 各 element 的 crop;`callImageGen({ reference_image_base64, reference_image_base64s })` 喂入
+4. **部分失败容忍**(HANDOFF §6.1):单路失败 → 该路 elements 标 `asset.status='failed'`,其他路正常 → 总 run 仍 completed
+5. 单 element crop 失败(NaN bbox / 0 面积)→ 跳过该 element 不阻断该路;若该路所有 element crop 都坏 → fail 该路 sub-run(不抛出)
+6. `re_extract` 单元素重抠用 1-shot 单图模板(`DEFAULT_PASS2_EXTRACT`),`/api/elements/[id]/re-extract`
+
+### 关键陷阱
+
+- `category_cn` 映射(§6.3.1)必须用 — 中文 prompt 自然度对模型表现影响显著
+- `pageDescription` 取 `project.description ?? page.name`
+- 6 路是否都跑取决于该 state 有没有该 category 的 type=static 元素 — 没有的 category 跳过(不调 image_gen)
+
+---
+
+## 9. Phase 7 — 切片产物落盘 + 用户全手动指派 + 手动 crop(MVP S3)
+
+> **退出准则**:Pass 2 完成后所有 element 处于"无 asset"状态;Asset Review 左 grid 显示该 page 全部切片缩略图,用户拖切片到右侧 element 卡片完成指派;指派后 asset 立即落 `data/assets-bin/{element-id}.png`,卡片刷新预览;遇到"两个 element 被合并到一张切片"的 case,用户能在切片上手动画框再切。
+
+### 与 HANDOFF §6.7 / PR #25 的偏离
+
+HANDOFF 设计了 SliceManifest 中间层 + 默认 (y, x) 自动指派 + 「换切图」改派。MVP **去掉自动指派、去掉 manifest 文件**,走全手动 + **加手动 crop 工具**:
+
+| 项 | HANDOFF §6.7 | MVP S3 |
 |---|---|---|
-| Pass 2 通道 | backup `gpt-image-2`(v1-v7) | **`gpt-image-2-official`** + `quality:high`(backup 字形漂移) |
-| Pass 2 prompt 措辞 | hard rules / TRUST SOURCE / pixel-faithfully(v2) | **会话式自然中文**(激进措辞触发模型 regenerate) |
-| Pass 2 prompt 字段 | entity_name / bbox / JSON(v1/v3) | **删,只用 description 渲染 element_summary** |
-| Pass 2 背景 | transparent(v7-v10) → 白底(v8-v10) | **绿幕 #00FF00**(transparent 漏画;白底抠穿元素白色) |
-| 抠图判别色 | 白色(v6-v10) | **绿色 #00FF00**(白色抠穿 chip 白底 / 娃娃白发,**结构性死路**) |
-| 抠图依赖 | white-threshold + segmenter v1 fallback | **本地 chroma green key,0 API,无 fallback**(segmenter kind 已删除) |
-| 切片算法 | PIL 矩形 crop(v6-v9) → BFS(v3-v9) | **scipy `binary_dilation` + `ndimage.label`**(矩形 crop 异形元素留空隙;BFS 不能桥接断裂) |
-| 元素覆盖完整性 | Pass 2 偶尔漏画(v9-v10) | **prompt 末尾自然语言数量明示**「共 N 个,记得每个都画到」 |
+| 切片落盘 | `data/slices/{state}-{cat}/{idx}.png` + manifest.json | 同左,**无 manifest** |
+| Pass 2 完成后 | 默认 (y, x) 指派 → 自动生成 N 个 Asset | **不创建 Asset**,全部 element 状态 `no_asset` |
+| 指派关系存哪 | 独立 SliceManifest | Asset 自身 `slice_source: { state_id, category, idx }`,反查"该 (s,c,i) 当前哪些 asset 引用"扫一遍 assets 即可 |
+| Asset Review UI | 卡片自动配 asset,不满意点「换切图」 | 左切片 grid + 右 element 列表,拖拽 / 点选指派 |
+| **多 element 被合并切片** | 无解,只能重跑 Pass 2 碰运气 | **新增手动 crop**:用户在切片大图上画框,后端按框再切,新切片追加到该 category(原切片保留) |
+| 重抠路径 | 新切片自动替换旧 asset | 单元素重抠产物只 1 张,无歧义,自动指派给该 element |
 
-**关键产物(Phase 4/5 实施时直接复用):**
-- `poc/inputs/canonical-512.png` — 测试图(奶茶盲盒抽中页)
-- `poc/prompts/pass1-system-v9b.txt` — Pass 1 prompt(归一化 bbox 强化版)
-- **`outputs/v11-green.png`** — Pass 2 终版输出范例(绿幕 + 11 元素)
-- **`outputs/v11-keyed.png`** — chroma key 后透明 PNG 范例
-- **`outputs/v11-elements/element_001..011.png`** — 11 块完美切片范例
-- `ref/split_elements.py` — scipy 切片 reference impl(直接移植到 `src/lib/slicer.ts`)
-- `outputs/v9b-pass1.json` — Pass 1 输出范例(36 元素,归一化 bbox)
+### 动作
 
-**对后续 Phase 影响(已同步到 PRD/SPEC/CLAUDE):**
-1. CLAUDE.md 反直觉强约束 §6 §7 重写(绿幕 chroma key + 数量明示 + 否决 white-threshold + 删 segmenter fallback)
-2. SPEC.md Pass 2 prompt 模板重写(`element_summary` 渲染规则 + 自然语言数量明示)
-3. SPEC.md 抠图章节 `whiteThresholdKey → chromaGreenKey`,加 spill suppression
-4. SPEC.md 切片章节 BFS → scipy ndimage,加 `min_opaque_pct: 1%` 二级过滤
-5. SPEC.md `ProviderKind` 删 `'segmenter'`,`Element` 删 `extraction_prompt` 字段(用 `description` 渲染)
-6. SPEC.md Default seed 模型名 `gpt-image-2 → gpt-image-2-official`,加 `default_quality: 'high'`
-7. PRD.md MVP-α 阶段描述同步,Asset Review 加「Edge clean」「Adjust chroma threshold」按钮
+1. `src/lib/slices.ts`(精简版):
+   - `writeSlice(stateId, category, idx, buffer)` → `data/slices/{state}-{cat}/{idx}.png`
+   - `listSlices(stateId)` 扫目录返回所有 `{ state_id, category, idx, path, w, h, opaque_pct }`(opaque_pct 切片时算好缓存到 sidecar `{idx}.json`)
+   - `nextSliceIdx(stateId, category)`:扫目录返回下一个可用 idx(支持 crop / 重抠追加切片)
+   - `getSliceImage(stateId, category, idx)` 读 buffer
+   - `assignSliceToElement(elementId, sliceSource)`:
+     1. copy slice PNG → `data/assets-bin/{element_id}.png`
+     2. `createOrUpdateAsset(elementId, { slice_source, status: 'extracted', width, height, alpha_quality })`
+     3. **不**清同 idx 的其他 asset(MVP S3 允许一切片指派给多 element,copy 多次)
+   - `unassignAsset(elementId)`:删 assets-bin 文件 + 删 Asset(用户拖走指派想"清空"时用)
+   - **`subCropSlice(stateId, category, idx, rects)`**(新):对原切片 PNG 按用户给的多个像素 bbox 各 crop 出一张子图 → 用 `nextSliceIdx` 依次追加写入。原切片**不动**(保留)。返回新切片 metadata 列表
+2. `pass2-runner.runRoute` 改造:chroma key + slice → **只**走 `writeSlice`,**不**调 `createOrUpdateAsset`
+3. **Asset 数据模型扩展**:`Asset` 加 `slice_source?: { state_id: string, category: VisualCategory, idx: number }` 字段
+4. API:
+   - `GET /api/states/[id]/slices` → `{ slices: SliceInfo[] }`
+   - `GET /api/states/[id]/slices/[category]/[idx]` → 直接返回切片 PNG
+   - `POST /api/elements/[id]/assign-slice` body `{ state_id, category, idx }` → `{ asset: Asset }`
+   - `DELETE /api/elements/[id]/asset` → 204(撤销指派)
+   - **`POST /api/states/[id]/slices/[category]/[idx]/sub-crop`**(新)body `{ rects: Array<{ x: number, y: number, w: number, h: number }> }` (像素坐标,相对原切片图)→ `{ created: SliceInfo[] }`
+5. UI: Asset Review 大改,切片缩略图 hover 显示「✂ 切」入口 → 全屏 dialog 上画框确认。详见 §17.6 草图
+
+### 关键陷阱
+
+- 一切片指派给多 element(用户场景:同一切片是两个相似 element 的源)→ copy 多次,各自独立 Asset。指派时**不**冲突检查
+- 切片 PNG **永不删**(用户可能拖错想换回去,sub-crop 后也想看原图对比)。仅在该 state 整个被删时清目录
+- Asset 反查"未指派的切片":`listSlices(stateId)` ∩ NOT EXISTS `assets.slice_source`。无须独立 manifest
+- 单元素重抠:`/api/elements/[id]/re-extract` 完成后,单切片产物自动调 `assignSliceToElement` 指派给该 element(无歧义,例外条款)
+- sub-crop 的 rects **不要**做服务端"自动检测连通域再切" — 用户场景就是 chroma 切错合并的 case,自动检测多半没用,直接用用户给的框
+- sub-crop 后的新切片是普通切片,可再次 sub-crop(允许"切了再切")
 
 ---
 
-## Phase 1:项目骨架
+## 10. Phase 8 — 反向校验 + Asset Review 单元素重抠
 
-**目的:** 把 Next.js + shadcn + 文件存储 + Sidebar + 顶层 layout 搭好,跑得动
+> **退出准则**:故意把某 element 的 keyed 区域涂个绿点 → validate 标 contamination=true → UI 警告。重抠后 asset 替换成功,validate 重跑警告消失。
 
-**实施级子 plan**:[`docs/plans/phase-1-bootstrap.md`](./docs/plans/phase-1-bootstrap.md)(完整 checkbox / 代码片段 / 验证步骤 / 风险预警,**实施时按子 plan 走**)
+### 动作
 
-**Files:** 见上文 File Structure,Phase 1 重点是 `src/app/layout.tsx` / `src/app/page.tsx` / `src/components/sidebar.tsx` / `src/middleware.ts` / `src/lib/{fs-utils, id, types, run-lock, config}.ts` / shadcn 初始化
+1. `src/lib/prompts/render-validate.ts`:HANDOFF §6.4 prompt 拼装(canonical_image + keyed_png + elements_json)
+2. `validate` API `/api/states/[id]/validate`(HANDOFF §4.3)
+3. 解析 → `alpha_quality` / `complete` / `style_match` / `contamination` / `notes` 写入 Asset
+4. UI:Asset Review 卡显示质量警告 chip(complete=false → 红;contamination=true → 黄;alpha_quality < 0.7 → 黄)
+5. 「重抠」按钮 → POST `/api/elements/[id]/re-extract` → 走 1-shot 单图 prompt
 
-### Task 1.1:Next.js + TypeScript + shadcn 初始化
+### 关键陷阱
 
-- [ ] **Step 1: `npx create-next-app@latest`**
+- §6.4:**反向校验不阻断**,仅给提示。即使全员校验失败,用户仍可上传 CDN(用户主权 > LLM 判断)
+- 唯一阻断的是 `status='failed'`(Pass 2 没产出)
 
-```bash
-cd /Users/lijiakun/Documents/img2UI
-npx create-next-app@latest . \
-  --typescript --tailwind --app --no-src-dir --import-alias "@/*" \
-  --eslint --use-npm
-# 选 src/ directory: Yes,移除上面的 --no-src-dir
+---
+
+## 11. Phase 9 — 抠图 API fallback(可选,HANDOFF §7.7 / PR #26)
+
+> **抠图对象 = Pass 2 输出的整张元素拆分图**(`data/pass2/{state}-{cat}.png`,绿幕 #00FF00 背景 + 多元素分散排布的那张)。**不重发** image_gen,直接复用绿幕底片走 koukoutu API 重抠 → 透明 PNG → 重切片。
+>
+> **退出准则**:本地 chroma key 边缘有微弱半透残留的 case → 点「用 API 抠图」→ 干净。停 koukoutu(改 base_url)→ 全失败抛错,旧 chroma 结果保留(asset 不动)。
+
+### 数据流(显式)
+
+```
+触发: 用户在 Asset Review 点「🩹 用 API 抠图」(state-level 全局按钮)
+  │
+  ├─ 找 active matting provider (kind=matting)
+  ├─ listPass2GreenScreens(stateId) → [{category, buffer}, ...]    ← 复用 data/pass2/{state}-{cat}.png
+  │     注意: 这是 Pass 2 阶段输出的整张多元素拆分图,不是单 element crop
+  ├─ for each category:
+  │     transparent = await callMatting(provider, { png: buffer })
+  │     overwrite data/keyed/{state}-{cat}.png ← 覆盖原 chroma key 结果
+  │     reSliceAndAssign(stateId, category, transparent)
+  │       ├─ writeSlice 把新切片落盘(用 nextSliceIdx 追加,不覆盖旧切片)
+  │       └─ 旧切片保留(用户可能想对比/退回)
+  └─ 部分失败容忍 → 该 category 保留旧 chroma 切片不动
 ```
 
-实际命令 yes 选项:`--src-dir`(把代码放 src/)
+**关键**:抠图对象是 Pass 2 留底的**整张图**(包含该 category 全部元素的绿幕图),不是逐元素抠。一次 koukoutu 调用搞定一路,N 路就 N 次调用。
 
-- [ ] **Step 2: 升级 TypeScript 配置**
+### 动作
 
-`tsconfig.json` 加上:
+1. `src/lib/matting-client.ts`:`callMatting(provider, { png })` koukoutu sync API,multipart/form-data,60s timeout,区分 JSON 错误 vs PNG bytes
+2. `default-providers.ts` 加 `kind='matting'` seed
+3. `/api/states/[id]/re-key-via-api`:复用 `data/pass2/{state}-{cat}.png` → 逐 category 调 callMatting → 覆写 keyed + 重切片(走 §9 `writeSlice` 追加,旧切片保留)
+4. **state-level lock 复用 Pass 2 同一把锁**
+5. UI:Asset Review 全局「用 API 抠图」按钮(state 级,见 §17.6);执行结果 toast(全成 / 部分成功 / 全失败)。新切片在切片库里追加显示,用户可主动指派替换
 
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noFallthroughCasesInSwitch": true
-  }
-}
+### 关键陷阱
+
+- §13.7:**严守边界** — pipeline runner **不**要 import matting client;只有 `re-key-via-api` 路由 import
+- `pingMatting` 不实现(koukoutu 没免费 ping endpoint),Settings UI 提示"请到 Asset Review 实测"
+
+---
+
+## 12. Phase 10 — CDN + Export
+
+> **退出准则**:export 文件夹丢给 Claude Code,基于 spec.md + assets 写出贴合代码;manifest.json cdn_url 正确,未上传 asset cdn_url=null,coding agent 用本地 fallback。
+
+### 动作
+
+1. `src/lib/cdn-client.ts`:S3 包装(@aws-sdk/client-s3),`uploadAsset(asset, project_id, page_id)` → key `${project_id}/${page_id}/${asset.id}.png`
+2. API:`POST /api/assets/[id]/upload`、`POST /api/pages/[id]/upload-all-assets`
+3. `src/lib/exporter.ts`:HANDOFF §10 文件结构生成(folder + 可选 zip stream)
+4. `spec.md` 渲染:HANDOFF §10.6 模板(元素表格 + 状态 diff + coding_agent_intro)
+5. UI:page 详情页加「导出」按钮 → 选目录(填路径)/ 下载 zip
+6. 同步上传 → asset.cdn_url + status='uploaded'
+
+---
+
+## 13. CLAUDE.md(Phase 1 创建,作为后续 session 的工作约束)
+
+```md
+# img2UI CLAUDE.md
+
+## 工作准则
+- HANDOFF.md(在 ../img2UI-archive/HANDOFF.md)是产品契约。§13 反直觉硬约束 + §5.3.1 / §6.3.1 / §6.3.2 / §6.4 prompt 模板 + 附录 A category 定义都是逐字照抄,不要"觉得更合理"地改写
+- **MVP 简化决策见 PLAN §0.4**(单 state per page / 小元素过滤 / 切片全手动指派),与 HANDOFF 不一致以 PLAN §0.4 为准
+- TS strict;不引额外抽象层(无 DI / repository / event bus);Route Handler 直接调 lib 函数
+- 不引 Tailwind;UI 用 **MUI v6 + Emotion**;主题在 src/theme/index.ts 一处管理;主色 `#0d99ff`(Figma 蓝),其他 MD3 token(大圆角 16 / ripple / elevation 1→3)保留
+- 文件 IO 都走 writeAtomic;并发用 src/lib/run-lock.ts 内存锁
+- 不要在 pipeline runner / pass2-runner 里 import matting-client;只有 re-key-via-api 路由 import(§13.7)
+- 看到 Pass 1 prompt 出现 EXCLUSIVE 措辞(`Return ONLY` / `Do NOT return others`)立即回滚(§13.8)
+- Pass 2 完成 **不**创建 Asset(MVP S3),只 writeSlice;Asset 是用户在 Asset Review 拖切片到 element 时产生的
+- apimart `quality` **全程 `'high'`**,不退到 medium
+
+## 实测收敛参数(不许动)
+- mllm: gemini-3.1-pro-preview / temperature=1 / max_tokens=32000 / thinking_budget=4096 / api_format=sankuai 无 Bearer
+- image_gen: gpt-image-2-official(不是 backup gpt-image-2)/ quality=high / poll_max_attempts=60 / poll_initial_delay=12s
+- chroma: full_alpha=60 / full_opaque=25 / spill suppression on
+- slicer: gap=15 / padding=5 / min_size=30 / min_opaque_pct=1.0
+- Pass 1 合并: IoU > 0.5,优先级 subject<button<container<background<decoration<other,≥3/5 才 done
+
+## 不要做的事
+- 不复用 archive/src/lib 任何代码
+- 不重复 "三选一" 决策(已在 PLAN §1 定:MUI v6)
+- 不引 OpenCV / scipy(slicer 自实现)
+- 不在 PoC 评估时只看统计指标(必看 keyed/{state}-{cat}.png 实际像素质量)
 ```
 
-- [ ] **Step 3: 安装 shadcn**
+---
 
-```bash
-npx shadcn@latest init -d -s base-nova -c neutral
-npx shadcn@latest add button input label card badge dialog tabs select slider separator checkbox progress sonner textarea
-```
+## 14. UI 设计草案(Material Design 3,MUI v6)
 
-- [ ] **Step 4: 安装运行时依赖**
+### 14.1 整体布局
 
-```bash
-npm install nanoid sharp lucide-react @aws-sdk/client-s3 openai
-npm install --save-dev vitest @types/node
-```
+- **Top App Bar**(MUI `<AppBar>`):左 logo "img2UI" / 面包屑(Project › Page › State)/ 右 Settings 入口
+- **Side Navigation**:仅在项目内部页面显示,展示当前项目的 page 树(可折叠);state 子节点显示 pipeline_status 颜色 chip
+- **Main content**:RWD 三档(< 600 / 600-1240 / > 1240),`<Container maxWidth="xl">`
+- **FAB**:列表页右下,新建项目 / 新建页面 / 上传
 
-- [ ] **Step 5: Commit**
+### 14.2 关键页面
 
-```bash
-git add .
-git commit -m "chore: 初始化 Next.js 16 + shadcn v4 + 关键依赖"
-```
+| 页面 | 核心组件 | 视觉重点 |
+|---|---|---|
+| `/` 项目列表 | `<Card>` Grid + `<Skeleton>` loading + 缩略图 | MD3 大圆角(16px)、elevation 1 → hover elevation 3 |
+| `/projects/[id]/pages/[pageId]` | **单图上传** dropzone(`<Paper variant="outlined">` dashed) + 已上传时显示原图缩略 + Pipeline 状态卡 | 状态 chip:idle 灰 / running primary + spin / done success / failed error |
+| Element Review | bbox 叠加层(canvas)+ 右侧 element 表格 + 折叠"已过滤的小元素 (N)" | 拖拽改 bbox 用 react-rnd;选中卡片高亮 |
+| Asset Review(MVP S3 全手动) | 左:切片 grid(按 category 分组,缩略图带 opaque_pct);右:element 列表(每行显示 description + 已指派 asset 预览或"未指派"占位) | 拖切片到 element 行 → 指派;再次拖另一切片 → 替换;指派后 chip 显示 alpha_quality / contamination 警告 |
+| Settings/Providers | `<Accordion>` 每 provider 一栏 | active provider `<Badge color="primary">` |
 
-### Task 1.2:核心 lib 模块——`fs-utils` / `id` / `types`
-
-- [ ] **Step 1: 写 `src/lib/fs-utils.ts`**
+### 14.3 Theme token(`src/theme/index.ts`)
 
 ```ts
-import { promises as fs } from 'node:fs'
-import path from 'node:path'
-import { nanoid } from 'nanoid'
-
-export async function writeAtomic(filepath: string, content: string | Buffer): Promise<void> {
-  const dir = path.dirname(filepath)
-  await fs.mkdir(dir, { recursive: true })
-  const tmp = `${filepath}.tmp.${nanoid(8)}`
-  await fs.writeFile(tmp, content)
-  await fs.rename(tmp, filepath)
+// 主色 = Figma 蓝(替换 MD3 baseline 紫),其他 MD3 token 保留
+// 用 Material Theme Builder 喂 #0d99ff 生成完整 12-token palette
+palette: {
+  primary:   { main: '#0d99ff' },           // Figma blue
+  secondary: { main: '#5e6b7a' },           // 中性灰蓝(MD3 风,从主色派生)
+  // 状态色保留 MUI 默认(success/warning/error/info)
 }
-
-export async function readJson<T>(filepath: string): Promise<T | null> {
-  try {
-    const content = await fs.readFile(filepath, 'utf8')
-    return JSON.parse(content) as T
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw e
-  }
+shape: { borderRadius: 16 }                 // MD3 大圆角,Card 默认
+typography: {
+  fontFamily: '"Roboto", "PingFang SC", "Microsoft YaHei", sans-serif',
+  // MD3 type scale: display/headline/title/body/label
 }
-
-export async function writeJson<T>(filepath: string, data: T): Promise<void> {
-  await writeAtomic(filepath, JSON.stringify(data, null, 2))
-}
-
-export async function listJsonInDir<T>(dir: string): Promise<T[]> {
-  try {
-    const files = await fs.readdir(dir)
-    const results: T[] = []
-    for (const f of files) {
-      if (f.endsWith('.json')) {
-        const j = await readJson<T>(path.join(dir, f))
-        if (j) results.push(j)
-      }
-    }
-    return results
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw e
-  }
-}
-
-export const DATA_ROOT = path.join(process.cwd(), 'data')
-```
-
-- [ ] **Step 2: 写 `src/lib/id.ts`**
-
-```ts
-import { customAlphabet } from 'nanoid'
-
-const alpha = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-export const nid6 = customAlphabet(alpha, 6)
-export const nid8 = customAlphabet(alpha, 8)
-export const nid12 = customAlphabet(alpha, 12)
-
-export const newProviderId = () => `prv_${nid6()}`
-export const newProjectId = () => `proj_${nid8()}`
-export const newPageId = () => `page_${nid8()}`
-export const newStateId = () => `state_${nid8()}`
-export const newElementId = () => `el_${nid8()}`
-export const newAssetId = () => `asset_${nid8()}`
-export const newRunId = () => `run_${nid8()}`
-```
-
-- [ ] **Step 3: 写 `src/lib/types.ts`**
-
-把 SPEC.md § 数据 schema 中的所有 TypeScript 类型导出。略——见 [SPEC.md](./SPEC.md)。**重要:必须跟 SPEC 完全一致,文档同步规则见 [AGENTS.md § 8]**
-
-- [ ] **Step 4: 写最小单测 `src/lib/__tests__/fs-utils.test.ts`**
-
-```ts
-import { describe, it, expect } from 'vitest'
-import { writeAtomic, readJson, writeJson, DATA_ROOT } from '../fs-utils'
-import path from 'node:path'
-import { promises as fs } from 'node:fs'
-
-describe('fs-utils', () => {
-  it('writeJson + readJson roundtrip', async () => {
-    const tmp = path.join(DATA_ROOT, '_test', 'roundtrip.json')
-    await writeJson(tmp, { hello: 'world' })
-    const back = await readJson<{ hello: string }>(tmp)
-    expect(back?.hello).toBe('world')
-    await fs.rm(path.dirname(tmp), { recursive: true })
-  })
-
-  it('readJson returns null on missing file', async () => {
-    const back = await readJson(path.join(DATA_ROOT, '_test', 'nope.json'))
-    expect(back).toBeNull()
-  })
-})
-```
-
-- [ ] **Step 5: 配置 vitest**
-
-写 `vitest.config.ts`:
-
-```ts
-import { defineConfig } from 'vitest/config'
-export default defineConfig({
-  test: {
-    include: ['src/**/__tests__/**/*.test.ts'],
-    environment: 'node',
-  },
-})
-```
-
-加 `package.json` script: `"test": "vitest run"`
-
-- [ ] **Step 6: 跑测试 + commit**
-
-```bash
-npm test
-# Expected: 2 tests pass
-
-git add .
-git commit -m "feat(lib): fs-utils + id + types 基础模块"
-```
-
-### Task 1.3:CSRF middleware
-
-- [ ] **Step 1: 写 `src/middleware.ts`**
-
-```ts
-import { NextRequest, NextResponse } from 'next/server'
-
-export function middleware(req: NextRequest) {
-  // 只对 /api/* 应用 CSRF gate
-  if (!req.nextUrl.pathname.startsWith('/api/')) return NextResponse.next()
-  // GET / HEAD 是安全的
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return NextResponse.next()
-  // 检查 Sec-Fetch-Site:same-origin / same-site / none(直接打开)允许;cross-site 拒绝
-  const site = req.headers.get('sec-fetch-site')
-  if (site === 'cross-site') {
-    return new NextResponse('CSRF blocked', { status: 403 })
-  }
-  return NextResponse.next()
-}
-
-export const config = { matcher: '/api/:path*' }
-```
-
-- [ ] **Step 2: Commit**
-
-```bash
-git add src/middleware.ts
-git commit -m "feat(security): CSRF gate via Sec-Fetch-Site,localhost-only"
-```
-
-### Task 1.4:顶层 layout + Sidebar
-
-- [ ] **Step 1: 写 `src/components/sidebar.tsx`**
-
-```tsx
-'use client'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Folder, Settings, Image as ImageIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
-
-const NAV = [
-  { href: '/projects', label: '项目', icon: Folder },
-  { href: '/settings', label: '设置', icon: Settings },
-]
-
-export function Sidebar() {
-  const pathname = usePathname()
-  return (
-    <aside className="w-52 shrink-0 border-r bg-muted/20 flex flex-col">
-      <div className="px-4 py-4 border-b flex items-center gap-2">
-        <ImageIcon className="size-5" />
-        <span className="font-medium">img2UI</span>
-      </div>
-      <nav className="flex-1 p-2 space-y-1">
-        {NAV.map((item) => {
-          const active = pathname.startsWith(item.href)
-          const Icon = item.icon
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-2 px-3 py-2 rounded-md text-sm',
-                active ? 'bg-foreground/10 font-medium' : 'hover:bg-foreground/5'
-              )}
-            >
-              <Icon className="size-4" />
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
-    </aside>
-  )
+components: {
+  MuiButton:    { styleOverrides: { root: { borderRadius: 12, textTransform: 'none' } } },
+  MuiChip:      { styleOverrides: { root: { borderRadius: 8 } } },
+  MuiTextField: { defaultProps: { size: 'small' } },        // 紧凑感
+  MuiCard:      { defaultProps: { elevation: 1 } },         // hover 时 sx 提到 3
 }
 ```
 
-- [ ] **Step 2: 改 `src/app/layout.tsx`**
+CJK 字体显式 fallback。MD3 ripple / `<ButtonBase>` 默认 enable,不调。
 
-```tsx
-import type { Metadata } from 'next'
-import { Toaster } from 'sonner'
-import { Sidebar } from '@/components/sidebar'
-import './globals.css'
+### 14.4 不做的 UI 加法
 
-export const metadata: Metadata = {
-  title: 'img2UI',
-  description: '把 AI 生图设计稿转成 coding agent 可消费的素材包',
-}
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="zh-CN">
-      <body className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">{children}</main>
-        <Toaster position="bottom-right" />
-      </body>
-    </html>
-  )
-}
-```
-
-- [ ] **Step 3: 写 `src/app/page.tsx`(首页 redirect)**
-
-```tsx
-import { redirect } from 'next/navigation'
-export default function Home() {
-  redirect('/projects')
-}
-```
-
-- [ ] **Step 4: 起服务验证**
-
-```bash
-npm run dev
-# 浏览器开 localhost:3000
-# 应该自动跳到 /projects(虽然是 404 因为还没建)
-# Sidebar 应该显示「项目」「设置」两个 link
-# 没有 console error
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/app src/components
-git commit -m "feat(ui): 顶层 layout + Sidebar 导航"
-```
-
-**Phase 1 退出准则:** `npm run dev` 起服务,浏览器看到 Sidebar 渲染正确,layout 正常。`npm test` 通过
+- 不上深色模式(MVP 不需要)
+- 不上动画库(framer-motion 等);MUI 自带 Fade/Grow/Collapse 够用
+- 不上 i18n;UI 文案就是中文
 
 ---
 
-## Phase 2:Provider 配置(任务级 outline,执行时再展开)
+## 15. 风险点 / 已知不确定项
 
-**目的:** Settings 页能 CRUD 3 类 provider(mllm / image_gen / cdn),Test Connection 工作,API key 双向 mask
-
-**实施级子 plan**:[`docs/plans/phase-2-provider-config.md`](./docs/plans/phase-2-provider-config.md)(Task 2.1-2.9 完整 checkbox / 代码片段 / 验证步骤,**实施时按子 plan 走**)
-
-**Files to create/modify:**
-
-```
-src/app/settings/{layout,page}.tsx
-src/app/settings/{models,cdn,prompts}/page.tsx
-src/app/api/config/route.ts
-src/app/api/config/test/route.ts
-src/lib/config.ts                # AppConfig CRUD + maskKey/unmaskApiKeys
-src/lib/llm-client.ts             # OpenAI/Anthropic dispatch + retry
-src/lib/cdn-client.ts             # S3 兼容 head 测试
-src/components/settings/provider-card.tsx
-src/components/settings/prompt-editor.tsx
-src/components/sticky-save-bar.tsx (从 evalyst 抄)
-src/components/confirm-dialog.tsx (从 evalyst 抄)
-src/lib/seeds/default-prompts.ts  # 首启动写入的 Pass 1/2 默认 prompt
-```
-
-**关键任务:**
-
-1. **从 evalyst 复制 `lib/llm-config.ts` 模式**:`maskKey` 函数(`sk-***xxxx`)、`unmaskApiKeys` 函数(从磁盘还原)、`writeAtomic` 持久化到 `data/config.json`
-2. **改造 ProviderConfig 加 `kind` discriminator**:用 TypeScript discriminated union,UI 按 kind 分组渲染卡片,字段按 kind 切换显示
-3. **`provider-card.tsx` 是通用卡片**,内部根据 props.kind 决定渲染哪些字段。Test Connection 按钮按 kind 调不同 endpoint:
-   - `mllm`:发 5-token ping(OpenAI / sankuai)或最小 messages(Anthropic)
-   - `image_gen`:apimart sync 提交一张 16x16 单像素生成 task,等 completed 即可(不需要下载,确认链路通就行);OpenAI 直连用最小 generations 请求
-   - `cdn`:HEAD bucket 检查权限
-4. **首启动 seed**:`data/config.json` 不存在时,写入默认 prompts(从 `src/lib/seeds/default-prompts.ts`),providers 数组为空
-5. **API 路由**:`GET /api/config` 调 `maskKey` 后返回;`PUT /api/config` 检测 mask 字符串、调 `unmaskApiKeys` 后写盘;`POST /api/config/test` 按 provider id 取真实 key,发测试请求,**不返回真实 key**
-
-**验证:**
-- 单测:`maskKey('sk-abcdef1234567890')` → `'sk-***7890'`
-- 单测:`unmaskApiKeys` 在 mask 字符串时从磁盘还原,在新值时直接采纳
-- E2E:新建 OpenAI mllm provider,Test Connection 通过,关闭浏览器重开能看到 provider 仍在(且 key 是遮罩的)
-
-**预估:** 3-4 天。**完成后写一份子 plan `docs/plans/phase-2-providers.md` 详细到任务级**(执行 Phase 2 前展开)
+| # | 风险 | 缓解 |
+|---|---|---|
+| R1 | Phase 1 三个 Test Connection 在你环境一次过(API key 能否拿到) | 第一动作就 Test Connection;失败 stop 不进 Phase 2 |
+| R2 | MUI v6 + Next.js 15 RSC/SSR `<AppRouterCacheProvider>` 路径正确;`'use client'` 边界正确 | 用 `@mui/material-nextjs/v15-appRouter` 官方包跟官方 example |
+| R3 | slicer 移植精度 — connected component 算法两次实现(Python vs TS)不必精确一致,只需"切出来的 element 数量与位置肉眼接受" | 用 archive 里的 keyed PNG 当 fixture 跑回归 |
+| R4 | apimart 单图 ~$0.17,Phase 6 调试 6 路并发跑一次 ~$1。Phase 5/6/8 多次重跑成本不可忽视 | **全程 `quality='high'`**(用户决策:不接受 medium 字形漂的不确定性)。控成本靠"批量验证不重复跑":Phase 5 跑 1 次确认链路 → Phase 6 跑 1-2 次确认多参考图行为 → Phase 8 跑 1 次确认反向校验。预算 Phase 5-8 dogfood 总开销 < $30 |
+| R5 | "完全忘记老 UI"——但你 review PLAN 时可能想起某些老 UI 局部体验是好的 | review 时随时告诉我,加进 §14 |
 
 ---
 
-## Phase 3:Project / Page / State CRUD + 上传
+## 16. 决策固化(全部已敲定)
 
-**实施级子 plan**:[`docs/plans/phase-3-projects-pages-states.md`](./docs/plans/phase-3-projects-pages-states.md)(Task 3.1-3.7 完整 checkbox / 代码片段 / 验证步骤,**实施时按子 plan 走**)
+### 16.1 MVP 简化(§0.4)
+- ✅ S1 — 每 page 只支持 1 张图(UI 限制单 state,后端数据模型保留)
+- ✅ S2 — Pass 1 后处理过滤小元素,阈值相对面积 `< 0.001`
+- ✅ S3 — 切片库去自动指派,全手动拖拽 + 切片 sub-crop 工具
 
-**目的:** 项目-页面 navigation,页面下能上传多张状态图,触发 Pass 1 占位(返回模拟数据)
+### 16.2 偏离 HANDOFF
+- ✅ §0.1 边界 — `archive/src/lib/*` 不复用;prompt 文本 / visual-category 定义 / split_elements 算法**逐字照抄 / 对照移植**
+- ✅ §1.1 UI 框架 — **MUI v6 + Emotion**,主色 `#0d99ff` Figma 蓝替 MD3 baseline 紫,其他 MD3 token(大圆角 / ripple / elevation)保留;不引 Tailwind / shadcn / framer-motion
+- ✅ §1.3 Phase 顺序按 HANDOFF §14 不改
 
-**Files to create:**
+### 16.3 路径 / 数据
+- ✅ URL 不暴露 `stateId`(§17.8)— 前端从 page.canonical_state_id 自动派发,后端 API 仍按 stateId
+- ✅ 一切片可指派给多 element(后端 copy 多次,各自独立 Asset)
+- ✅ Asset 加 `slice_source: { state_id, category, idx }` 字段
+- ✅ 切片 PNG 永不删,sub-crop 后原切片保留
 
-```
-src/app/projects/page.tsx
-src/app/projects/[pid]/{layout,page}.tsx
-src/app/projects/[pid]/pages/[id]/page.tsx
-src/app/api/projects/route.ts
-src/app/api/projects/[id]/route.ts
-src/app/api/projects/[id]/pages/route.ts
-src/app/api/pages/[id]/route.ts
-src/app/api/pages/[id]/states/route.ts
-src/app/api/states/[id]/route.ts
-src/app/api/states/[id]/pass1/route.ts        # 占位返回 mock
-src/lib/projects.ts
-src/lib/pages.ts
-src/lib/states.ts
-src/lib/pipelines.ts
-src/lib/run-lock.ts
-src/components/upload/states-uploader.tsx
-src/components/pipeline/pipeline-stepper.tsx
-```
+### 16.4 实施 / 成本
+- ✅ apimart `quality` **全程 `'high'`**,不接受 medium 字形漂的不确定性;控成本靠"批量验证 + 不重复跑"
+- ✅ Phase 节奏 — **Phase 1-3 一气跑通后 stop**(脚手架 + CRUD + Pass 1 单路 LLM 调通,踩坑成本最低的检查点);Phase 4 之后每 phase 完成都 stop 等 review
+- ✅ §13 CLAUDE.md 草稿整段接受
 
-**关键任务:**
-
-1. **CRUD 模式统一**:`lib/projects.ts` 等都用同一个 pattern——`list / get / create / update / delete`,持久化路径是 `data/projects/{id}.json`(单文件一项目),delete 时级联清理 `pages/`、`states/`、`elements/`、`assets/` 等
-2. **States 上传**:`POST /api/pages/[id]/states` 接 multipart,sharp 读图获取 width/height,写到 `data/raw/{state-id}.png`,生成 State JSON。同时返回缩略图(用 sharp 生成 256px webp)
-3. **`pipeline-stepper.tsx`**:6 步可视化组件,接受 `state.pipeline_status`,渲染 ✓ ⏳ ⚪ ✗
-4. **Pass 1 占位**:`POST /api/states/[id]/pass1` 起一个异步任务,5 秒后写入 mock element 数据(2 个 static + 1 个 code),期间状态机 idle → pass1_running → pass1_done
-5. **Run lock**:`run-lock.ts` 是内存 Map<state_id, run_id>,Pass 1/2/re-extract 互斥
-
-**验证:**
-- 端到端:创建项目 → 进入项目 → 新建页面 → 上传 3 张状态图 → 看到 States 区有 3 个卡 → 自动触发 Pass 1 → 5 秒后 Pipeline 进度区 stepper 推进到「布局分析 ✓ 完成」
-
-**预估:** 3-4 天。**完成后写子 plan `docs/plans/phase-3-crud.md`**
+### 16.5 仍可微调(不影响开 Phase 1)
+- 主色生成的完整 MD3 12-token palette(用 Material Theme Builder 喂 `#0d99ff` 生成,Phase 1 落地时一并定 hex 值)
+- Element Review 拖拽组件选 react-rnd vs 自实现(Phase 4 落地时定)
 
 ---
 
-## Phase 4:真实 Pass 1 + Element Review
-
-**实施级子 plan**:[`docs/plans/phase-4-pass1-element-review.md`](./docs/plans/phase-4-pass1-element-review.md)(Task 4.1-4.6 完整 checkbox / 代码片段 / 验证步骤)
-
-**目的:** 真实接 mllm 跑布局分析,跨状态对齐,Element Review canvas 全功能(bbox 拖拽、空白拖创建、叠加层 toggle、详情面板编辑)
-
-**Files to create:**
-
-```
-src/lib/llm-client.ts              # 增强:支持 vision input,3 次 retry,120s 超时
-src/lib/pipeline-runner.ts         # Pass 1 实现
-src/lib/elements.ts                # Element CRUD + 跨状态对齐
-src/lib/prompts/pass1.ts           # Pass 1 prompt 模板
-src/app/api/states/[id]/pass1/route.ts   # 替换 Phase 3 的 mock,调用 pipeline-runner
-src/app/api/pages/[id]/elements/route.ts
-src/app/projects/[pid]/pages/[id]/elements/page.tsx
-src/components/element-review/canvas.tsx
-src/components/element-review/element-list.tsx
-src/components/element-review/element-detail-panel.tsx
-```
-
-**关键任务:**
-
-1. **`pipeline-runner.ts` 的 Pass 1 实现**:
-   - 读 state(s) 的原图
-   - 渲染 Pass 1 prompt 模板(注入 page_name / state_count / images base64)
-   - 调 `llm-client.callMllm()`(支持 image_url / base64 input,response_format json_object,temperature=0)
-   - 解析返回 JSON,跨状态对齐(同 entity_name → 同 element.id),写入 `data/elements/{page-id}.json`
-   - 更新 PipelineRun 状态为 completed
-   - 错误处理:retry 3 次,超时 120s,error 写入 PipelineRun.error
-2. **`canvas.tsx` 是核心**:
-   - 用 `<canvas>` 或 SVG 叠加层(推荐 SVG,因为有交互);原图作背景 `<img>`
-   - 每个元素一个 `<g>` 包含 bbox `<rect>`+ 元素 name 标签
-   - bbox 上 8 个角/边点 `<circle>` 用作 resize handle
-   - 全图绑定 mouse 事件:
-     - mousedown on bbox → 进入 drag mode
-     - mousedown on handle → 进入 resize mode
-     - mousedown on empty area → 开始绘制新 bbox
-   - 选中态、hover 态、modify mode 用 CSS variable 切换
-3. **`element-detail-panel.tsx`**:根据 type 切换显示字段(static 只显示 description / code 显示 shape_spec + material_spec)。textarea 用 `react-textarea-autosize` 或自然 resize。**注意**:type=static 时 description 直接进 Pass 2 prompt 渲染,UI 上显示提示「这段描述会用于资产提取,描述越具体效果越好」
-4. **跨状态对齐 UI**:在 element row 显示 `Cross-state: [canonical, hover]` chip,点击展开详情看每个 state 的 bbox 差异
-
-**验证:**
-- 用 Phase 0 的真实奶茶盲盒图跑端到端
-- Element Review canvas 上能拖拽改 bbox、空白拉新元素
-- 保存后 reload 状态可恢复
-- type 切换从 static → code,description 字段保留(始终显示),shape_spec / material_spec 字段显示
-
-**预估:** 5-7 天。**写子 plan `docs/plans/phase-4-pass1-element-review.md`**
+**所有决策已固化。下一轮你说"开始 Phase 1"我就跑。** 不会再问。
 
 ---
 
-## Phase 5:真实 Pass 2 + Asset Review
+## 17. UI ASCII 草图
 
-**实施级子 plan**:[`docs/plans/phase-5-pass2-asset-review.md`](./docs/plans/phase-5-pass2-asset-review.md)(Task 5.1-5.4)
+> 画的是布局 / 信息层级 / 交互逻辑,**不**是视觉精度(MD3 圆角 / elevation / 颜色靠 MUI 默认)。横向尺寸按 ~1280px 桌面绘制。
 
-**目的:** 真实接 image_gen 跑资产提取(绿幕 chroma key 路径),scipy 切片,反向校验,Asset Review 全功能
+### 17.1 全局壳
 
-**Files to create:**
+- **Top AppBar**:logo + 面包屑(`Project › Page › Stage`)+ 右侧 Settings
+- **Side Nav**:进入项目后才出现,显示当前项目的 page 树 + Settings 入口;page 节点旁有 pipeline 状态 dot
+- **Main**:页面主体
 
-```
-src/lib/image-gen-client.ts         # gpt-image-2-official image-edit 封装(apimart async pattern)
-src/lib/alpha-key.ts                # chroma green key(0 API)
-src/lib/slicer.ts                   # scipy binary_dilation + connected component 切片(移植 ref/split_elements.py)
-src/lib/image-utils.ts              # sharp 封装:resize, alpha 检测, edge map
-src/lib/assets.ts                   # Asset CRUD
-src/lib/prompts/render-element-summary.ts  # Pass 2 element_summary 渲染(数量明示)
-src/lib/prompts/{pass2,validate}.ts # Pass 2 + 校验 prompt 模板
-src/app/api/states/[id]/pass2/route.ts
-src/app/api/states/[id]/validate/route.ts
-src/app/api/elements/[id]/re-extract/route.ts
-src/app/projects/[pid]/pages/[id]/assets/page.tsx
-src/components/asset-review/batch-png-viewer.tsx       # 支持切换看绿幕原图 / chroma key 后透明 PNG
-src/components/asset-review/assets-grid.tsx
-src/components/asset-review/asset-detail-panel.tsx
-src/components/asset-review/edge-clean-tool.tsx        # 局部 spill suppression / alpha 微调
-src/components/asset-review/chroma-threshold-slider.tsx # 调 chroma key 25/60 阈值,本地实时预览
-src/components/asset-review/split-fragment-tool.tsx    # 拆分误融合的连通块
-```
-
-**关键任务:**
-
-1. **`image-gen-client.ts`**:封装 apimart `/v1/images/generations` async pattern:submit → poll(initial 12s + interval 5s,最多 24 次)→ download(必须带浏览器 UA,否则 S3 403)。`quality` 参数透传(provider 默认 `'high'`)。OpenAI 直连备选用 sync 路径
-2. **`render-element-summary.ts`**(SPEC.md § Pass 2 prompt 模板规定):取 type=static 元素,按 name 分组(完全相同 name 归一组),单数渲染 `- {name}({特征})`,复数渲染 `- {name} 共 {count} 个({聚合差异点,如不同文字})`。返回 `{ text, count }`
-3. **`pipeline-runner.ts` Pass 2 实现**(基于 PoC v11):
-   - 读 canonical state 原图 + 该 page 所有 type=static element
-   - 调 `render-element-summary` 渲染 `{{element_summary}}` 和 `{{element_count}}`
-   - 用 SPEC § Pass 2 prompt 模板拼出 prompt(会话式 + 绿幕 #00FF00 + 数量明示 + 间距要求)
-   - 调 `image-gen-client`,得到绿幕 PNG → 写到 `data/pass2/{state-id}.png`
-   - 调 `lib/alpha-key.ts` 做 chroma green key → 写到 `data/keyed/{state-id}.png`
-   - 调 `slicer.ts` 做 scipy 切片,产出 N 个 bbox + 切片 → 写到 `data/assets-bin/{asset-id}.png`
-   - 触发反向校验
-4. **`alpha-key.ts`**(PoC v11 验证过的算法):`g_excess = G - max(R, B)`,> 60 全透 / < 25 全不透 / 中间 ramp。Spill suppression:`G_new = G - max(0, g_excess) for α>0`。提供 UI slider 让用户调阈值
-5. **`slicer.ts`**:移植 `ref/split_elements.py`。binary_dilation iter=15(默认),connected component。min_size=30 + 二级过滤 `min_opaque_pct=1%`(剔除半透残留噪点)。worker 线程跑(避免阻塞 Next.js)。排序 (y_center, x_center)
-6. **元素到切片的映射**:MVP 用「按位置顺序对应 + 用户手动调整」。Asset Review grid 上每个切片显示「对应 element」下拉,用户可改;支持「拆分一块为多个 asset」(碎块合并的 case 在 v11 不再出现,因为异形 frame 是 type=code 不进 Pass 2,所以**不需要合并工具**)
-7. **重抠**:`POST /api/elements/[id]/re-extract`:用单元素 element_summary(只渲染该元素)+ 原图调 image-edit,产新绿幕 PNG → chroma key + 切片 → 替换该 asset。新 Pass 2 PNG 写到 `data/pass2/{state-id}-element-{id}.png` 留底
-8. **校验展示**:Asset 卡片状态 icon 来自 `alpha_quality` 阈值 + `complete` flag
-
-**验证:**
-- 端到端:Pass 1 完成 → Run Pass 2 → 等待 60-180 秒 → Asset Review 显示绿幕 batch PNG + chroma 后 PNG + N 个切片
-- 至少 70% 的 asset 直接 ✓ 通过校验(v11 实测 11/11 通过,但是测试图,真实复杂页可能更低)
-- 单元素重抠:对一个有 ⚠ 警告的 asset 改 description → 点 `Re-extract`,~3 分钟后看到该 asset 被替换,状态 → ✓
-- chroma threshold slider 调节后,batch PNG 预览实时更新
-
-**预估:** 5-7 天。**写子 plan `docs/plans/phase-5-pass2-asset-review.md`**
-
----
-
-## Phase 6:CDN 上传 + Export
-
-**目的:** S3 兼容 CDN 批量/单个上传,Export 文件夹生成,spec.md 渲染
-
-**Files to create:**
+### 17.2 `/` 项目列表
 
 ```
-src/lib/cdn-client.ts               # S3 PutObject + URL 生成
-src/lib/exporter.ts                 # 生成 Export 文件夹 / zip
-src/app/api/assets/[id]/upload/route.ts
-src/app/api/pages/[id]/upload-all-assets/route.ts
-src/app/api/pages/[id]/export/route.ts
-src/app/projects/[pid]/pages/[id]/export/page.tsx
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ img2UI                                              Settings ⚙   Help ?     ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  我的项目                                                                    ║
+║                                                                              ║
+║  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    ║
+║  │              │  │              │  │              │  │              │    ║
+║  │   [缩略图]   │  │   [缩略图]   │  │   [缩略图]   │  │   [缩略图]   │    ║
+║  │              │  │              │  │              │  │              │    ║
+║  ├──────────────┤  ├──────────────┤  ├──────────────┤  ├──────────────┤    ║
+║  │ 抽奖活动 H5  │  │ 双 11 主会场 │  │ 新人引导     │  │ 拉新活动     │    ║
+║  │ 3 pages      │  │ 8 pages      │  │ 2 pages      │  │ 5 pages      │    ║
+║  │ 2026-05-10   │  │ 2026-05-12   │  │ 2026-05-15   │  │ 2026-05-16   │    ║
+║  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    ║
+║                                                                              ║
+║                                                                       ┌──┐  ║
+║                                                                       │ +│  ║
+║                                                                       └──┘  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-**关键任务:**
+### 17.3 项目详情 = 页面列表
 
-1. **`cdn-client.ts`**:用 @aws-sdk/client-s3,签名 PutObject。文件名规则 `{public_url_prefix}/{project-id}/{page-id}/{asset-id}.png`
-2. **批量上传**:串行(避免 rate limit),进度通过 SSE 或轮询返回。失败的单个不影响其他
-3. **Export 文件夹生成**:按 [SPEC.md § Export 文件结构] 创建。spec.md 用模板字符串拼接(不引入 nunjucks 这种模板引擎,YAGNI)
-4. **zip 生成**:用 archiver 或 tar-stream,流式输出避免一次读全
-5. **Export UI**:tree 渲染用文本拼接(不用 react-treeview 这种库),`Open folder` 在 macOS 上调 `child_process.exec('open <path>')`
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ img2UI    抽奖活动 H5                               Settings ⚙   Help ?     ║
+╠════════════════╦═════════════════════════════════════════════════════════════╣
+║ 抽奖活动 H5    ║                                                              ║
+║                ║   页面                                                       ║
+║ ▼ Pages        ║                                                              ║
+║   • 入口页 ●   ║   ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  ║
+║   • 抽中页 ◌   ║   │                │  │                │  │              │  ║
+║   • 未中页 ◌   ║   │   [缩略图]     │  │   [缩略图]     │  │   [缩略图]   │  ║
+║                ║   │                │  │                │  │              │  ║
+║ Settings       ║   ├────────────────┤  ├────────────────┤  ├──────────────┤  ║
+║   Providers    ║   │ 入口页         │  │ 抽中页         │  │ 未中页       │  ║
+║   Prompts      ║   │ /lottery       │  │ /lottery/win   │  │ /lottery/lose│  ║
+║                ║   │ pass2_done  ●  │  │ idle        ◌  │  │ idle      ◌  │  ║
+║                ║   └────────────────┘  └────────────────┘  └──────────────┘  ║
+║                ║                                                       ┌──┐  ║
+║                ║                                                       │ +│  ║
+║                ║                                                       └──┘  ║
+╚════════════════╩═════════════════════════════════════════════════════════════╝
+```
 
-**验证:**
-- 上传 8 个 asset 到真实 S3 bucket,所有 cdn_url 写入 manifest.json
-- Export 生成 `~/img2ui-out/{project-name}/`,目录结构跟 SPEC 一致
-- 把这个文件夹丢给 Claude Code,问「读 spec.md 然后实现这个页面」,Claude Code 能成功读懂并产出代码
+`●` = pass2_done · `◌` = idle · `🟡` = running · `🔴` = failed(MUI Chip 颜色,这里用 ASCII 近似)
 
-**预估:** 3-4 天
+### 17.4 页面详情(单图上传 + Pipeline 状态)
 
----
+未上传:
 
-## Phase 7:打磨 + dogfood
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ img2UI   抽奖活动 H5 › 抽中页                       Settings ⚙   Help ?     ║
+╠════════════════╦═════════════════════════════════════════════════════════════╣
+║ 抽奖活动 H5    ║                                                              ║
+║                ║   抽中页    路由: /lottery/win                               ║
+║ ▼ Pages        ║                                                              ║
+║   • 入口页 ●   ║   ┌─────────────────────────────────────────────────────┐  ║
+║   • 抽中页 ◌   ║   │                                                     │  ║
+║   • 未中页 ◌   ║   │       拖拽 PNG 到此处  或  [📁 选择文件]            │  ║
+║                ║   │                                                     │  ║
+║ Settings       ║   │       (每个页面仅支持 1 张设计稿)                   │  ║
+║   Providers    ║   │                                                     │  ║
+║   Prompts      ║   └─────────────────────────────────────────────────────┘  ║
+║                ║                                                              ║
+╚════════════════╩═════════════════════════════════════════════════════════════╝
+```
 
-**目的:** MVP-α 退出准则达成
+已上传:
 
-**关键任务:**
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ img2UI   抽奖活动 H5 › 抽中页                       Settings ⚙   Help ?     ║
+╠════════════════╦═════════════════════════════════════════════════════════════╣
+║ 抽奖活动 H5    ║                                                              ║
+║                ║   抽中页    路由: /lottery/win        [🔄 重新上传]         ║
+║ ▼ Pages        ║                                                              ║
+║   • 入口页 ●   ║   ┌─────────────────────────┐  ┌────────────────────────┐  ║
+║   • 抽中页 ◌   ║   │                         │  │ Pipeline               │  ║
+║   • 未中页 ◌   ║   │                         │  │                        │  ║
+║                ║   │      [设计稿原图        │  │  ✓ Pass 1     done     │  ║
+║ Settings       ║   │       预览,等比缩放]    │  │  ◌ Element Review      │  ║
+║   Providers    ║   │                         │  │  ◌ Pass 2              │  ║
+║   Prompts      ║   │                         │  │  ◌ Asset Review        │  ║
+║                ║   │                         │  │  ◌ Validate            │  ║
+║                ║   └─────────────────────────┘  │  ◌ Upload CDN          │  ║
+║                ║                                │  ◌ Export              │  ║
+║                ║   [▶ Element Review]           │                        │  ║
+║                ║                                └────────────────────────┘  ║
+╚════════════════╩═════════════════════════════════════════════════════════════╝
+```
 
-1. **端到端跑通真实活动页**(嘉锟自己挑一个):3 个状态、~30 元素,从上传到 Export 全流程
-2. **关键问题修复**:Phase 4-6 跑 dogfood 时记下来的所有 bug
-3. **错误态完善**:网络错误 / API key 失效 / CDN 配置错 / 磁盘满 等场景的友好提示(不阻断,提供修复路径)
-4. **README**:用户文档,包含安装、首次配置、第一次运行的引导
-5. **基础单测覆盖**:`fs-utils` / `id` / `slicer` / `maskKey` / `pipeline-runner`(用 mock LLM)
-6. **E2E**:Playwright 跑 1 个端到端场景(用 mock LLM)
+主按钮在最左下,跟着 pipeline 推进文案变("运行 Pass 1" → "Element Review" → "运行 Pass 2" → ...)。右侧时间线 chip 颜色对应状态。
 
-**验证:**
-- 嘉锟独立用 img2UI 转换一个真实活动页,产出 coding agent 用 1 小时内能跑通的代码
-- 全部测试通过,无 console error/warning
-- README 让一个新工程师 30 分钟内能装好 + 跑出第一个 Export
+### 17.5 Element Review
 
-**预估:** 3-5 天
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║ img2UI  抽奖活动 H5 › 抽中页 › Element Review        Settings ⚙   Help ?       ║
+╠════════════════╦═════════════════════════════════════════════════════════════════╣
+║                ║                                                                  ║
+║  Elements (24) ║   ┌──────────────────────────┐  ┌──────────────────────────┐  ║
+║  全部 / 未确认 ║   │ ▢ 设计稿 + bbox 叠加层   │  │ 选中元素                  │  ║
+║  ────────────  ║   │                          │  │                           │  ║
+║  ┌──────────┐  ║   │  ┌──────────┐            │  │ 名称  卡通娃娃            │  ║
+║  │● 卡通娃娃 │  ║   │  │ 主体     │ ← 拖拽    │  │ 类型  ◉ static  ○ code   │  ║
+║  │ static   │  ║   │  │ SUBJECT  │   重定位  │  │ 分类  subject ▾           │  ║
+║  │ subject  │  ║   │  └──────────┘            │  │                           │  ║
+║  └──────────┘  ║   │       ┌────┐             │  │ 描述                      │  ║
+║  ┌──────────┐  ║   │       │按钮│             │  │ ┌─────────────────────┐  │  ║
+║  │○ "幸运签"│  ║   │       │BTN │             │  │ │ 蓬松云朵头发的卡通  │  │  ║
+║  │ static   │  ║   │       └────┘             │  │ │ 娃娃,蓝色羽绒服,粉  │  │  ║
+║  │ subject  │  ║   │           ┌──────┐       │  │ │ 色围巾,胸前抱礼盒   │  │  ║
+║  └──────────┘  ║   │           │ 容器 │       │  │ └─────────────────────┘  │  ║
+║  ┌──────────┐  ║   │           │CONT  │       │  │                           │  ║
+║  │○ 抽奖按钮 │  ║   │           └──────┘       │  │ bbox (px)                 │  ║
+║  │ static   │  ║   │                          │  │ x:128 y:240 w:380 h:420  │  ║
+║  │ button   │  ║   │  ⊕ 拖拽 bbox 边角调整    │  │                           │  ║
+║  └──────────┘  ║   │  ⊗ 点击删除元素          │  │ z-index  5                │  ║
+║   ...          ║   └──────────────────────────┘  │                           │  ║
+║                ║                                  │ [✓ 确认]    [🗑 删除]    │  ║
+║  ▶ 已过滤的    ║                                  └──────────────────────────┘  ║
+║    小元素 (3)  ║                                                                  ║
+║  ────────────  ║   ┌────────────────────────────────────────────────────────┐  ║
+║                ║   │ 全部 24 个元素都确认后:           [▶ 运行 Pass 2]      │  ║
+║  [全部确认]    ║   └────────────────────────────────────────────────────────┘  ║
+╚════════════════╩═════════════════════════════════════════════════════════════════╝
+```
 
----
+- 左 sidebar 列 elements,实心圆点 = 已确认,空心圆点 = 待确认
+- 中间 canvas 显示原图 + 半透明 bbox 叠加(每 element 一框,选中高亮)
+- 右侧详情面板编辑选中 element 的 type / category / description / bbox(数值或拖动)
+- 「已过滤的小元素」是 §0.4 S2 的折叠区,默认收起
 
-## 跨 Phase 通用规则
+### 17.6 Asset Review(MVP S3 全手动指派)— **关键页**
 
-1. **每个 Phase 完成后打 tag**:`v0.0.X` X 递增,CHANGELOG 在 `[Unreleased]` 记录,tag 时合并到正式版本号
-2. **每个 Phase 第一个 commit 之前更新文档**:如果实施过程发现 PRD/SPEC 错漏,先改文档再写代码,**不允许**先写代码后补文档
-3. **Phase 4 / 5 的 LLM prompt 修改必须伴随 PoC 重跑**(用 `data/raw/` 真实图),不允许盲改
-4. **Phase 2-6 进入前先展开为子 plan**(`docs/plans/phase-N-*.md`),细化到任务级。本 PLAN.md 只是路线图
+```
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║ img2UI  抽奖活动 H5 › 抽中页 › Asset Review     Settings ⚙   Help ?              ║
+╠════════════════╦═══════════════════════════════════════════════════════════════════╣
+║                ║                                       [🩹 用 API 抠图]  [↪ 重抠]  ║
+║                ║                                                                    ║
+║                ║  ┌────── 切片库 (15) ──────────┐  ┌────── 元素列表 (8 静态) ────┐ ║
+║                ║  │                             │  │                              │ ║
+║                ║  │ ▼ subject (3)               │  │ ╭─ 卡通娃娃 ───────────────╮│ ║
+║                ║  │   ┌────┐ ┌────┐ ┌────┐      │  │ │ static · subject         ││ ║
+║                ║  │   │[🐻]│ │[字]│ │[图]│      │  │ │  ┌────┐                  ││ ║
+║                ║  │   │ #0 │ │ #1 │ │ #2 │      │  │ │  │[🐻]│  α=0.93  ✓       ││ ║
+║                ║  │   │93% │ │88% │ │76% │      │  │ │  │ #0 │  α 0.93           ││ ║
+║                ║  │   └────┘ └────┘ └────┘      │  │ │  └────┘                  ││ ║
+║                ║  │                             │  │ │                  [🗑撤销]││ ║
+║                ║  │ ▼ button (2)                │  │ ╰──────────────────────────╯│ ║
+║                ║  │   ┌────┐ ┌────┐             │  │                              │ ║
+║                ║  │   │[btn]│ │[btn]│            │  │ ╭─ "幸运签" 标题 ──────────╮│ ║
+║                ║  │   │ #0 │ │ #1 │             │  │ │ static · subject         ││ ║
+║                ║  │   │92% │ │84% │             │  │ │  ┌────┐                  ││ ║
+║                ║  │   └────┘ └────┘             │  │ │  │ ?  │ ← 拖切片到此     ││ ║
+║                ║  │                             │  │ │  └────┘   或 [↪ 重抠]    ││ ║
+║                ║  │ ▼ decoration (5)            │  │ ╰──────────────────────────╯│ ║
+║                ║  │   ┌────┐ ┌────┐ ┌────┐      │  │                              │ ║
+║                ║  │   │[★] │ │[彩]│ │[贴]│      │  │ ╭─ 抽奖按钮 ────────────────╮│ ║
+║                ║  │   │ #0 │ │ #1 │ │ #2 │      │  │ │ static · button          ││ ║
+║                ║  │   └────┘ └────┘ └────┘      │  │ │  ┌────┐  ⚠ contamination ││ ║
+║                ║  │   ┌────┐ ┌────┐             │  │ │  │[btn]│ α=0.62           ││ ║
+║                ║  │   │[星]│ │[云]│             │  │ │  │ #0 │ ━━━━━━━━━━━━━━━ ││ ║
+║                ║  │   │ #3 │ │ #4 │             │  │ │  └────┘ [换] [↪ 重抠]    ││ ║
+║                ║  │   └────┘ └────┘             │  │ ╰──────────────────────────╯│ ║
+║                ║  │                             │  │                              │ ║
+║                ║  │ ▶ container (3)             │  │ ╭─ 礼盒 ────────────────────╮│ ║
+║                ║  │ ▶ background (2)            │  │ │ ...                       ││ ║
+║                ║  │                             │  │ ╰──────────────────────────╯│ ║
+║                ║  │ 边框颜色:                   │  │                              │ ║
+║                ║  │ □ 灰=未指派                 │  │  ...还有 4 个                │ ║
+║                ║  │ ■ 蓝=当前选中已用           │  │                              │ ║
+║                ║  │ ■ 橙=别的 element 已用      │  │                              │ ║
+║                ║  │  (允许重复指派,会 copy)    │  │                              │ ║
+║                ║  └─────────────────────────────┘  └──────────────────────────────┘ ║
+║                ║                                                                    ║
+║                ║  全部 8 个元素都已指派后:                       [▶ 上传 CDN]      ║
+║                ║                                                                    ║
+╚════════════════╩═══════════════════════════════════════════════════════════════════╝
+```
 
----
+**核心交互**:
+- 左 grid 按 visual_category 折叠分组,每切片缩略图带 idx + opaque_pct
+- 右列表是该 page 全部 type=static 的 element,每行显示已指派的 asset 预览(`?` 占位 = 未指派)
+- 拖切片到 element 行 → 后端 `assignSliceToElement` → asset 立即落盘 + 行刷新
+- 已指派的 element 拖另一切片来 = 替换(撤销旧 asset 文件)
+- 同一切片可拖给多 element(后端 copy 多次,各自独立 Asset)
+- 切片框颜色实时更新:被当前选中 element 引用 → 蓝;被别的 element 引用 → 橙;无引用 → 灰
+- 切片缩略图 hover 显示 `✂ 切` 角标 → 进入 sub-crop 对话框(§17.6.1)
+- "重抠"按钮 → re_extract 单元素 → 完成后该 element 自动获得新 asset(单切片无歧义)
+- 顶部全局「🩹 用 API 抠图」走 §11 koukoutu fallback;**抠图对象是 Pass 2 留底的整张元素拆分图(每 category 一张)**,不重发 image_gen
 
-## Self-Review
+### 17.6.1 切片 sub-crop 对话框
 
-**Spec coverage 检查:**
+场景:某切片把两个挨太近的 element 合并了(chroma key 后 connected component 把它们当一块),用户想再切一刀。
 
-| SPEC / PRD 内容 | Phase 覆盖 |
-|---|---|
-| Provider CRUD + 4 kind | Phase 2 ✓ |
-| API key 双向 mask | Phase 2 ✓ |
-| Project / Page / State CRUD | Phase 3 ✓ |
-| 状态图上传 + 缩略图 | Phase 3 ✓ |
-| Pass 1 跨状态对齐 | Phase 4 ✓ |
-| Element Review canvas + 拖拽 | Phase 4 ✓ |
-| Pass 2 image-edit 提取 | Phase 5 ✓ |
-| 切片算法 + 边界 case | Phase 0 PoC + Phase 5 ✓ |
-| 反向校验 | Phase 5 ✓ |
-| 单元素重抠 | Phase 5 ✓ |
-| CDN 批量上传 + 单个重试 | Phase 6 ✓ |
-| Export 文件夹 + spec.md | Phase 6 ✓ |
-| 错误重试语义 | 每个 phase 内 |
-| 跨状态资产对齐 | Phase 4 ✓ |
-| 异形容器 = code 类型 | Phase 0 PoC + Phase 4 prompt ✓ |
-| MVP-α 退出准则 | Phase 7 ✓ |
+```
+╔════════════════════════════════════════════════════════════════════════════╗
+║  ✂  切片 sub-crop  · subject #2                                  [✕]      ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║                                                                            ║
+║   工具: [▭ 画框]  [↩ 撤销]  [全部清空]    已画 2 个框                      ║
+║                                                                            ║
+║   ┌────────────────────────────────────────────────────────────────┐      ║
+║   │                                                                │      ║
+║   │       ┌─────────┐                                              │      ║
+║   │       │ 框 #1   │   ← 鼠标拖拽生成,可改大小/移动              │      ║
+║   │       │ [🐻]    │                                              │      ║
+║   │       │         │                                              │      ║
+║   │       └─────────┘                                              │      ║
+║   │                                                                │      ║
+║   │                          ┌─────────────┐                      │      ║
+║   │                          │   框 #2     │                       │      ║
+║   │                          │  [字体]     │                       │      ║
+║   │                          │             │                       │      ║
+║   │                          └─────────────┘                       │      ║
+║   │                                                                │      ║
+║   │   (透明背景 = 棋盘格,展示原切片)                              │      ║
+║   └────────────────────────────────────────────────────────────────┘      ║
+║                                                                            ║
+║   提示: 原切片 #2 会保留;按框各生成一张新切片追加到 subject 类             ║
+║                                                                            ║
+║                                  [取消]    [✂ 切出 2 个新切片]           ║
+╚════════════════════════════════════════════════════════════════════════════╝
+```
 
-无明显 gap
+- 全屏 `<Dialog>` 显示原切片大图(透明背景棋盘格)
+- 用户拖鼠标画矩形(react-rnd 或 canvas+鼠标事件),可画多个,可改尺寸 / 移动 / 删除
+- 确认后调 `POST /api/states/[id]/slices/[cat]/[idx]/sub-crop` body `{ rects: [...] }`
+- 后端按框 crop,新切片用 `nextSliceIdx` 追加;原切片**不动**
+- 关闭 dialog 后切片库刷新,subject category 下出现 #N、#N+1 新切片;用户拖到对应 element 完成指派
 
-**已知偏离 writing-plans skill 的部分:**
-- Phase 2-7 没有展开成 step-by-step TDD 任务,只有 outline。**理由**:本 plan 是路线图,每个 Phase 进入前再展开成单独 sub-plan(`docs/plans/phase-N-*.md`)。完整 step-by-step 写在 PLAN.md 会膨胀到 300+ 任务,不可读不可维护
-- Phase 0 / 1 写到 step 级,作为模板示范
+### 17.7 Settings / Providers
 
----
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ img2UI    Settings › Providers                      Settings ⚙   Help ?     ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  Providers                                                                   ║
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │ ▼  ⚫ MLLM · sankuai Gemini 3.1 Pro (default)            [active]   │    ║
+║  ├─────────────────────────────────────────────────────────────────────┤    ║
+║  │   名称        [sankuai Gemini 3.1 Pro (default)               ]     │    ║
+║  │   API 格式    [sankuai ▾]                                           │    ║
+║  │   Base URL    [https://aigc.sankuai.com/v1/openai/native      ]     │    ║
+║  │   API Key     [sk-***xxxx                                     ] 👁   │    ║
+║  │   Model       [gemini-3.1-pro-preview                         ]     │    ║
+║  │   Temp [1.0  ]    Max tokens [32000  ]    Thinking budget [4096]    │    ║
+║  │                                                                     │    ║
+║  │              [💾 保存]    [⚡ Test Connection]    [🗑 删除]          │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │ ▶  ⚫ Image Gen · apimart gpt-image-2-official (default) [active]   │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │ ▶  ⚫ CDN · Self-hosted S3                              [active]    │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │ ▶  ⚪ Matting · koukoutu (manual fallback)              [inactive]  │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║                                              [+ 添加 Provider]               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
 
-**PLAN 版本**: v0.1 (2026-05-12)
-**对应文档**: PRD.md v0.1 / SPEC.md v0.1
+每类只能 1 个 active(checkbox 触发后端把同类其他 active=false)。Test Connection 内联展示结果(成功 ✓ 200 + 延迟 / 失败 ✗ + error message)。
+
+### 17.8 顶层导航逻辑
+
+| 路径 | 出现 SideNav? | 主操作 |
+|---|---|---|
+| `/` | ✗ | 浏览 / 新建项目 |
+| `/projects/[id]` | ✓(项目下 page 树) | 浏览 / 新建 page |
+| `/projects/[id]/pages/[pageId]` | ✓ | 上传 / 启动 pipeline |
+| `/projects/[id]/pages/[pageId]/element-review` | ✓ | 修 element(Pass 1 之后) |
+| `/projects/[id]/pages/[pageId]/asset-review` | ✓ | 拖切片指派(Pass 2 之后) |
+| `/settings/providers` | ✗ | provider CRUD |
+| `/settings/prompts` | ✗ | 4 份 prompt 模板编辑 |
+
+URL 路径**不**暴露 `state-id`(MVP S1 单 state per page),前端 effective state = page.canonical_state_id。后端 API 仍按 `state-id` 走(数据模型不动)。
+

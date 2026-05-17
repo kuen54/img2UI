@@ -1,117 +1,269 @@
-// Slice library:Pass 2 输出的所有切片都先落到 data/slices/{state-id}-{category}/,
-// 然后按 (y,x) 默认指派给该 category 的 elements;用户可手动改派。
-//
-// 设计原则:
-// - 切片文件不可变(idx 一旦写入就是固定 PNG bytes)
-// - 切片 ↔ element 是多对一(一个 element 同时只指派 1 个 slice;一个 slice 可只指派给 0/1 个 element)
-// - assigned_element_id 改派时,自动清空旧 slice 上的同 element 指派(保证唯一性)
-// - assignSliceToElement 内部 = copy slice → assets-bin/{element-id}.png + 更新 manifest +
-//   createOrUpdateAsset 元数据(向后兼容旧 asset.id == element.id 流向)
+// MVP S3 切片库简化版(无 SliceManifest 独立文件)。
+// 切片 PNG 落 data/slices/{state}-{cat}/{idx}.png + sidecar {idx}.json(metadata)。
+// 指派关系存 Asset.slice_source,反查"未被引用的切片"扫一遍 assets。
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import sharp from 'sharp'
+import {
+  paths,
+  readJsonIfExists,
+  readdirIfExists,
+  writeAtomic,
+  writeJsonAtomic,
+  unlinkIfExists,
+  ensureDataRoot,
+  DATA_ROOT,
+} from './fs-utils'
+import type { SliceInfo, SliceSource, VisualCategory, Asset } from './types'
+import { ALL_VISUAL_CATEGORIES } from './visual-category'
 
-import { DATA_ROOT, readJson, writeJson } from '@/lib/fs-utils'
-import { createOrUpdateAsset } from '@/lib/assets'
-import type { SliceManifest } from '@/lib/types'
-
-export function sliceDirFor(stateId: string, category: string): string {
-  return path.join(DATA_ROOT, 'slices', `${stateId}-${category}`)
+interface SliceSidecar {
+  idx: number
+  width: number
+  height: number
+  opaque_pct: number
+  bbox: [number, number, number, number]
 }
 
-export function slicePathFor(stateId: string, category: string, idx: number): string {
-  return path.join(sliceDirFor(stateId, category), `${idx}.png`)
-}
-
-export function manifestPathFor(stateId: string, category: string): string {
-  return path.join(sliceDirFor(stateId, category), 'manifest.json')
-}
-
+/** 把切片 buffer 写入指定 (state, cat, idx) 位置 + 写 sidecar metadata */
 export async function writeSlice(
   stateId: string,
-  category: string,
+  category: VisualCategory,
   idx: number,
   buffer: Buffer,
-): Promise<void> {
-  const dir = sliceDirFor(stateId, category)
+  meta: { opaque_pct: number; bbox: [number, number, number, number] },
+): Promise<SliceInfo> {
+  await ensureDataRoot()
+  const dir = paths.sliceDir(stateId, category)
   await fs.mkdir(dir, { recursive: true })
-  await fs.writeFile(slicePathFor(stateId, category, idx), buffer)
+  const png = paths.slice(stateId, category, idx)
+  await writeAtomic(png, buffer)
+  const sharpMeta = await sharp(buffer).metadata()
+  const w = sharpMeta.width ?? 0
+  const h = sharpMeta.height ?? 0
+  const sidecar: SliceSidecar = { idx, width: w, height: h, opaque_pct: meta.opaque_pct, bbox: meta.bbox }
+  await writeJsonAtomic(paths.sliceSidecar(stateId, category, idx), sidecar)
+  return {
+    state_id: stateId,
+    category,
+    idx,
+    path: png,
+    width: w,
+    height: h,
+    opaque_pct: meta.opaque_pct,
+  }
 }
 
-export async function readSlice(
+/** 列某 state 下所有切片(扫所有 category 子目录) */
+export async function listSlicesForState(stateId: string): Promise<SliceInfo[]> {
+  const out: SliceInfo[] = []
+  for (const cat of ALL_VISUAL_CATEGORIES) {
+    out.push(...(await listSlicesForCategory(stateId, cat)))
+  }
+  return out
+}
+
+export async function listSlicesForCategory(
   stateId: string,
-  category: string,
+  category: VisualCategory,
+): Promise<SliceInfo[]> {
+  const dir = paths.sliceDir(stateId, category)
+  const files = await readdirIfExists(dir)
+  const sidecars = files.filter((f) => f.endsWith('.json'))
+  const out: SliceInfo[] = []
+  for (const f of sidecars) {
+    const m = f.match(/^(\d+)\.json$/)
+    if (!m) continue
+    const idx = parseInt(m[1]!, 10)
+    const sidecar = await readJsonIfExists<SliceSidecar>(path.join(dir, f))
+    if (!sidecar) continue
+    out.push({
+      state_id: stateId,
+      category,
+      idx,
+      path: paths.slice(stateId, category, idx),
+      width: sidecar.width,
+      height: sidecar.height,
+      opaque_pct: sidecar.opaque_pct,
+    })
+  }
+  return out.sort((a, b) => a.idx - b.idx)
+}
+
+/** 找该路下一个可用 idx(用于 sub-crop / re-key 追加) */
+export async function nextSliceIdx(
+  stateId: string,
+  category: VisualCategory,
+): Promise<number> {
+  const list = await listSlicesForCategory(stateId, category)
+  if (list.length === 0) return 0
+  return Math.max(...list.map((s) => s.idx)) + 1
+}
+
+/** 读切片 PNG buffer */
+export async function readSliceBuffer(
+  stateId: string,
+  category: VisualCategory,
   idx: number,
-): Promise<Buffer | null> {
-  try {
-    return await fs.readFile(slicePathFor(stateId, category, idx))
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw e
-  }
+): Promise<Buffer> {
+  return fs.readFile(paths.slice(stateId, category, idx))
 }
 
-export async function listSlices(
+/** 删切片 PNG + sidecar(整路 / 整 state 删时调,常规不调) */
+export async function removeSlice(
   stateId: string,
-  category: string,
-): Promise<SliceManifest | null> {
-  return readJson<SliceManifest>(manifestPathFor(stateId, category))
-}
-
-export async function saveManifest(
-  stateId: string,
-  category: string,
-  manifest: SliceManifest,
+  category: VisualCategory,
+  idx: number,
 ): Promise<void> {
-  await writeJson(manifestPathFor(stateId, category), manifest)
+  await unlinkIfExists(paths.slice(stateId, category, idx))
+  await unlinkIfExists(paths.sliceSidecar(stateId, category, idx))
 }
 
-export type AssignSliceContext = {
-  page_id: string
-}
+// ─── sub-crop:在原切片上按用户给的多个 rects 再切 ─────────────────────────
 
-// 把 (state, category, sliceIdx) 指派给 elementId:
-//   1. 读 manifest 校验 idx 合法
-//   2. 读 slice 字节,写到 assets-bin/{elementId}.png
-//   3. 更新 manifest:把 elementId 在其他 slice 上的旧 assigned_element_id 清掉,把目标 idx 设为 elementId
-//   4. createOrUpdateAsset(向后兼容旧路径)
-export async function assignSliceToElement(
+export async function subCropSlice(
   stateId: string,
-  category: string,
-  sliceIdx: number,
-  elementId: string,
-  ctx: AssignSliceContext,
-): Promise<void> {
-  const manifest = await listSlices(stateId, category)
-  if (!manifest) throw new Error(`slice manifest 不存在:${stateId}/${category}`)
+  category: VisualCategory,
+  idx: number,
+  rects: Array<{ x: number; y: number; w: number; h: number }>,
+): Promise<SliceInfo[]> {
+  if (rects.length === 0) return []
+  const orig = await readSliceBuffer(stateId, category, idx)
+  const meta = await sharp(orig).metadata()
+  const W = meta.width ?? 0
+  const H = meta.height ?? 0
+  const created: SliceInfo[] = []
+  for (const r of rects) {
+    let left = Math.round(r.x)
+    let top = Math.round(r.y)
+    let width = Math.round(r.w)
+    let height = Math.round(r.h)
+    if (left < 0) { width += left; left = 0 }
+    if (top < 0) { height += top; top = 0 }
+    if (left + width > W) width = W - left
+    if (top + height > H) height = H - top
+    if (width < 4 || height < 4) continue
 
-  const target = manifest.slices.find((s) => s.idx === sliceIdx)
-  if (!target) throw new Error(`slice idx ${sliceIdx} 越界(共 ${manifest.slices.length} 个)`)
+    const buf = await sharp(orig)
+      .extract({ left, top, width, height })
+      .png()
+      .toBuffer()
 
-  const sliceBuf = await readSlice(stateId, category, sliceIdx)
-  if (!sliceBuf) throw new Error(`slice file 不存在:${stateId}/${category}/${sliceIdx}.png`)
-
-  // 写到 assets-bin/{elementId}.png(向后兼容)
-  const binDir = path.join(DATA_ROOT, 'assets-bin')
-  await fs.mkdir(binDir, { recursive: true })
-  await fs.writeFile(path.join(binDir, `${elementId}.png`), sliceBuf)
-
-  // 更新 manifest:清旧、设新
-  for (const s of manifest.slices) {
-    if (s.assigned_element_id === elementId && s.idx !== sliceIdx) {
-      s.assigned_element_id = null
+    // opaque_pct on sub-crop
+    const { data, info } = await sharp(buf)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const N = info.width * info.height
+    let opaque = 0
+    for (let i = 0; i < N; i++) {
+      if (data[i * info.channels + 3]! > 200) opaque++
     }
-  }
-  target.assigned_element_id = elementId
-  await saveManifest(stateId, category, manifest)
+    const pct = (opaque / N) * 100
 
-  // createOrUpdateAsset:复用旧路径,id == element_id
-  await createOrUpdateAsset({
-    id: elementId,
-    element_id: elementId,
-    page_id: ctx.page_id,
-    width: target.width,
-    height: target.height,
-    alpha_quality: target.opaque_pct / 100,
-  })
+    const newIdx = await nextSliceIdx(stateId, category)
+    const info2 = await writeSlice(stateId, category, newIdx, buf, {
+      opaque_pct: pct,
+      bbox: [left, top, width, height],
+    })
+    created.push(info2)
+  }
+  return created
 }
+
+// ─── 指派 / 撤销(MVP S3:Asset.slice_source 反查) ────────────────────────
+
+import { newId, nowIso } from './id'
+import { getAsset, saveAsset, deleteAsset, listAssetsForPage } from './assets'
+
+/** 把切片指派给 element:copy → assets-bin + 创建/更新 Asset */
+export async function assignSliceToElement(input: {
+  elementId: string
+  pageId: string
+  source: SliceSource
+}): Promise<Asset> {
+  const sliceBuf = await readSliceBuffer(input.source.state_id, input.source.category, input.source.idx)
+  const meta = await sharp(sliceBuf).metadata()
+  const w = meta.width ?? 0
+  const h = meta.height ?? 0
+
+  // copy 到 assets-bin/{element-id}.png(asset.id == element.id)
+  await writeAtomic(paths.assetBin(input.elementId), sliceBuf)
+
+  // 计算 alpha_quality(opaque% / 100,简版)
+  const { data, info } = await sharp(sliceBuf)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const N = info.width * info.height
+  let opaque = 0
+  for (let i = 0; i < N; i++) {
+    if (data[i * info.channels + 3]! > 200) opaque++
+  }
+  const alpha = N > 0 ? opaque / N : 0
+
+  const existing = await getAsset(input.elementId)
+  const now = nowIso()
+  const asset: Asset = {
+    id: input.elementId,
+    element_id: input.elementId,
+    page_id: input.pageId,
+    local_path: paths.assetBin(input.elementId),
+    ...(existing?.cdn_url ? { cdn_url: existing.cdn_url } : {}),
+    width: w,
+    height: h,
+    alpha_quality: alpha,
+    status: 'extracted',
+    slice_source: input.source,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  }
+  await saveAsset(asset)
+  return asset
+}
+
+/** 撤销指派:删 assets-bin + 删 Asset 记录 */
+export async function unassignAsset(elementId: string): Promise<void> {
+  await unlinkIfExists(paths.assetBin(elementId))
+  await deleteAsset(elementId)
+}
+
+/** 反查:某切片当前被哪些 asset 引用(可能多个,因 MVP S3 允许重复指派) */
+export async function findAssetsBySliceSource(
+  pageId: string,
+  source: SliceSource,
+): Promise<Asset[]> {
+  const all = await listAssetsForPage(pageId)
+  return all.filter(
+    (a) =>
+      a.slice_source &&
+      a.slice_source.state_id === source.state_id &&
+      a.slice_source.category === source.category &&
+      a.slice_source.idx === source.idx,
+  )
+}
+
+/** 反查:列出某 state 下所有切片 + 是否被引用(各 asset_id) */
+export async function listSlicesWithAssignment(
+  pageId: string,
+  stateId: string,
+): Promise<Array<SliceInfo & { assigned_to: string[] }>> {
+  const slices = await listSlicesForState(stateId)
+  const assets = await listAssetsForPage(pageId)
+  return slices.map((s) => ({
+    ...s,
+    assigned_to: assets
+      .filter(
+        (a) =>
+          a.slice_source &&
+          a.slice_source.state_id === s.state_id &&
+          a.slice_source.category === s.category &&
+          a.slice_source.idx === s.idx,
+      )
+      .map((a) => a.element_id),
+  }))
+}
+
+// 避免循环 import:placeholder 不直接调 newId 但保持引用
+void newId

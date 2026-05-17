@@ -1,26 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { getPipelineRun } from '@/lib/elements'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
 
-import { getRun, listSubRuns } from '@/lib/pipelines'
-import type { PipelineRun } from '@/lib/types'
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
 
-type RouteCtx = { params: Promise<{ id: string }> }
-
-export async function GET(req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const run = await getRun(id)
-  if (!run) return NextResponse.json({ error: 'not found' }, { status: 404 })
-
-  const includeSub = req.nextUrl.searchParams.get('include_sub') === 'true'
-  if (!includeSub) {
-    return NextResponse.json(run)
+export async function GET(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const run = await getPipelineRun(id)
+    if (!run) return jsonResponse({ error: 'not found' }, { status: 404 })
+    return jsonResponse(run)
+  } catch (err) {
+    return errorToResponse(err)
   }
-
-  // pass1 / pass2 → 找同 state 同 parent 的 sub-runs(pass1_*, pass2_*)
-  let subRuns: PipelineRun[] = []
-  if (run.pass === 'pass1') {
-    subRuns = await listSubRuns(run.state_id, 'pass1')
-  } else if (run.pass === 'pass2') {
-    subRuns = await listSubRuns(run.state_id, 'pass2')
-  }
-  return NextResponse.json({ run, sub_runs: subRuns })
 }

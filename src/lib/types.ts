@@ -1,53 +1,53 @@
-// 数据 schema — 跟 SPEC.md § 数据 schema 完全一致
-// 改这份必须同步改 SPEC.md(参见 AGENTS.md § 8 文档同步规则)
+// HANDOFF §3 全部数据类型(逐字对应,带 MVP §0.4 偏离)
+// 命名:`Element` 与 DOM 全局冲突,改名 `LayoutElement`
 
-import type { VisualCategory } from '@/lib/visual-category'
-
-// 重新导出 VisualCategory,方便消费方从 types 一次性引入
-export type { VisualCategory } from '@/lib/visual-category'
-
-// =============================================================================
-// Provider 与 Config
-// =============================================================================
+// ─── §3.1 Provider + AppConfig ──────────────────────────────────────────────
 
 export type ProviderKind = 'mllm' | 'image_gen' | 'cdn' | 'matting'
-export type ApiFormat = 'openai' | 'anthropic' | 'apimart' | 'sankuai' | 's3' | 'koukoutu'
 
-export type ProviderConfig = {
-  id: string                       // nanoid(6),前缀 prv_
+export type ApiFormat =
+  | 'openai'
+  | 'anthropic'
+  | 'apimart'
+  | 'sankuai'
+  | 's3'
+  | 'koukoutu'
+
+export interface ProviderConfig {
+  id: string
   kind: ProviderKind
-  name: string                     // 用户给的展示名
+  name: string
   api_format: ApiFormat
   base_url: string
-  api_key: string                  // 服务端持久化明文,GET 时遮罩
-
-  // for kind=mllm | image_gen
+  /** 服务端持久化明文,GET 时遮罩 */
+  api_key: string
+  /** mllm | image_gen 才有 */
   model?: string
-
-  // for kind=mllm
+  // mllm
   default_temperature?: number
   default_max_tokens?: number
-  vision_capable?: boolean         // 必须 true 才能用作 mllm
-
-  // for kind=image_gen
+  vision_capable?: boolean
+  // image_gen
   endpoint_kind?: 'image_edit' | 'image_generation'
   is_async?: boolean
   poll_interval_seconds?: number
   poll_initial_delay_seconds?: number
   poll_max_attempts?: number
   default_quality?: 'low' | 'medium' | 'high'
-
-  // for kind=cdn
+  // cdn
   bucket?: string
   region?: string
   public_url_prefix?: string
-
+  /** S3 用:Access Key ID(api_key 字段存 Secret Access Key) */
+  access_key_id?: string
+  // 状态
   active?: boolean
   created_at: string
   updated_at: string
 }
 
-export type AppConfig = {
+export interface AppConfig {
+  /** schema 版本号,启动时检测做迁移 */
   version: string
   providers: ProviderConfig[]
   prompts: {
@@ -63,75 +63,105 @@ export type AppConfig = {
   }
 }
 
-// =============================================================================
-// Project / Page / State
-// =============================================================================
+// ─── §3.2 Project / Page / State ────────────────────────────────────────────
 
-export type Project = {
-  id: string                       // nanoid(8),前缀 proj_
+export interface Project {
+  id: string
   name: string
   description?: string
+  /** "Next.js + Tailwind + shadcn" 之类的 hint,写进 spec.md */
   tech_stack_hint?: string
+  /** 覆盖默认 CDN */
   cdn_provider_id?: string
   created_at: string
   updated_at: string
-  // API decorated(GET 时附加,不持久化)
-  sample_thumbnail_url?: string    // Phase 8e:取项目下第一个有缩略图的 page
 }
 
-export type Page = {
-  id: string                       // nanoid(8),前缀 page_
+export interface Page {
+  id: string
   project_id: string
+  /** "抽中页" */
   name: string
+  /** "/lottery/result" */
   route_hint?: string
+  /** 默认状态 id;MVP S1 单 state per page,这就是唯一的 state */
   canonical_state_id: string
-  thumbnail_path?: string          // data/thumbs/{page-id}.png,canonical state 上传后填(Phase 8e)
   created_at: string
   updated_at: string
-  // API decorated(GET 时附加,不持久化)
-  thumbnail_url?: string           // Phase 8e:thumbnail_path 存在时填 /api/thumbs/{pageId}
 }
 
 export type StatePipelineStatus =
   | 'idle'
-  | 'pass1_running' | 'pass1_done' | 'pass1_failed'
-  | 'pass2_running' | 'pass2_done' | 'pass2_failed'
-  | 'validating' | 'validated'
+  | 'pass1_running'
+  | 'pass1_done'
+  | 'pass1_failed'
+  | 'pass2_running'
+  | 'pass2_done'
+  | 'pass2_failed'
+  | 'validating'
+  | 'validated'
 
-export type State = {
-  id: string                       // nanoid(8),前缀 state_
+export interface StateRecord {
+  id: string
   page_id: string
+  /** "canonical" / "hover" / "empty";MVP S1 单 state 时固定 "canonical" */
   name: string
-  original_image_path: string      // data/raw/{state-id}.png
+  /** data/raw/{state-id}.png */
+  original_image_path: string
   width: number
   height: number
   pipeline_status: StatePipelineStatus
   pass1_run_id?: string
   pass2_run_id?: string
+  validate_run_id?: string
   created_at: string
 }
 
-// =============================================================================
-// Element / Asset
-// =============================================================================
+// ─── §3.3 Element / Asset ───────────────────────────────────────────────────
 
-export type Element = {
-  id: string                       // nanoid(8),前缀 el_;跨状态对齐:同 entity 同 id
+export type VisualCategory =
+  | 'subject'
+  | 'button'
+  | 'container'
+  | 'background'
+  | 'decoration'
+  | 'other'
+
+/** IoU 合并冲突时高优先级胜出(数字越小越优先) */
+export const VISUAL_CATEGORY_PRIORITY: Record<VisualCategory, number> = {
+  subject: 1,
+  button: 2,
+  container: 3,
+  background: 4,
+  decoration: 5,
+  other: 6,
+}
+
+export type ElementType = 'static' | 'code'
+
+/** 归一化 bbox [x, y, w, h] ∈ [0, 1] */
+export type BBox = readonly [number, number, number, number]
+
+export interface LayoutElement {
+  id: string
   page_id: string
+  /** MVP S1 永远 = [page.canonical_state_id] */
   state_ids: string[]
+  /** "卡通娃娃" */
   name: string
-  type: 'static' | 'code'
-  visual_category: VisualCategory  // 新增,Pass 1 输出(Phase 8b)
-  bbox: [number, number, number, number]   // canonical 原图归一化坐标 [x,y,w,h] ∈ [0,1]
+  type: ElementType
+  visual_category: VisualCategory
+  bbox: BBox
   z_index: number
-  description: string              // for coding agent + Pass 2 prompt 渲染源, ≤ 80 字
-
-  // type=code 才有
+  /** 中文 ≤ 80 字 */
+  description: string
+  /** type=code 才有 */
   shape_spec?: string
+  /** type=code 才有 */
   material_spec?: string
-
   cross_state_notes?: string
-  pass1_routes_seen?: string[]     // 新增,debug:此 element 在哪几路 Pass 1 中被识别(Phase 8b)
+  /** debug:此 element 在哪几路 Pass 1 中被识别 */
+  pass1_routes_seen?: string[]
   reviewed: boolean
   created_at: string
   updated_at: string
@@ -139,72 +169,97 @@ export type Element = {
 
 export type AssetStatus = 'extracted' | 'validated' | 'uploaded' | 'failed'
 
-export type Asset = {
-  id: string                       // 与 element.id 一致
+/** MVP S3:切片来源,放进 Asset 自身,无独立 SliceManifest */
+export interface SliceSource {
+  state_id: string
+  category: VisualCategory
+  idx: number
+}
+
+export interface Asset {
+  /** 与 element.id 一致 */
+  id: string
   element_id: string
   page_id: string
-  local_path: string               // data/assets-bin/{asset-id}.png
+  /** data/assets-bin/{asset-id}.png */
+  local_path: string
   cdn_url?: string
   width: number
   height: number
-  alpha_quality: number            // 0-1
+  /** 0-1 */
+  alpha_quality: number
   validation_notes?: string
   status: AssetStatus
+  /** MVP S3:指派关系存这里,无独立 manifest */
+  slice_source?: SliceSource
   created_at: string
   updated_at: string
 }
 
-// =============================================================================
-// Slice library
-// =============================================================================
-// Pass 2 切片落地后,同一 (state, category) 的所有切片先写到切片库。
-// 默认按 (y,x) 顺序自动指派给该 category 的 elements;用户可在 Asset Review
-// 通过 SlicePickerDialog 手动改派(slice_idx ↔ element_id 多对一)。
-// 见 CLAUDE.md § 找东西 § data/slices/。
+// ─── §3.4 切片(MVP S3 简化:无 SliceManifest 文件) ──────────────────────────
 
-export type SliceManifestEntry = {
-  idx: number                              // 0-based,与文件名 {idx}.png 对应
-  bbox: [number, number, number, number]   // keyed PNG 上的像素坐标 [x,y,w,h]
-  opaque_pct: number                       // 0-100
+export interface SliceInfo {
+  state_id: string
+  category: VisualCategory
+  idx: number
+  /** 文件相对路径 data/slices/{state}-{cat}/{idx}.png */
+  path: string
   width: number
   height: number
-  assigned_element_id: string | null       // 当前指派给的 element id,null = 未指派
+  /** 0-100 */
+  opaque_pct: number
 }
 
-export type SliceManifest = {
-  state_id: string
-  category: string                         // VisualCategory 字面量,manifest 用宽 string 容错
-  slices: SliceManifestEntry[]
-  created_at: string
-}
-
-// =============================================================================
-// PipelineRun
-// =============================================================================
+// ─── §3.5 PipelineRun ───────────────────────────────────────────────────────
 
 export type PipelinePassKind =
-  | 'pass1' | 'pass1_subject' | 'pass1_button' | 'pass1_container'
-  | 'pass1_background' | 'pass1_decoration'
-  | 'pass2' | 'pass2_subject' | 'pass2_button' | 'pass2_container'
-  | 'pass2_background' | 'pass2_decoration' | 'pass2_other'
-  | 'validate' | 're_extract'
+  | 'pass1' // 总 audit 入口
+  | 'pass1_subject'
+  | 'pass1_button'
+  | 'pass1_container'
+  | 'pass1_background'
+  | 'pass1_decoration'
+  | 'pass2' // 总 audit 入口
+  | 'pass2_subject'
+  | 'pass2_button'
+  | 'pass2_container'
+  | 'pass2_background'
+  | 'pass2_decoration'
+  | 'pass2_other'
+  | 'validate'
+  | 're_extract'
 
-export type PipelineRun = {
-  id: string                       // nanoid(8),前缀 run_
+export interface PipelineRunError {
+  code: string
+  message: string
+  retryable: boolean
+}
+
+export interface LlmRequestSpec {
+  provider_id: string
+  model: string
+  /** 实际发出的 prompt(展开变量后) */
+  prompt: string
+  /** 输入图片的本地路径或 base64 sha256 */
+  images: string[]
+  extra: Record<string, unknown>
+}
+
+export interface PipelineRun {
+  id: string
   state_id: string
   pass: PipelinePassKind
   status: 'running' | 'completed' | 'failed'
   started_at: string
   completed_at?: string
-
-  llm_request: {
-    provider_id: string
-    model: string
-    prompt: string                 // 实际发出的 prompt(展开变量后)
-    images: string[]               // 输入图片的本地路径或 base64 sha256
-    extra: Record<string, unknown> // 其他参数(temperature, max_tokens 等)
-  }
-  llm_response: Record<string, unknown>
-  parsed_result?: Record<string, unknown>
-  error?: { code: string; message: string; retryable: boolean }
+  llm_request: LlmRequestSpec
+  /** 原始返回值,留底 */
+  llm_response: unknown
+  parsed_result?: unknown
+  error?: PipelineRunError
 }
+
+// ─── 工具类型 ────────────────────────────────────────────────────────────────
+
+export type Brand<T, B> = T & { __brand: B }
+export type IsoDateTime = Brand<string, 'IsoDateTime'>

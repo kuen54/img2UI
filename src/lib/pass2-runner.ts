@@ -1,634 +1,352 @@
-// Pass 2 主编排:渲染 prompt + 调 image_gen + 写绿幕原图 + chroma key + 切片 + 写 assets
-//
-// Phase 5 实现(1-shot 全量)
-// Phase 8c 重写主路径:按 visual_category 分组并行 + multi-ref crops
-//
-// 部分失败容忍策略(Phase 8c):
-// - 每个 visual_category 一路 image_gen 调用(各自 sub-run = pass2_subject / pass2_decoration / ...)
-// - 单路失败:该路所有 elements 的 asset 标 status=failed,其他路不受影响
-// - Pass 2 总 run 始终 completed(只要 runPass2 走完整个 try);失败的 element 在 Asset Review 提示用户重抠
-// - 这与 v0.1 1-shot Pass 2「全成或全败」不同 — multi-route 下「部分成功」是正常状态
-//
-// re_extract 路径(单元素重抠)保留 1-shot 单图调用,不走分组逻辑(单元素天然只有 1 路)
+// HANDOFF §6:Pass 2 按 visual_category 6 路并行,多参考图,部分失败容忍。
+// MVP S3:不创建 Asset,仅写绿幕 + chroma keyed + 切片落盘到切片库。
+// 用户在 Asset Review 拖切片到 element 时才 createAsset。
 
 import { promises as fs } from 'node:fs'
-import path from 'node:path'
-
-import type { Element, Page, ProviderConfig, State, PipelinePassKind } from '@/lib/types'
-import { DATA_ROOT } from '@/lib/fs-utils'
-import { loadConfig } from '@/lib/config'
-import { callImageGen } from '@/lib/llm-client'
-import { getState, setPipelineStatus } from '@/lib/states'
-import { getPage } from '@/lib/pages'
-import { getProject } from '@/lib/projects'
-import { getElementsByPage } from '@/lib/elements'
-import { createRun, completeRun, failRun } from '@/lib/pipelines'
-import { acquireLock, releaseLock, RunLockConflictError } from '@/lib/run-lock'
-import { chromaGreenKey } from '@/lib/alpha-key'
-import { sliceAssets } from '@/lib/slicer'
-import { createOrUpdateAsset, writeAssetBinary } from '@/lib/assets'
+import type {
+  LayoutElement,
+  StateRecord,
+  VisualCategory,
+  ProviderConfig,
+  PipelineRun,
+  PipelinePassKind,
+  Page,
+  Project,
+} from './types'
+import { newId, nowIso } from './id'
+import { paths, writeAtomic } from './fs-utils'
+import { callImageGen } from './llm-client'
+import { getActiveProvider, getConfig } from './config'
+import { ALL_VISUAL_CATEGORIES } from './visual-category'
+import { chromaGreenKey } from './alpha-key'
+import { sliceAssets } from './slicer'
+import { writeSlice } from './slices'
+import { cropFromBbox, bufferToDataUrl } from './bbox-crop'
 import {
-  writeSlice,
-  saveManifest,
-  assignSliceToElement,
-} from '@/lib/slices'
-import type { SliceManifest, SliceManifestEntry } from '@/lib/types'
-import { renderPass2RoutePrompt } from '@/lib/prompts/render-pass2-route'
-import { cropFromBbox } from '@/lib/bbox-crop'
-import { listMultiRouteFiles } from '@/lib/multi-png-stack'
-import { callMatting } from '@/lib/matting-client'
-import { type VisualCategory } from '@/lib/visual-category'
+  renderPass2RoutePrompt,
+  renderPass2ReExtract,
+} from './prompts/render-pass2-route'
+import { createPipelineRun, updatePipelineRun } from './elements'
 
-export type Pass2Result = { run_id: string; created_assets: number }
+export interface Pass2RouteResult {
+  category: VisualCategory
+  elementCount: number
+  sliceCount: number
+  subRunId: string
+}
 
-export async function runPass2(
-  stateId: string,
-  options?: { onlyElementId?: string },
-): Promise<Pass2Result> {
-  const lockKey = `state:${stateId}`
-  try {
-    acquireLock(lockKey, `pass2-${Date.now()}`)
-  } catch (e) {
-    if (e instanceof RunLockConflictError) {
-      throw new Error('该设计稿正在跑 pipeline,稍候再试')
-    }
-    throw e
+export interface Pass2RouteFailure {
+  category: VisualCategory
+  error: string
+  elementIds: string[]
+}
+
+export interface Pass2MultiResult {
+  successes: Pass2RouteResult[]
+  failures: Pass2RouteFailure[]
+  /** 该 state 全部 type=static elements(在所有路次中) */
+  totalStaticCount: number
+}
+
+/**
+ * Pass 2 multi-route:按 visual_category 分组并行。
+ * 部分失败容忍:单路 fail 不阻断其他路。
+ */
+export async function runPass2MultiRoute(input: {
+  state: StateRecord
+  page: Page
+  project: Project
+  elements: LayoutElement[]
+}): Promise<Pass2MultiResult> {
+  const { state, page, project, elements } = input
+
+  const provider = await getActiveProvider('image_gen')
+  if (!provider) {
+    throw new Error('未配置 active image_gen provider')
   }
 
-  // re_extract(单元素重抠)走原 1-shot 路径
-  if (options?.onlyElementId) {
-    try {
-      return await runReExtract(stateId, options.onlyElementId)
-    } finally {
-      releaseLock(lockKey)
-    }
+  // 仅 type=static 进 Pass 2
+  const statics = elements.filter((e) => e.type === 'static')
+  const totalStaticCount = statics.length
+
+  // 按 visual_category 分组
+  const byCat = new Map<VisualCategory, LayoutElement[]>()
+  for (const cat of ALL_VISUAL_CATEGORIES) {
+    byCat.set(cat, [])
+  }
+  for (const el of statics) {
+    byCat.get(el.visual_category)!.push(el)
   }
 
-  // 全量 Pass 2:按 visual_category 分组并行
-  let totalRunId: string | null = null
-  try {
-    const state = await getState(stateId)
-    if (!state) throw new Error('state not found')
-    const page = await getPage(state.page_id)
-    if (!page) throw new Error('page not found')
-    const project = await getProject(page.project_id)
-    if (!project) throw new Error('project not found')
+  const pageDescription = project.description ?? page.name
+  const rawBuf = await fs.readFile(paths.raw(state.id))
 
-    const config = await loadConfig()
-    const provider = config.providers.find((p) => p.kind === 'image_gen' && p.active)
-    if (!provider) throw new Error('未配置 active image_gen provider(去 /settings/models 设置)')
+  const tasks: Array<{ category: VisualCategory; els: LayoutElement[] }> = []
+  for (const [cat, els] of byCat) {
+    if (els.length > 0) tasks.push({ category: cat, els })
+  }
 
-    const allElements = await getElementsByPage(state.page_id)
-    const staticElements = allElements.filter((e) => e.type === 'static')
-    if (staticElements.length === 0) throw new Error('没有 type=static 元素可提取')
+  const settled = await Promise.allSettled(
+    tasks.map((t) =>
+      runRoute({
+        state,
+        provider,
+        category: t.category,
+        elements: t.els,
+        pageDescription,
+        rawBuf,
+      }),
+    ),
+  )
 
-    const staticByCategory = groupByCategory(staticElements)
-
-    // 总 run(顶层 pass2)记录整体 multi-route 编排
-    const totalRun = await createRun({
-      state_id: stateId,
-      pass: 'pass2',
-      llm_request: {
-        provider_id: provider.id,
-        model: provider.model ?? '',
-        prompt: '[multi-route Pass 2 — see sub-runs by category]',
-        images: [state.original_image_path],
-        extra: {
-          categories: Array.from(staticByCategory.keys()),
-          element_count: staticElements.length,
-        },
-      },
-    })
-    totalRunId = totalRun.id
-    await setPipelineStatus(stateId, 'pass2_running', { pass2_run_id: totalRun.id })
-
-    // 读原图(只读一次,所有路共用)
-    const rawBuf = await fs.readFile(path.join(DATA_ROOT, 'raw', `${stateId}.png`))
-    const rawDataUrl = `data:image/png;base64,${rawBuf.toString('base64')}`
-    const pageDesc = project.description ?? page.name
-
-    // 每 visual_category 一路并行
-    const routeResults = await Promise.allSettled(
-      Array.from(staticByCategory.entries()).map(([cat, els]) =>
-        runRoute({
-          stateId,
-          state,
-          provider,
-          rawBuf,
-          rawDataUrl,
-          pageDesc,
-          category: cat,
-          elements: els,
-        }),
-      ),
-    )
-
-    const summary = routeResults.map((s) =>
-      s.status === 'fulfilled' ? s.value : { ok: false as const, error: 'rejected' },
-    )
-    const okRoutes = summary.filter((s) => s.ok).length
-    const totalCreated = summary.reduce(
-      (a, s) => a + (s.ok ? s.sliced : 0),
-      0,
-    )
-
-    await setPipelineStatus(stateId, 'pass2_done')
-    await completeRun(totalRunId, {
-      llm_response: { successful_routes: okRoutes, total_routes: summary.length },
-      parsed_result: {
-        by_route: summary,
-        created_assets: totalCreated,
-        element_count: staticElements.length,
-      },
-    })
-
-    return { run_id: totalRunId, created_assets: totalCreated }
-  } catch (err) {
-    if (totalRunId) {
-      await failRun(totalRunId, {
-        code: 'PASS2_ERROR',
-        message: (err as Error).message,
-        retryable: true,
+  const successes: Pass2RouteResult[] = []
+  const failures: Pass2RouteFailure[] = []
+  for (let i = 0; i < settled.length; i++) {
+    const t = tasks[i]!
+    const r = settled[i]!
+    if (r.status === 'fulfilled') {
+      successes.push(r.value)
+    } else {
+      const message = r.reason instanceof Error ? r.reason.message : String(r.reason)
+      failures.push({
+        category: t.category,
+        error: message,
+        elementIds: t.els.map((e) => e.id),
       })
     }
-    await setPipelineStatus(stateId, 'pass2_failed')
-    throw err
-  } finally {
-    releaseLock(lockKey)
   }
+
+  return { successes, failures, totalStaticCount }
 }
 
-// =============================================================================
-// 单路执行:某 visual_category 的全部 elements 一次 image_gen 调用 + chroma key + 切片 + 写 assets
-// 失败时:该路所有 elements 标 status=failed,但不抛出(由 caller 的 Promise.allSettled 收集)
-// =============================================================================
+// ─── 单路 sub-run ──────────────────────────────────────────────────────────
 
-type RouteCtx = {
-  stateId: string
-  state: State
+async function runRoute(input: {
+  state: StateRecord
   provider: ProviderConfig
-  rawBuf: Buffer
-  rawDataUrl: string
-  pageDesc: string
   category: VisualCategory
-  elements: Element[]
-}
+  elements: LayoutElement[]
+  pageDescription: string
+  rawBuf: Buffer
+}): Promise<Pass2RouteResult> {
+  const { state, provider, category, elements, pageDescription, rawBuf } = input
 
-type RouteResult =
-  | { ok: true; category: VisualCategory; sliced: number; expected: number }
-  | { ok: false; category: VisualCategory; error: string; sliced?: never }
-
-async function runRoute(ctx: RouteCtx): Promise<RouteResult> {
-  const { stateId, state, provider, rawBuf, rawDataUrl, pageDesc, category, elements } = ctx
-
-  const subPass: PipelinePassKind = `pass2_${category}` as PipelinePassKind
-  const subRun = await createRun({
-    state_id: stateId,
-    pass: subPass,
+  const subRun: PipelineRun = {
+    id: newId(),
+    state_id: state.id,
+    pass: `pass2_${category}` as PipelinePassKind,
+    status: 'running',
+    started_at: nowIso(),
     llm_request: {
       provider_id: provider.id,
       model: provider.model ?? '',
-      prompt: `[only-${category}]`,
-      images: [state.original_image_path],
-      extra: { category, element_ids: elements.map((e) => e.id) },
+      prompt: '(待 prompt 渲染后填)',
+      images: [paths.raw(state.id)],
+      extra: { category, element_count: elements.length },
     },
+    llm_response: null,
+  }
+  await createPipelineRun(subRun)
+
+  try {
+    // 1. 准备多参考图:[原图, ...每个 element 的 crop]
+    const validElements: LayoutElement[] = []
+    const cropDataUrls: string[] = []
+    for (const el of elements) {
+      try {
+        const { buffer } = await cropFromBbox(rawBuf, el.bbox)
+        cropDataUrls.push(await bufferToDataUrl(buffer))
+        validElements.push(el)
+      } catch (err) {
+        // 单 element crop 失败 → 跳过该 element
+        console.warn(
+          `[pass2 ${category}] crop ${el.name} (${el.id}) failed: ${err instanceof Error ? err.message : err}`,
+        )
+      }
+    }
+    if (validElements.length === 0) {
+      throw new Error(`所有 ${elements.length} 个 element 的 crop 都失败`)
+    }
+
+    // 2. 渲染 prompt
+    const prompt = renderPass2RoutePrompt({
+      category,
+      elements: validElements,
+      pageDescription,
+    })
+    await updatePipelineRun(subRun.id, {
+      llm_request: {
+        ...subRun.llm_request,
+        prompt,
+      },
+    })
+
+    // 3. 调 image_gen
+    const mainDataUrl = await bufferToDataUrl(rawBuf)
+    const result = await callImageGen(provider, {
+      prompt,
+      reference_image_base64: mainDataUrl,
+      reference_image_base64s: cropDataUrls,
+      size: '1:1',
+      resolution: '1k',
+      quality: 'high',
+      n: 1,
+    })
+
+    // 4. 落 data/pass2/{state}-{cat}.png(留底,re-key-via-api 复用)
+    await writeAtomic(paths.pass2GreenScreen(state.id, category), result.image)
+
+    // 5. chroma key
+    const transparent = await chromaGreenKey(result.image)
+    await writeAtomic(paths.keyed(state.id, category), transparent)
+
+    // 6. slice
+    const slices = await sliceAssets(transparent)
+
+    // 7. 写到切片库(MVP S3:不创建 Asset)
+    for (let i = 0; i < slices.length; i++) {
+      const s = slices[i]!
+      await writeSlice(state.id, category, i, s.buffer, {
+        opaque_pct: s.opaque_pct,
+        bbox: s.bbox,
+      })
+    }
+
+    await updatePipelineRun(subRun.id, {
+      status: 'completed',
+      completed_at: nowIso(),
+      llm_response: { latency_ms: result.latency_ms, cost: result.cost ?? null },
+      parsed_result: {
+        slice_count: slices.length,
+        element_count: validElements.length,
+      },
+    })
+
+    return {
+      category,
+      elementCount: validElements.length,
+      sliceCount: slices.length,
+      subRunId: subRun.id,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await updatePipelineRun(subRun.id, {
+      status: 'failed',
+      completed_at: nowIso(),
+      error: { code: 'PASS2_ROUTE_ERROR', message, retryable: true },
+    }).catch(() => {})
+    throw err
+  }
+}
+
+// ─── re_extract 单元素重抠 ─────────────────────────────────────────────────
+
+export interface ReExtractResult {
+  /** 新切片(已写入 data/slices/{state}-{cat}/{idx}.png) */
+  newSliceIdx: number
+  newSliceCategory: VisualCategory
+  subRunId: string
+}
+
+/**
+ * 单元素重抠:1-shot 单图模板,只传原图(不传 crops)。
+ * 完成后该 element 自动获得新 slice — caller 应调 assignSliceToElement 完成自动指派。
+ */
+export async function runReExtract(input: {
+  state: StateRecord
+  page: Page
+  project: Project
+  element: LayoutElement
+}): Promise<ReExtractResult> {
+  const { state, page, project, element } = input
+
+  const provider = await getActiveProvider('image_gen')
+  if (!provider) {
+    throw new Error('未配置 active image_gen provider')
+  }
+
+  const config = await getConfig()
+  const template = config.prompts.pass2_extract
+  const pageDescription = project.description ?? page.name
+  const prompt = renderPass2ReExtract({
+    template,
+    pageDescription,
+    element,
   })
 
+  const subRun: PipelineRun = {
+    id: newId(),
+    state_id: state.id,
+    pass: 're_extract',
+    status: 'running',
+    started_at: nowIso(),
+    llm_request: {
+      provider_id: provider.id,
+      model: provider.model ?? '',
+      prompt,
+      images: [paths.raw(state.id)],
+      extra: { element_id: element.id, element_name: element.name },
+    },
+    llm_response: null,
+  }
+  await createPipelineRun(subRun)
+
   try {
-    // 1. 生成 crops(顺序与 elements 一致)
-    //    Phase 8f BUG #1:单 element crop 失败 → 标 failed asset + skip,不阻断该路其他 elements
-    const crops: string[] = []
-    const validElements: Element[] = []
-    for (const el of elements) {
-      try {
-        const cropBuf = await cropFromBbox(rawBuf, el.bbox, {
-          width: state.width,
-          height: state.height,
-        })
-        crops.push(`data:image/png;base64,${cropBuf.toString('base64')}`)
-        validElements.push(el)
-      } catch (cropErr) {
-        // 该 element 的 bbox 让 cropFromBbox 抛(NaN / 真零面积)— 标 failed,继续下一个
-        console.warn(
-          `[pass2-runner] skip ${el.id} (${el.name}) crop: ${(cropErr as Error).message}`,
-        )
-        await createOrUpdateAsset({
-          id: el.id,
-          element_id: el.id,
-          page_id: state.page_id,
-          width: 0,
-          height: 0,
-          alpha_quality: 0,
-          status: 'failed',
-        })
-      }
-    }
+    const rawBuf = await fs.readFile(paths.raw(state.id))
+    const mainDataUrl = await bufferToDataUrl(rawBuf)
 
-    if (validElements.length === 0) {
-      // 该路所有 element 的 bbox 都坏 — fail 该路 sub-run,不抛(允许其他路完成)
-      await failRun(subRun.id, {
-        code: `PASS2_ROUTE_${category.toUpperCase()}_NO_VALID_CROPS`,
-        message: '该路所有 element bbox 都无效',
-        retryable: false,
-      })
-      return { ok: false, category, error: 'no valid crops' }
-    }
-
-    // 2. 调 image_gen(主图 + valid crops)
-    const promptText = renderPass2RoutePrompt(category, validElements, pageDesc)
-    const { image: greenScreenPng, cost } = await callImageGen(provider, {
-      prompt: promptText,
-      reference_image_base64: rawDataUrl,
-      reference_image_base64s: crops,
+    const result = await callImageGen(provider, {
+      prompt,
+      reference_image_base64: mainDataUrl,
+      // re_extract 不传 crops(单元素无歧义)
       size: '1:1',
       resolution: '1k',
-      quality: provider.default_quality ?? 'high',
+      quality: 'high',
       n: 1,
     })
 
-    // 3. 留底绿幕图 + chroma key + 切片
-    const pass2Dir = path.join(DATA_ROOT, 'pass2')
-    await fs.mkdir(pass2Dir, { recursive: true })
-    await fs.writeFile(path.join(pass2Dir, `${stateId}-${category}.png`), greenScreenPng)
-
-    const keyedPng = await chromaGreenKey(greenScreenPng)
-    const keyedDir = path.join(DATA_ROOT, 'keyed')
-    await fs.mkdir(keyedDir, { recursive: true })
-    await fs.writeFile(path.join(keyedDir, `${stateId}-${category}.png`), keyedPng)
-
-    const slices = await sliceAssets(keyedPng, {
-      gap: 15,
-      padding: 5,
-      min_size: 30,
-      min_opaque_pct: 1,
-    })
-
-    // 4a. 写所有 slices 到切片库 + manifest(供用户后续手动改派)
-    //     manifest 先全部 assigned_element_id=null,下面的默认 (y,x) 指派写入后再回填
-    //     宽高直接来自 slicer 的 bbox(slicer 用 sharp.extract 切出来的 PNG 与 bbox 像素尺寸一致),
-    //     不再二次走 sharp metadata,避免在并行 route 下做多余的图像 IO。
-    const manifestEntries: SliceManifestEntry[] = []
-    for (let i = 0; i < slices.length; i++) {
-      const slice = slices[i]!
-      await writeSlice(stateId, category, i, slice.buffer)
-      manifestEntries.push({
-        idx: i,
-        bbox: slice.bbox,
-        opaque_pct: slice.opaque_pct,
-        width: slice.bbox[2],
-        height: slice.bbox[3],
-        assigned_element_id: null,
-      })
+    // chroma + slice
+    const transparent = await chromaGreenKey(result.image)
+    const slices = await sliceAssets(transparent)
+    if (slices.length === 0) {
+      throw new Error('chroma + slice 后无切片产生')
     }
-    const manifest: SliceManifest = {
-      state_id: stateId,
-      category,
-      slices: manifestEntries,
-      created_at: new Date().toISOString(),
-    }
-    await saveManifest(stateId, category, manifest)
-
-    // 4b. 默认 (y,x) 指派(保留旧行为):走 assignSliceToElement,
-    //     它内部会 copy slice → assets-bin/{element-id}.png + 更新 manifest.assigned_element_id +
-    //     createOrUpdateAsset。模型多画的切片(超出 elements 数量)留在切片库,用户可手动选用。
-    //     模型漏画的元素(slices < elements)在该路也无对应 asset(用户在 Asset Review 看到空)
-    const limit = Math.min(validElements.length, slices.length)
-    for (let i = 0; i < limit; i++) {
-      const el = validElements[i]!
-      await assignSliceToElement(stateId, category, i, el.id, {
-        page_id: state.page_id,
-      })
-    }
-
-    await completeRun(subRun.id, {
-      llm_response: { cost: cost ?? null },
-      parsed_result: {
-        category,
-        element_count: validElements.length,
-        slice_count: slices.length,
-        created_assets: limit,
-      },
-    })
-    return { ok: true, category, sliced: limit, expected: validElements.length }
-  } catch (err) {
-    const errMsg = (err as Error).message
-    await failRun(subRun.id, {
-      code: `PASS2_ROUTE_${category.toUpperCase()}_ERROR`,
-      message: errMsg,
-      retryable: true,
-    })
-    // 该路 elements 标 failed(不抛出,允许其他路完成)
-    for (const el of elements) {
-      await createOrUpdateAsset({
-        id: el.id,
-        element_id: el.id,
-        page_id: state.page_id,
-        width: 0,
-        height: 0,
-        alpha_quality: 0,
-        status: 'failed',
-      })
-    }
-    return { ok: false, category, error: errMsg }
-  }
-}
-
-function groupByCategory(els: Element[]): Map<VisualCategory, Element[]> {
-  const m = new Map<VisualCategory, Element[]>()
-  for (const e of els) {
-    const cat = (e.visual_category ?? 'other') as VisualCategory
-    const list = m.get(cat) ?? []
-    list.push(e)
-    m.set(cat, list)
-  }
-  return m
-}
-
-// =============================================================================
-// re_extract:单元素重抠保留原 1-shot 路径(MVP-α 行为不变)
-// =============================================================================
-
-async function runReExtract(stateId: string, elementId: string): Promise<Pass2Result> {
-  let runId: string | null = null
-  try {
-    const state = await getState(stateId)
-    if (!state) throw new Error('state not found')
-    const page = await getPage(state.page_id)
-    if (!page) throw new Error('page not found')
-    const project = await getProject(page.project_id)
-    if (!project) throw new Error('project not found')
-
-    const config = await loadConfig()
-    const provider = config.providers.find((p) => p.kind === 'image_gen' && p.active)
-    if (!provider) throw new Error('未配置 active image_gen provider(去 /settings/models 设置)')
-
-    const allElements = await getElementsByPage(state.page_id)
-    const targetEls = allElements.filter((e) => e.type === 'static' && e.id === elementId)
-    if (targetEls.length === 0) throw new Error('指定的 element 不是 static 或不存在')
-
-    const run = await createRun({
-      state_id: stateId,
-      pass: 're_extract',
-      llm_request: {
-        provider_id: provider.id,
-        model: provider.model ?? '',
-        prompt: '[Pass 2 prompt 见 parsed_result]',
-        images: [state.original_image_path],
-        extra: { element_id: elementId },
-      },
-    })
-    runId = run.id
-    await setPipelineStatus(stateId, 'pass2_running', { pass2_run_id: run.id })
-
-    const elementSummary = renderElementSummary(targetEls)
-    const elementCount = targetEls.length
-    const pageDescription = project.description ?? page.name
-    const promptText = config.prompts.pass2_extract
-      .replace(/\{\{page_description\}\}/g, pageDescription)
-      .replace(/\{\{element_summary\}\}/g, elementSummary)
-      .replace(/\{\{element_count\}\}/g, String(elementCount))
-
-    const rawBuf = await fs.readFile(path.join(DATA_ROOT, 'raw', `${stateId}.png`))
-    const refDataUrl = `data:image/png;base64,${rawBuf.toString('base64')}`
-
-    const { image: greenScreenPng, cost } = await callImageGen(provider, {
-      prompt: promptText,
-      reference_image_base64: refDataUrl,
-      size: '1:1',
-      resolution: '1k',
-      quality: provider.default_quality ?? 'high',
-      n: 1,
-    })
-
-    const pass2Dir = path.join(DATA_ROOT, 'pass2')
-    await fs.mkdir(pass2Dir, { recursive: true })
-    await fs.writeFile(path.join(pass2Dir, `${stateId}-re-${elementId}.png`), greenScreenPng)
-
-    const keyedPng = await chromaGreenKey(greenScreenPng)
-    const keyedDir = path.join(DATA_ROOT, 'keyed')
-    await fs.mkdir(keyedDir, { recursive: true })
-    await fs.writeFile(path.join(keyedDir, `${stateId}-re-${elementId}.png`), keyedPng)
-
-    const slices = await sliceAssets(keyedPng, {
-      gap: 15,
-      padding: 5,
-      min_size: 30,
-      min_opaque_pct: 1,
-    })
-    if (slices.length === 0) throw new Error('单元素重抠未切出任何 asset')
-    const best = slices.reduce(
-      (acc, s) => (s.opaque_pct > acc.opaque_pct ? s : acc),
-      slices[0]!,
+    // 取面积最大的切片(单元素重抠通常只有 1 个,但偶尔噪点)
+    const main = slices.reduce((a, b) =>
+      a.width * a.height >= b.width * b.height ? a : b,
     )
-    await writeAssetBinary(elementId, best.buffer)
-    const meta = await sharpDims(best.buffer)
-    await createOrUpdateAsset({
-      id: elementId,
-      element_id: elementId,
-      page_id: state.page_id,
-      width: meta.width,
-      height: meta.height,
-      alpha_quality: best.opaque_pct / 100,
+    // 写到该 element 的 visual_category 路下
+    const cat = element.visual_category
+    const { nextSliceIdx } = await import('./slices')
+    const idx = await nextSliceIdx(state.id, cat)
+    await writeSlice(state.id, cat, idx, main.buffer, {
+      opaque_pct: main.opaque_pct,
+      bbox: main.bbox,
     })
 
-    await setPipelineStatus(stateId, 'pass2_done')
-    await completeRun(run.id, {
-      llm_response: { cost: cost ?? null },
+    await updatePipelineRun(subRun.id, {
+      status: 'completed',
+      completed_at: nowIso(),
+      llm_response: { latency_ms: result.latency_ms, cost: result.cost ?? null },
       parsed_result: {
-        element_count: elementCount,
+        new_slice_idx: idx,
+        category: cat,
         slice_count: slices.length,
-        created_assets: 1,
-        prompt_length: promptText.length,
       },
     })
 
-    return { run_id: run.id, created_assets: 1 }
-  } catch (err) {
-    if (runId) {
-      await failRun(runId, {
-        code: 'PASS2_ERROR',
-        message: (err as Error).message,
-        retryable: true,
-      })
+    return {
+      newSliceIdx: idx,
+      newSliceCategory: cat,
+      subRunId: subRun.id,
     }
-    await setPipelineStatus(stateId, 'pass2_failed')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await updatePipelineRun(subRun.id, {
+      status: 'failed',
+      completed_at: nowIso(),
+      error: { code: 'RE_EXTRACT_ERROR', message, retryable: true },
+    }).catch(() => {})
     throw err
   }
 }
-
-// 按 name 分组渲染(SPEC § Pass 2 prompt 模板 § element_summary 渲染规则)
-// 仅 re_extract 路径仍在用;全量 Pass 2 已改为 renderPass2RoutePrompt
-export function renderElementSummary(elements: Element[]): string {
-  const groups = new Map<string, Element[]>()
-  for (const el of elements) {
-    const key = el.name.trim()
-    const list = groups.get(key) ?? []
-    list.push(el)
-    groups.set(key, list)
-  }
-  const lines: string[] = []
-  for (const [name, list] of groups) {
-    if (list.length === 1) {
-      const el = list[0]!
-      lines.push(`- ${name}(${el.description}`.trim() + ')')
-    } else {
-      const descs = list.map((e) => e.description.slice(0, 40)).join(';')
-      lines.push(`- ${name} 共 ${list.length} 个(${descs})`)
-    }
-  }
-  return lines.join('\n')
-}
-
-async function sharpDims(buf: Buffer): Promise<{ width: number; height: number }> {
-  const sharp = (await import('sharp')).default
-  const m = await sharp(buf).metadata()
-  return { width: m.width ?? 0, height: m.height ?? 0 }
-}
-
-// =============================================================================
-// reKeyViaApi:用户手动触发的 API 抠图(Asset Review 「用 API 抠图」按钮)
-//
-// 复用 pass2/{stateId}-{cat}.png 绿幕原图,送给抠图 provider(首发 koukoutu sync),
-// 拿到透明 PNG 后覆写 keyed/{stateId}-{cat}.png + 重切片 + 刷新该 category 的 asset。
-// 默认 pipeline 不动 — 仍是绿幕 + chroma key,这条只在用户主动点按钮时跑。
-//
-// 部分失败容忍:某 category 抠图失败 → 该 category 的 asset 不动(保留旧 chroma key 结果),
-// 不像 Pass 2 那样把 asset 标 status=failed。理由:这是用户主动 retry,不该把好的旧结果覆盖坏。
-//
-// 写顺序:matting + slice 都成功后才覆写 keyed/ + 更新 asset。中间任意步骤抛错都不留半成品。
-// =============================================================================
-
-export type ReKeyResult = {
-  run_id: string
-  refreshed: number
-  failed_routes: { category: string; error: string }[]
-}
-
-export async function reKeyViaApi(stateId: string): Promise<ReKeyResult> {
-  const lockKey = `state:${stateId}`
-  try {
-    acquireLock(lockKey, `rekey-${Date.now()}`)
-  } catch (e) {
-    if (e instanceof RunLockConflictError) {
-      throw new Error('该设计稿正在跑 pipeline,稍候再试')
-    }
-    throw e
-  }
-
-  let runId: string | null = null
-  try {
-    const state = await getState(stateId)
-    if (!state) throw new Error('state not found')
-
-    const config = await loadConfig()
-    const provider = config.providers.find((p) => p.kind === 'matting' && p.active)
-    if (!provider) {
-      throw new Error('未配置 active matting provider(去 /settings/models 设置)')
-    }
-
-    const allElements = await getElementsByPage(state.page_id)
-    const staticElements = allElements.filter((e) => e.type === 'static')
-    const elementsByCategory = groupByCategory(staticElements)
-
-    const pass2Dir = path.join(DATA_ROOT, 'pass2')
-    const files = await listMultiRouteFiles(pass2Dir, stateId)
-    if (files.length === 0) {
-      throw new Error('pass2 raw 不存在,请先跑一次 Pass 2')
-    }
-
-    const run = await createRun({
-      state_id: stateId,
-      pass: 're_extract',
-      llm_request: {
-        provider_id: provider.id,
-        model: provider.model ?? 'background-removal',
-        prompt: '[matting API re-key — replaces chroma green key]',
-        images: [state.original_image_path],
-        extra: {
-          method: 'matting_api',
-          api_format: provider.api_format,
-          file_count: files.length,
-        },
-      },
-    })
-    runId = run.id
-
-    const failed: { category: string; error: string }[] = []
-    let refreshed = 0
-    const keyedDir = path.join(DATA_ROOT, 'keyed')
-    await fs.mkdir(keyedDir, { recursive: true })
-
-    for (const file of files) {
-      const cat = inferCategoryFromFilename(file, stateId)
-      const greenScreenPng = await fs.readFile(file)
-      try {
-        const transparentPng = await callMatting(provider, { png: greenScreenPng })
-        const slices = await sliceAssets(transparentPng, {
-          gap: 15,
-          padding: 5,
-          min_size: 30,
-          min_opaque_pct: 1,
-        })
-        await fs.writeFile(path.join(keyedDir, `${stateId}-${cat}.png`), transparentPng)
-
-        const els = elementsByCategory.get(cat as VisualCategory) ?? []
-        const limit = Math.min(els.length, slices.length)
-        for (let i = 0; i < limit; i++) {
-          const el = els[i]!
-          const slice = slices[i]!
-          await writeAssetBinary(el.id, slice.buffer)
-          const meta = await sharpDims(slice.buffer)
-          await createOrUpdateAsset({
-            id: el.id,
-            element_id: el.id,
-            page_id: state.page_id,
-            width: meta.width,
-            height: meta.height,
-            alpha_quality: slice.opaque_pct / 100,
-          })
-          refreshed++
-        }
-      } catch (err) {
-        failed.push({ category: cat, error: (err as Error).message })
-      }
-    }
-
-    if (failed.length === files.length) {
-      throw new Error(`API 抠图全部失败(${failed.length} 路):${failed[0]?.error ?? ''}`)
-    }
-
-    await completeRun(run.id, {
-      llm_response: {
-        successful_routes: files.length - failed.length,
-        total_routes: files.length,
-      },
-      parsed_result: {
-        refreshed,
-        failed_routes: failed,
-        method: 'matting_api',
-      },
-    })
-    return { run_id: run.id, refreshed, failed_routes: failed }
-  } catch (err) {
-    if (runId) {
-      await failRun(runId, {
-        code: 'REKEY_API_ERROR',
-        message: (err as Error).message,
-        retryable: true,
-      })
-    }
-    throw err
-  } finally {
-    releaseLock(lockKey)
-  }
-}
-
-// 从 pass2/{stateId}-{category}.png 推 category。VisualCategory 都是单词,无 `-`,安全。
-function inferCategoryFromFilename(filePath: string, stateId: string): string {
-  const base = path.basename(filePath, '.png')  // 'state_x-button'
-  const prefix = `${stateId}-`
-  return base.startsWith(prefix) ? base.slice(prefix.length) : base
-}
-
-// 仅在测试中用得到的辅助
-export type { ProviderConfig, Page, State }

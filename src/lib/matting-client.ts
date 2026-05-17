@@ -1,42 +1,48 @@
-// Matting client:抠图 API 调用统一封装
-// 默认 pipeline 走绿幕 + chroma key(alpha-key.ts),这里仅作为 Asset Review 手动 fallback
-// 见 CLAUDE.md § 7
+// HANDOFF §7.7:抠图 fallback,默认不在自动 pipeline 路径。
+// 仅 Asset Review 用户主动点「用 API 抠图」时,/api/states/[id]/re-key-via-api 路由调用。
 
-import type { ProviderConfig } from '@/lib/types'
+import type { ProviderConfig } from './types'
+import { HttpError } from './http'
 
-const MATTING_TIMEOUT_MS = 60_000  // koukoutu sync 单图实测 ~3-10s,1min 兜底
+const MATTING_TIMEOUT_MS = 60_000
 
-export type CallMattingOptions = {
-  png: Buffer            // 输入 PNG(可以是绿幕的 pass2 raw,也可以是任何 PNG)
+export interface CallMattingOpts {
+  png: Buffer
   signal?: AbortSignal
 }
 
-// 返回透明背景的 RGBA PNG bytes
+/** 透明 PNG bytes;失败抛错 */
 export async function callMatting(
   provider: ProviderConfig,
-  opts: CallMattingOptions,
+  opts: CallMattingOpts,
 ): Promise<Buffer> {
   if (provider.kind !== 'matting') {
     throw new Error(`provider kind 不是 matting: ${provider.kind}`)
   }
-  if (!provider.api_key) throw new Error('api_key 未填')
+  if (!provider.api_key) throw new HttpError(401, 'api_key empty', false)
 
   switch (provider.api_format) {
     case 'koukoutu':
       return callKoukoutuSync(provider, opts)
     default:
-      throw new Error(`matting 不支持 api_format: ${provider.api_format}`)
+      throw new Error(`matting api_format 不支持: ${provider.api_format}`)
   }
 }
 
-// =============================================================================
-// koukoutu sync /v1/create:multipart 上传 image_file → 直接返回 PNG bytes
-// 实测响应 Content-Type: application/octet-stream(成功),application/json(错误)
-// =============================================================================
-
-async function callKoukoutuSync(p: ProviderConfig, opts: CallMattingOptions): Promise<Buffer> {
+/**
+ * koukoutu sync (`${base_url}/create`):
+ * - 默认 base_url 含 /v1 后缀(sync.koukoutu.com/v1),所以 endpoint 拼成 `/create`
+ * - multipart/form-data,字段:image_file (binary), model_key (str), output_format (str)
+ * - 成功:Content-Type: application/octet-stream,body 是透明 PNG bytes
+ * - 失败:Content-Type: application/json,body { code, message }
+ * - 60s timeout(单图通常 5-15s)
+ */
+async function callKoukoutuSync(
+  p: ProviderConfig,
+  opts: CallMattingOpts,
+): Promise<Buffer> {
   const form = new FormData()
-  form.append('model_key', p.model ?? 'background-removal')
+  form.append('model_key', p.model && p.model !== 'default' ? p.model : 'background-removal')
   form.append('output_format', 'png')
   form.append(
     'image_file',
@@ -45,10 +51,16 @@ async function callKoukoutuSync(p: ProviderConfig, opts: CallMattingOptions): Pr
   )
 
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), MATTING_TIMEOUT_MS)
+  const timer = setTimeout(() => ctrl.abort(new Error('matting timeout')), MATTING_TIMEOUT_MS)
+  if (opts.signal) {
+    opts.signal.addEventListener('abort', () => ctrl.abort(opts.signal?.reason), {
+      once: true,
+    })
+  }
+
   try {
-    if (opts.signal) opts.signal.addEventListener('abort', () => ctrl.abort())
-    const res = await fetch(`${p.base_url}/create`, {
+    const url = `${trimSlash(p.base_url)}/create`
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'X-API-Key': p.api_key },
       body: form,
@@ -58,7 +70,7 @@ async function callKoukoutuSync(p: ProviderConfig, opts: CallMattingOptions): Pr
       const text = await res.text().catch(() => '')
       throw new Error(`koukoutu HTTP ${res.status}: ${text.slice(0, 300)}`)
     }
-    // 错误响应:200 但 content-type 是 application/json,body 含 { code, message }
+    // 200 但 Content-Type 是 JSON → 错误体
     const ct = res.headers.get('content-type') ?? ''
     if (ct.toLowerCase().includes('application/json')) {
       const j = (await res.json().catch(() => null)) as
@@ -66,9 +78,13 @@ async function callKoukoutuSync(p: ProviderConfig, opts: CallMattingOptions): Pr
         | null
       throw new Error(`koukoutu 错误:${j?.message ?? JSON.stringify(j)}`)
     }
-    const arrayBuf = await res.arrayBuffer()
-    return Buffer.from(arrayBuf)
+    const ab = await res.arrayBuffer()
+    return Buffer.from(ab)
   } finally {
     clearTimeout(timer)
   }
+}
+
+function trimSlash(s: string): string {
+  return s.endsWith('/') ? s.slice(0, -1) : s
 }

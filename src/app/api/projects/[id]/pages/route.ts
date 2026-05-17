@@ -1,45 +1,63 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import {
+  createPage,
+  listPagesByProject,
+  listStatesByPage,
+  getProject,
+} from '@/lib/projects'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
 
-import { getProject } from '@/lib/projects'
-import { listPagesByProject, createPage } from '@/lib/pages'
-import type { Page } from '@/lib/types'
-
-type RouteCtx = { params: Promise<{ id: string }> }
-
-// 删除内部字段 + 注入 thumbnail_url(只在 thumbnail_path 存在时)
-function decoratePage(page: Page): Page {
-  const rest = { ...page }
-  delete rest.thumbnail_path
-  if (page.thumbnail_path) {
-    return { ...rest, thumbnail_url: `/api/thumbs/${page.id}` }
-  }
-  return rest
+interface RouteParams {
+  params: Promise<{ id: string }>
 }
 
-export async function GET(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const project = await getProject(id)
-  if (!project) return NextResponse.json({ error: 'project not found' }, { status: 404 })
-  const pages = await listPagesByProject(id)
-  return NextResponse.json(pages.map(decoratePage))
+export async function GET(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const pages = await listPagesByProject(id)
+    const enriched = await Promise.all(
+      pages.map(async (p) => {
+        let thumbnail_url: string | undefined
+        if (p.canonical_state_id) {
+          thumbnail_url = `/api/thumbs/${p.canonical_state_id}`
+        } else {
+          const states = await listStatesByPage(p.id)
+          const s = states[0]
+          if (s) thumbnail_url = `/api/thumbs/${s.id}`
+        }
+        return {
+          ...p,
+          ...(thumbnail_url ? { thumbnail_url } : {}),
+          has_state: !!p.canonical_state_id,
+        }
+      }),
+    )
+    return jsonResponse(enriched)
+  } catch (err) {
+    return errorToResponse(err)
+  }
 }
 
-export async function POST(req: NextRequest, ctx: RouteCtx) {
-  const { id: projectId } = await ctx.params
-  const project = await getProject(projectId)
-  if (!project) return NextResponse.json({ error: 'project not found' }, { status: 404 })
+export async function POST(req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const project = await getProject(id)
+    if (!project) return jsonResponse({ error: 'project not found' }, { status: 404 })
 
-  const body = (await req.json().catch(() => null)) as
-    | { name?: string; route_hint?: string }
-    | null
-  if (!body || typeof body.name !== 'string' || !body.name.trim()) {
-    return NextResponse.json({ error: 'name 必填' }, { status: 400 })
+    const body = (await req.json()) as { name: string; route_hint?: string }
+    if (!body.name?.trim()) {
+      return jsonResponse({ error: 'name required' }, { status: 400 })
+    }
+    const page = await createPage({
+      project_id: id,
+      name: body.name.trim(),
+      ...(body.route_hint ? { route_hint: body.route_hint } : {}),
+    })
+    return jsonResponse(page, { status: 201 })
+  } catch (err) {
+    return errorToResponse(err)
   }
-
-  const page = await createPage({
-    project_id: projectId,
-    name: body.name.trim(),
-    ...(body.route_hint !== undefined && { route_hint: body.route_hint }),
-  })
-  return NextResponse.json(page, { status: 201 })
 }
