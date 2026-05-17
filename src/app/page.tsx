@@ -19,7 +19,11 @@ import Button from '@mui/material/Button'
 import { alpha } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import { AppShell } from '@/components/AppShell'
-import { StatusDot, type StatusDotKind } from '@/components/StatusDot'
+import { StatusDot } from '@/components/StatusDot'
+import {
+  describeRunStatus,
+  formatRelative,
+} from '@/lib/format'
 import type { Project } from '@/lib/types'
 import type { ProjectStats } from '@/lib/projects-stats'
 
@@ -147,7 +151,7 @@ function ProjectRow({
 }: {
   project: ProjectListItem
 }): React.ReactElement {
-  const { kind, label } = describeRunStatus(p.stats)
+  const { kind, label } = describeRunStatus(p.stats.last_run)
 
   const metaParts: string[] = [
     `${p.stats.total_pages} 页`,
@@ -400,44 +404,4 @@ function NewProjectDialog({
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-
-function describeRunStatus(stats: ProjectStats): {
-  kind: StatusDotKind
-  label: string
-} {
-  if (!stats.last_run) {
-    return { kind: 'idle', label: '尚未跑' }
-  }
-  const passLabel = formatPassKind(stats.last_run.pass)
-  const ago = formatRelative(stats.last_run.at)
-  switch (stats.last_run.status) {
-    case 'running':
-      return { kind: 'running', label: `运行中 ${passLabel}` }
-    case 'completed':
-      return { kind: 'completed', label: `${passLabel} · ${ago}` }
-    case 'failed':
-      return { kind: 'failed', label: `${passLabel} 失败 · ${ago}` }
-  }
-}
-
-function formatPassKind(pass: string): string {
-  // pass1_subject → pass1·subject;pass2 → pass2;validate → validate
-  if (pass.includes('_')) return pass.replace('_', '·')
-  return pass
-}
-
-function formatRelative(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  if (diffMs < 60_000) return '刚刚'
-  const min = Math.floor(diffMs / 60_000)
-  if (min < 60) return `${min} 分钟前`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} 小时前`
-  const day = Math.floor(hr / 24)
-  if (day < 30) return `${day} 天前`
-  return new Date(iso).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  })
-}
+// formatRelative / formatPassKind / describeRunStatus 已抽到 src/lib/format.ts

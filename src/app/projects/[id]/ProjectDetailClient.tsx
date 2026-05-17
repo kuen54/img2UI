@@ -23,8 +23,14 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import HomeIcon from '@mui/icons-material/Home'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { StatusDot, type StatusDotKind } from '@/components/StatusDot'
-import type { Project, Page, StatePipelineStatus } from '@/lib/types'
+import { StatusDot } from '@/components/StatusDot'
+import {
+  describeRunStatus,
+  formatRelative,
+  pipelineStatusLabel,
+  type RunStatusKind,
+} from '@/lib/format'
+import type { Project, Page } from '@/lib/types'
 import type { PageStats } from '@/lib/page-stats'
 
 interface PageListItem extends Page {
@@ -490,73 +496,17 @@ function NewPageDialog({
   )
 }
 
-// ─── helpers(MVP 期间复制 page.tsx 的 formatRelative / describeRunStatus / formatPassKind;
-//   第 3 处复用时再抽 lib/format.ts) ────────────────────────────────────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 function describePageStatus(
   stats: PageStats,
   hasState: boolean,
-): { kind: StatusDotKind; label: string } {
+): { kind: RunStatusKind; label: string } {
   // 优先看 last_run(更细:有时间 + pass kind)
-  if (stats.last_run) {
-    const passLabel = formatPassKind(stats.last_run.pass)
-    const ago = formatRelative(stats.last_run.at)
-    switch (stats.last_run.status) {
-      case 'running':
-        return { kind: 'running', label: `运行中 ${passLabel}` }
-      case 'completed':
-        return { kind: 'completed', label: `${passLabel} · ${ago}` }
-      case 'failed':
-        return { kind: 'failed', label: `${passLabel} 失败 · ${ago}` }
-    }
-  }
+  if (stats.last_run) return describeRunStatus(stats.last_run)
   // last_run 缺失:用 pipeline_status 兜底
   if (!hasState || stats.pipeline_status === null) {
     return { kind: 'idle', label: '未上传' }
   }
   return { kind: 'idle', label: pipelineStatusLabel(stats.pipeline_status) }
-}
-
-function pipelineStatusLabel(status: StatePipelineStatus): string {
-  switch (status) {
-    case 'idle':
-      return '待 Pass 1'
-    case 'pass1_running':
-      return 'Pass 1 运行中'
-    case 'pass1_done':
-      return 'Pass 1 完成'
-    case 'pass1_failed':
-      return 'Pass 1 失败'
-    case 'pass2_running':
-      return 'Pass 2 运行中'
-    case 'pass2_done':
-      return 'Pass 2 完成'
-    case 'pass2_failed':
-      return 'Pass 2 失败'
-    case 'validating':
-      return '校验中'
-    case 'validated':
-      return '已校验'
-  }
-}
-
-function formatPassKind(pass: string): string {
-  if (pass.includes('_')) return pass.replace('_', '·')
-  return pass
-}
-
-function formatRelative(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  if (diffMs < 60_000) return '刚刚'
-  const min = Math.floor(diffMs / 60_000)
-  if (min < 60) return `${min} 分钟前`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} 小时前`
-  const day = Math.floor(hr / 24)
-  if (day < 30) return `${day} 天前`
-  return new Date(iso).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  })
 }
