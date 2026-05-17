@@ -127,14 +127,6 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
             {project.description && (
               <Typography color="text.secondary">{project.description}</Typography>
             )}
-            {project.tech_stack_hint && (
-              <Chip
-                size="small"
-                variant="outlined"
-                label={project.tech_stack_hint}
-                sx={{ mt: 1 }}
-              />
-            )}
           </Box>
         ) : (
           <Skeleton variant="text" width={320} height={48} />

@@ -85,7 +85,7 @@ Output strict JSON:
 /** HANDOFF §12.1 coding_agent_intro 默认值,写入 spec.md 末尾 */
 export const DEFAULT_CODING_AGENT_INTRO = `## Coding agent 指令
 
-- 优先使用项目现有组件库({tech_stack_hint})
+- 优先使用项目现有组件库
 - 异形容器用 SVG path 或 CSS clip-path 实现,具体参数见上方 spec
 - 静态资产引用 CDN URL(见 manifest.json),不要本地化;manifest.json 中 cdn_url 为 null 时 fallback 用本地 assets/ 路径
 - 多状态用 React state 切换,共享同一组件

@@ -195,7 +195,6 @@ function renderSpecMd(input: {
   lines.push('## 项目信息')
   lines.push(`- 项目: ${project.name}`)
   lines.push(`- 路由: ${page.route_hint ?? '(未指定)'}`)
-  lines.push(`- 技术栈: ${project.tech_stack_hint ?? '(未指定)'}`)
   lines.push(`- 状态: ${states.map((s) => s.name).join(' / ') || '(无)'}`)
   if (project.description) {
     lines.push('')

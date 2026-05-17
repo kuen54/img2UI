@@ -38,7 +38,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     const body = (await req.json()) as {
       name: string
       description?: string
-      tech_stack_hint?: string
       cdn_provider_id?: string
     }
     if (!body.name?.trim()) {
@@ -47,7 +46,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     const project = await createProject({
       name: body.name.trim(),
       ...(body.description ? { description: body.description } : {}),
-      ...(body.tech_stack_hint ? { tech_stack_hint: body.tech_stack_hint } : {}),
       ...(body.cdn_provider_id ? { cdn_provider_id: body.cdn_provider_id } : {}),
     })
     return jsonResponse(project, { status: 201 })

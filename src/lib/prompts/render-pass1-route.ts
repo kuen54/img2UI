@@ -57,13 +57,11 @@ For elements you do return, still classify each as \`static\` or \`code\` per th
 export function renderPass1UserHeader(input: {
   pageName: string
   pageDescription?: string
-  techStackHint?: string
   stateCount: number
 }): string {
   return [
     `Page name: ${input.pageName}`,
     `Page description: ${input.pageDescription ?? '(no description)'}`,
-    `Tech stack hint: ${input.techStackHint ?? '(unspecified)'}`,
     '',
     `States (${input.stateCount} total, canonical first):`,
   ].join('\n')
