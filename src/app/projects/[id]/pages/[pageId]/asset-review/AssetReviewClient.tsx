@@ -762,6 +762,7 @@ function ElementRow({
         <Stack direction="row" spacing={0.5}>
           <Button
             size="small"
+            variant="outlined"
             startIcon={reExtracting ? <CircularProgress size={14} /> : <RefreshIcon />}
             disabled={reExtracting}
             onClick={(e) => {

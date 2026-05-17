@@ -206,7 +206,14 @@ function PageCard({
     <Card
       sx={{
         width: 280,
-        '&:hover': { boxShadow: 3, transform: 'translateY(-2px)' },
+        transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, outline-color 0.18s ease',
+        outline: '1px solid transparent',
+        outlineOffset: -1,
+        '&:hover': {
+          boxShadow: 3,
+          transform: 'translateY(-2px)',
+          outline: '1px solid rgba(13, 153, 255, 0.4)',
+        },
       }}
     >
       <CardActionArea component={Link} href={`/projects/${projectId}/pages/${p.id}`}>

@@ -190,7 +190,8 @@ function ProviderAccordion({
   onChange,
   onSetActive,
 }: ProviderAccordionProps): React.ReactElement {
-  const [expanded, setExpanded] = useState(false)
+  // active 的 provider 默认展开 — 减少首屏空气感
+  const [expanded, setExpanded] = useState(!!p.active)
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{
