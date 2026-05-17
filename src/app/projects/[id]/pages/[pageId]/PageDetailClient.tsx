@@ -11,34 +11,45 @@ import Paper from '@mui/material/Paper'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
 import Skeleton from '@mui/material/Skeleton'
-import Chip from '@mui/material/Chip'
 import LinearProgress from '@mui/material/LinearProgress'
 import CircularProgress from '@mui/material/CircularProgress'
 import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
+import Divider from '@mui/material/Divider'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
+import TextField from '@mui/material/TextField'
+import { alpha } from '@mui/material/styles'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import CheckIcon from '@mui/icons-material/Check'
-import CloseIcon from '@mui/icons-material/Close'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
 import HomeIcon from '@mui/icons-material/Home'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { StatusDot } from '@/components/StatusDot'
+import {
+  formatRelative,
+  pipelineStatusLabel,
+  type RunStatusKind,
+} from '@/lib/format'
 import type { Project, Page, StateRecord, StatePipelineStatus } from '@/lib/types'
+import type { PageStats } from '@/lib/page-stats'
 
 interface PageWithStates extends Page {
   states: StateRecord[]
+  stats: PageStats
 }
 
-const STAGE_LABELS: Array<{ key: string; label: string; matchStatus: StatePipelineStatus[] }> = [
-  { key: 'pass1', label: 'Pass 1 · 布局分析', matchStatus: ['pass1_running', 'pass1_done', 'pass1_failed'] },
-  { key: 'element_review', label: 'Element Review', matchStatus: ['pass1_done'] },
-  { key: 'pass2', label: 'Pass 2 · 资产提取', matchStatus: ['pass2_running', 'pass2_done', 'pass2_failed'] },
-  { key: 'asset_review', label: 'Asset Review', matchStatus: ['pass2_done'] },
-  { key: 'validate', label: 'Validate', matchStatus: ['validating', 'validated'] },
-  { key: 'export', label: 'Export', matchStatus: [] },
+const STAGE_LABELS: Array<{ key: string; label: string }> = [
+  { key: 'pass1', label: 'Pass 1 · 布局分析' },
+  { key: 'element_review', label: 'Element Review' },
+  { key: 'pass2', label: 'Pass 2 · 资产提取' },
+  { key: 'asset_review', label: 'Asset Review' },
+  { key: 'validate', label: 'Validate' },
+  { key: 'export', label: 'Export' },
 ]
 
 export function PageDetailClient({
@@ -92,14 +103,16 @@ export function PageDetailClient({
           <NotFoundCard message="该页面不存在或已被删除。" />
         ) : (
           <>
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: 1.5 }}>
               <Typography variant="h2">{page.name}</Typography>
               {page.route_hint && (
-                <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                <Typography color="text.secondary" sx={{ mt: 0.25 }}>
                   路由 {page.route_hint}
                 </Typography>
               )}
             </Box>
+
+            <PageStatsStrip stats={page.stats} hasState={hasState} />
 
             {!hasState ? (
               <UploadDropzone pageId={pageId} onUploaded={reload} />
@@ -115,6 +128,65 @@ export function PageDetailClient({
         )}
       </Container>
     </AppShell>
+  )
+}
+
+// ─── Stats strip ────────────────────────────────────────────────────────────
+
+function PageStatsStrip({
+  stats,
+  hasState,
+}: {
+  stats: PageStats
+  hasState: boolean
+}): React.ReactElement {
+  const parts: string[] = [`${stats.state_count} 状态`]
+  if (stats.total_elements > 0) parts.push(`${stats.total_elements} 元素`)
+  if (stats.total_assets > 0) {
+    parts.push(`${stats.uploaded_assets}/${stats.total_assets} 资产已上传`)
+  }
+  if (stats.last_run) {
+    parts.push(`最近活动 ${formatRelative(stats.last_run.at)}`)
+  }
+
+  // 状态点 + 当前 pipeline_status 标签(整页主状态指示)
+  const statusKind: RunStatusKind =
+    stats.pipeline_status === null
+      ? 'idle'
+      : stats.pipeline_status.endsWith('_failed')
+        ? 'failed'
+        : stats.pipeline_status.endsWith('_running') || stats.pipeline_status === 'validating'
+          ? 'running'
+          : stats.pipeline_status === 'idle'
+            ? 'idle'
+            : 'completed'
+  const statusLabel = !hasState
+    ? '未上传'
+    : stats.pipeline_status
+      ? pipelineStatusLabel(stats.pipeline_status)
+      : '未上传'
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      gap={1.25}
+      sx={{ mb: 3, flexWrap: 'wrap' }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        {parts.join(' · ')}
+      </Typography>
+      <Box sx={{ flex: 1 }} />
+      <Stack direction="row" alignItems="center" gap={0.875}>
+        <StatusDot status={statusKind} />
+        <Typography
+          variant="caption"
+          sx={{ color: statusKind === 'idle' ? 'text.disabled' : 'text.secondary' }}
+        >
+          {statusLabel}
+        </Typography>
+      </Stack>
+    </Stack>
   )
 }
 
@@ -233,18 +305,27 @@ function DesignWithPipeline({
 
   const inFlight = state.pipeline_status.endsWith('_running') || state.pipeline_status === 'validating'
   const inFlightWarning = inFlight ? (
-    <Box sx={{ mt: 1.5, p: 1, bgcolor: 'warning.light', color: 'warning.contrastText', borderRadius: 1 }}>
-      ⚠ 当前 pipeline 还在跑(<code>{state.pipeline_status}</code>)。继续会丢失正在执行的结果(LLM 调用本身不会停止,但产物会被删)。
+    <Box
+      sx={{
+        mt: 1.5,
+        p: 1.25,
+        borderRadius: 1.5,
+        border: '1px solid',
+        borderColor: alpha('#d97706', 0.3),
+        bgcolor: alpha('#d97706', 0.06),
+      }}
+    >
+      <Typography variant="caption" sx={{ color: 'warning.dark' }}>
+        ⚠ 当前 pipeline 还在跑(<code>{state.pipeline_status}</code>)。继续会丢失正在执行的结果(LLM 调用本身不会停止,但产物会被删)。
+      </Typography>
     </Box>
   ) : null
 
   const replaceUpload = async (file: File): Promise<void> => {
     setReUploading(true)
     try {
-      // 先删除
       const delRes = await fetch(`/api/states/${state.id}`, { method: 'DELETE' })
       if (!delRes.ok && delRes.status !== 204) throw new Error(await delRes.text())
-      // 再上传
       const fd = new FormData()
       fd.append('file', file)
       const res = await fetch(`/api/pages/${state.page_id}/states`, {
@@ -274,64 +355,68 @@ function DesignWithPipeline({
   }
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
+    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
       {/* 设计稿预览 */}
-      <Card sx={{ flexGrow: 1, maxWidth: { md: 720 } }}>
+      <Card variant="outlined" sx={{ flexGrow: 1, maxWidth: { md: 720 }, overflow: 'hidden' }}>
         <Box
           sx={{
-            position: 'relative',
-            bgcolor: 'background.default',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: 320,
+            p: 2,
+            minHeight: 240,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/api/raw/${state.id}`}
             alt="design mockup"
-            style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+            style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', display: 'block' }}
           />
         </Box>
-        <CardContent>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">
-              {state.width} × {state.height} px · {state.name}
-            </Typography>
-            <Stack direction="row" spacing={1}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                disabled={reUploading}
-                onClick={() => fileInput.current?.click()}
-              >
-                {reUploading ? '替换中…' : '重新上传'}
-              </Button>
-              <IconButton
-                size="small"
-                color="error"
-                onClick={() => setConfirmDeleteOpen(true)}
-                aria-label="删除当前 state"
-                title="删除当前 state"
-              >
-                <DeleteIcon />
-              </IconButton>
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".png,image/png"
-                hidden
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) setPendingFile(f)
-                  e.target.value = ''
-                }}
-              />
-            </Stack>
+        <Divider />
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          gap={1}
+          sx={{ px: 2, py: 1.25 }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            {state.width} × {state.height} px · {state.name}
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              disabled={reUploading}
+              onClick={() => fileInput.current?.click()}
+            >
+              {reUploading ? '替换中…' : '重新上传'}
+            </Button>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => setConfirmDeleteOpen(true)}
+              aria-label="删除当前 state"
+              title="删除当前 state"
+            >
+              <DeleteIcon />
+            </IconButton>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".png,image/png"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) setPendingFile(f)
+                e.target.value = ''
+              }}
+            />
           </Stack>
-        </CardContent>
+        </Stack>
       </Card>
 
       {/* Pipeline 状态 */}
@@ -395,23 +480,23 @@ function PipelinePanel({
   pageId: string
 }): React.ReactElement {
   const status = state.pipeline_status
-  const stageState = (key: string): 'done' | 'active' | 'pending' | 'failed' => {
+  // stage list 里 dot 只反映「过去 / 失败」状态(completed / failed / idle)。
+  // 「next-up」语义通过 isCurrent + bold 文字表达,不让 dot 脉动 ——
+  // 真实的 in-flight 状态由下方 LinearProgress 单独表达。
+  const stageState = (key: string): RunStatusKind => {
     const order = ['pass1', 'element_review', 'pass2', 'asset_review', 'validate', 'export']
     const idx = order.indexOf(key)
-    const currentIdx =
-      status === 'pass1_running' ? 0
-      : status === 'pass1_done' ? 1
-      : status === 'pass1_failed' ? 0
-      : status === 'pass2_running' ? 2
-      : status === 'pass2_done' ? 3
-      : status === 'pass2_failed' ? 2
-      : status === 'validating' ? 4
-      : status === 'validated' ? 5
-      : -1
+    const currentIdx = currentStageIdx(status)
     if (status.endsWith('_failed') && idx === currentIdx) return 'failed'
-    if (idx < currentIdx) return 'done'
-    if (idx === currentIdx + 1) return 'active'
-    return 'pending'
+    if (idx < currentIdx) return 'completed'
+    return 'idle'
+  }
+  const isStageCurrent = (key: string): boolean => {
+    const order = ['pass1', 'element_review', 'pass2', 'asset_review', 'validate', 'export']
+    const idx = order.indexOf(key)
+    const currentIdx = currentStageIdx(status)
+    if (status.endsWith('_failed')) return false
+    return idx === currentIdx + 1
   }
 
   const [running, setRunning] = useState(false)
@@ -443,7 +528,7 @@ function PipelinePanel({
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
       toast.info('Pass 1 启动…轮询状态中')
-      pollPipelineRun(run_id, () => {
+      pollPipelineRun(run_id, 'Pass 1', () => {
         onChanged()
         setRunning(false)
       })
@@ -460,7 +545,7 @@ function PipelinePanel({
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
       toast.info('Pass 2 启动…轮询状态中(可能要 1-3 分钟)')
-      pollPipelineRun(run_id, () => {
+      pollPipelineRun(run_id, 'Pass 2', () => {
         onChanged()
         setRunning(false)
       })
@@ -471,8 +556,17 @@ function PipelinePanel({
   }
 
   return (
-    <Card sx={{ minWidth: { md: 320 }, flexShrink: 0 }}>
-      <CardContent>
+    <Card
+      variant="outlined"
+      sx={{
+        width: { md: 320 },
+        flexShrink: 0,
+        position: { md: 'sticky' },
+        top: { md: 16 },
+        alignSelf: 'flex-start',
+      }}
+    >
+      <Box sx={{ px: 2.5, py: 2, minWidth: 0 }}>
         <Typography variant="h5" sx={{ mb: 2 }}>
           Pipeline
         </Typography>
@@ -480,43 +574,18 @@ function PipelinePanel({
         <Stack spacing={1.5}>
           {STAGE_LABELS.map((s) => {
             const st = stageState(s.key)
+            const isCurrent = isStageCurrent(s.key)
             return (
-              <Stack key={s.key} direction="row" alignItems="center" spacing={1.5}>
-                <Box
-                  sx={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor:
-                      st === 'done' ? 'success.main'
-                      : st === 'active' ? 'primary.main'
-                      : st === 'failed' ? 'error.main'
-                      : 'action.disabled',
-                    color: 'white',
-                    fontSize: 12,
-                  }}
-                >
-                  {st === 'done' ? (
-                    <CheckIcon sx={{ fontSize: 14 }} />
-                  ) : st === 'active' ? (
-                    '▸'
-                  ) : st === 'failed' ? (
-                    <CloseIcon sx={{ fontSize: 14 }} />
-                  ) : (
-                    ''
-                  )}
-                </Box>
+              <Stack key={s.key} direction="row" alignItems="center" spacing={1.25}>
+                <StatusDot status={st} />
                 <Typography
                   variant="body2"
                   sx={{
                     color:
-                      st === 'pending' ? 'text.secondary'
-                      : st === 'failed' ? 'error.main'
-                      : 'text.primary',
-                    fontWeight: st === 'active' ? 600 : 400,
+                      st === 'failed' ? 'error.main'
+                      : st === 'completed' || isCurrent ? 'text.primary'
+                      : 'text.secondary',
+                    fontWeight: isCurrent ? 600 : 400,
                   }}
                 >
                   {s.label}
@@ -530,18 +599,17 @@ function PipelinePanel({
           <Box
             sx={{
               mt: 2.5,
-              p: 1.5,
+              p: 1.25,
               borderRadius: 1.5,
               border: '1px solid',
-              borderColor: 'error.main',
-              bgcolor: 'error.light',
-              color: 'error.contrastText',
+              borderColor: alpha('#b91c1c', 0.3),
+              bgcolor: alpha('#b91c1c', 0.04),
             }}
           >
             <Stack direction="row" spacing={1} alignItems="flex-start">
-              <ErrorOutlineIcon sx={{ fontSize: 18, mt: 0.25 }} />
+              <ErrorOutlineIcon sx={{ fontSize: 16, mt: 0.25, color: 'error.main' }} />
               <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                <Typography variant="caption" sx={{ display: 'block', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, color: 'error.main' }}>
                   上次失败原因
                 </Typography>
                 <Typography
@@ -551,6 +619,7 @@ function PipelinePanel({
                     fontFamily: 'monospace',
                     wordBreak: 'break-word',
                     mt: 0.5,
+                    color: 'text.primary',
                   }}
                 >
                   {errorMessage}
@@ -569,7 +638,11 @@ function PipelinePanel({
             fullWidth
             sx={{ mt: 3 }}
           >
-            {running ? 'Pass 1 运行中…' : '运行 Pass 1'}
+            {running
+              ? 'Pass 1 运行中…'
+              : status === 'pass1_failed'
+                ? '重跑 Pass 1'
+                : '运行 Pass 1'}
           </Button>
         )}
 
@@ -584,7 +657,6 @@ function PipelinePanel({
 
         {status === 'pass1_done' && (
           <Stack spacing={1} sx={{ mt: 3 }}>
-            <Chip label="Pass 1 已完成" color="success" />
             <Button
               variant="contained"
               component={Link}
@@ -609,7 +681,7 @@ function PipelinePanel({
           </Stack>
         )}
 
-        {(status === 'pass2_running') && (
+        {status === 'pass2_running' && (
           <Box sx={{ mt: 3 }}>
             <LinearProgress />
             <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
@@ -620,7 +692,6 @@ function PipelinePanel({
 
         {(status === 'pass2_done' || status === 'validated') && (
           <Stack spacing={1} sx={{ mt: 3 }}>
-            <Chip label={status === 'validated' ? '已校验' : 'Pass 2 已完成'} color="success" />
             <Button
               variant="contained"
               component={Link}
@@ -636,7 +707,6 @@ function PipelinePanel({
 
         {status === 'pass2_failed' && (
           <Stack spacing={1} sx={{ mt: 3 }}>
-            <Chip label="Pass 2 失败" color="error" />
             <Button
               variant="contained"
               fullWidth
@@ -648,9 +718,30 @@ function PipelinePanel({
             </Button>
           </Stack>
         )}
-      </CardContent>
+      </Box>
     </Card>
   )
+}
+
+function currentStageIdx(status: StatePipelineStatus): number {
+  switch (status) {
+    case 'pass1_running':
+    case 'pass1_failed':
+      return 0
+    case 'pass1_done':
+      return 1
+    case 'pass2_running':
+    case 'pass2_failed':
+      return 2
+    case 'pass2_done':
+      return 3
+    case 'validating':
+      return 4
+    case 'validated':
+      return 5
+    case 'idle':
+      return -1
+  }
 }
 
 // ─── NotFoundCard ──────────────────────────────────────────────────────────
@@ -671,18 +762,22 @@ function NotFoundCard({ message }: { message: string }): React.ReactElement {
   )
 }
 
-function pollPipelineRun(runId: string, onDone: () => void): void {
+function pollPipelineRun(
+  runId: string,
+  passLabel: string,
+  onDone: () => void,
+): void {
   const interval = setInterval(() => {
     void fetch(`/api/pipeline-runs/${runId}`)
       .then((r) => r.json())
       .then((run: { status: 'running' | 'completed' | 'failed'; error?: { message: string } }) => {
         if (run.status === 'completed') {
           clearInterval(interval)
-          toast.success('Pass 1 完成')
+          toast.success(`${passLabel} 完成`)
           onDone()
         } else if (run.status === 'failed') {
           clearInterval(interval)
-          toast.error(`Pass 1 失败:${run.error?.message ?? '未知错误'}`)
+          toast.error(`${passLabel} 失败:${run.error?.message ?? '未知错误'}`)
           onDone()
         }
       })
@@ -703,8 +798,8 @@ function CdnExportActions({
   pageId: string
 }): React.ReactElement {
   const [uploading, setUploading] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
 
   const validate = async (): Promise<void> => {
     setValidating(true)
@@ -725,7 +820,9 @@ function CdnExportActions({
       const res = await fetch(`/api/pages/${pageId}/upload-all-assets`, { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
       const data = (await res.json()) as { uploaded: number; failed: string[] }
-      toast.success(`已上传 ${data.uploaded} 个 asset${data.failed.length > 0 ? `,${data.failed.length} 个失败` : ''}`)
+      toast.success(
+        `已上传 ${data.uploaded} 个 asset${data.failed.length > 0 ? `,${data.failed.length} 个失败` : ''}`,
+      )
     } catch (err) {
       toast.error(`上传失败:${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -733,13 +830,56 @@ function CdnExportActions({
     }
   }
 
-  const exportFolder = async (): Promise<void> => {
-    const dir = prompt('输出目录(留空 = ~/img2ui-out):', '')
-    if (dir === null) return // cancelled
+  return (
+    <>
+      <Button
+        variant="outlined"
+        disabled={validating}
+        onClick={() => void validate()}
+      >
+        {validating ? '反向校验中…' : '反向校验(LLM 验质量)'}
+      </Button>
+      <Button
+        variant="outlined"
+        disabled={uploading}
+        onClick={() => void upload()}
+      >
+        {uploading ? '上传中…' : '上传所有 asset 到 CDN'}
+      </Button>
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={() => setExportDialogOpen(true)}
+      >
+        导出文件夹
+      </Button>
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        pageId={pageId}
+      />
+    </>
+  )
+}
+
+function ExportDialog({
+  open,
+  onClose,
+  pageId,
+}: {
+  open: boolean
+  onClose: () => void
+  pageId: string
+}): React.ReactElement {
+  const [outputDir, setOutputDir] = useState('')
+  const [exporting, setExporting] = useState(false)
+
+  const submit = async (): Promise<void> => {
     setExporting(true)
     try {
       const body: Record<string, unknown> = {}
-      if (dir.trim()) body['output_dir'] = dir.trim()
+      const trimmed = outputDir.trim()
+      if (trimmed) body['output_dir'] = trimmed
       const res = await fetch(`/api/pages/${pageId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -748,6 +888,8 @@ function CdnExportActions({
       if (!res.ok) throw new Error(await res.text())
       const data = (await res.json()) as { path: string }
       toast.success(`已导出到 ${data.path}`)
+      setOutputDir('')
+      onClose()
     } catch (err) {
       toast.error(`导出失败:${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -756,32 +898,29 @@ function CdnExportActions({
   }
 
   return (
-    <Stack spacing={1}>
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={validating}
-        onClick={() => void validate()}
-      >
-        {validating ? '反向校验中…' : '反向校验(LLM 验质量)'}
-      </Button>
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={uploading}
-        onClick={() => void upload()}
-      >
-        {uploading ? '上传中…' : '上传所有 asset 到 CDN'}
-      </Button>
-      <Button
-        size="small"
-        variant="contained"
-        color="primary"
-        disabled={exporting}
-        onClick={() => void exportFolder()}
-      >
-        {exporting ? '导出中…' : '导出文件夹'}
-      </Button>
-    </Stack>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>导出文件夹</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            label="输出目录"
+            value={outputDir}
+            onChange={(e) => setOutputDir(e.target.value)}
+            placeholder="~/img2ui-out"
+            helperText="留空 = ~/img2ui-out。会输出 elements.json + assets/ 目录"
+            autoFocus
+            fullWidth
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={exporting}>
+          取消
+        </Button>
+        <Button variant="contained" onClick={() => void submit()} disabled={exporting}>
+          {exporting ? '导出中…' : '导出'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   )
 }

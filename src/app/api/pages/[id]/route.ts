@@ -5,6 +5,7 @@ import {
   deletePage,
   listStatesByPage,
 } from '@/lib/projects'
+import { getPageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
 
@@ -19,7 +20,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams): Promise<R
     const page = await getPage(id)
     if (!page) return jsonResponse({ error: 'not found' }, { status: 404 })
     const states = await listStatesByPage(id)
-    return jsonResponse({ ...page, states })
+    const canonicalStateId = page.canonical_state_id || states[0]?.id || null
+    const stats = await getPageStats(id, canonicalStateId)
+    return jsonResponse({ ...page, states, stats })
   } catch (err) {
     return errorToResponse(err)
   }

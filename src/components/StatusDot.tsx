@@ -2,20 +2,19 @@
 
 import Box from '@mui/material/Box'
 import { keyframes } from '@emotion/react'
+import type { RunStatusKind } from '@/lib/format'
 
 const pulse = keyframes`
   from { opacity: 0.45 }
   to { opacity: 1 }
 `
 
-export type StatusDotKind = 'idle' | 'running' | 'completed' | 'failed'
-
 interface StatusDotProps {
-  status: StatusDotKind
+  status: RunStatusKind
   size?: number
 }
 
-const COLOR_MAP: Record<StatusDotKind, string> = {
+const COLOR_MAP: Record<RunStatusKind, string> = {
   idle: 'text.disabled',
   running: 'info.main',
   completed: 'success.main',
