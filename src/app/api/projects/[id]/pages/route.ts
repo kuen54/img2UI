@@ -5,6 +5,7 @@ import {
   listStatesByPage,
   getProject,
 } from '@/lib/projects'
+import { getPageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
 
@@ -20,17 +21,24 @@ export async function GET(_req: NextRequest, { params }: RouteParams): Promise<R
     const enriched = await Promise.all(
       pages.map(async (p) => {
         let thumbnail_url: string | undefined
+        let canonicalStateId: string | null = null
         if (p.canonical_state_id) {
           thumbnail_url = `/api/thumbs/${p.canonical_state_id}`
+          canonicalStateId = p.canonical_state_id
         } else {
           const states = await listStatesByPage(p.id)
           const s = states[0]
-          if (s) thumbnail_url = `/api/thumbs/${s.id}`
+          if (s) {
+            thumbnail_url = `/api/thumbs/${s.id}`
+            canonicalStateId = s.id
+          }
         }
+        const stats = await getPageStats(p.id, canonicalStateId)
         return {
           ...p,
           ...(thumbnail_url ? { thumbnail_url } : {}),
-          has_state: !!p.canonical_state_id,
+          has_state: !!p.canonical_state_id || canonicalStateId !== null,
+          stats,
         }
       }),
     )

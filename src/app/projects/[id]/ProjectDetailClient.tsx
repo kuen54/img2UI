@@ -6,14 +6,10 @@ import { toast } from 'sonner'
 import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 import Card from '@mui/material/Card'
-import CardActionArea from '@mui/material/CardActionArea'
-import CardContent from '@mui/material/CardContent'
-import CardMedia from '@mui/material/CardMedia'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Skeleton from '@mui/material/Skeleton'
-import Fab from '@mui/material/Fab'
-import Chip from '@mui/material/Chip'
+import Divider from '@mui/material/Divider'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -21,29 +17,20 @@ import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
+import { alpha } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import HomeIcon from '@mui/icons-material/Home'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { StatusDot, type StatusDotKind } from '@/components/StatusDot'
 import type { Project, Page, StatePipelineStatus } from '@/lib/types'
+import type { PageStats } from '@/lib/page-stats'
 
 interface PageListItem extends Page {
   thumbnail_url?: string
   has_state: boolean
-  pipeline_status?: StatePipelineStatus
-}
-
-const STATUS_COLOR: Record<StatePipelineStatus, 'default' | 'primary' | 'success' | 'error'> = {
-  idle: 'default',
-  pass1_running: 'primary',
-  pass1_done: 'primary',
-  pass1_failed: 'error',
-  pass2_running: 'primary',
-  pass2_done: 'success',
-  pass2_failed: 'error',
-  validating: 'primary',
-  validated: 'success',
+  stats: PageStats
 }
 
 export function ProjectDetailClient({ projectId }: { projectId: string }): React.ReactElement {
@@ -79,7 +66,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
     }
   }
 
-  // 加载完发现项目不存在 → 整页 404,不渲染下方页面列表 / FAB / 删除按钮
+  // 加载完发现项目不存在 → 整页 404,不渲染下方页面列表 / 删除按钮
   if (pages !== null && !project) {
     return (
       <AppShell breadcrumbs={[{ label: '项目', href: '/' }]}>
@@ -121,52 +108,46 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
       }
     >
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        {project ? (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h2">{project.name}</Typography>
-            {project.description && (
-              <Typography color="text.secondary">{project.description}</Typography>
-            )}
-          </Box>
-        ) : (
-          <Skeleton variant="text" width={320} height={48} />
-        )}
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          sx={{ mb: 1.5, gap: 2 }}
+        >
+          {project ? (
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h2">{project.name}</Typography>
+              {project.description && (
+                <Typography color="text.secondary" sx={{ mt: 0.25 }}>
+                  {project.description}
+                </Typography>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ flex: 1 }}>
+              <Skeleton variant="text" width={320} height={48} />
+            </Box>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setDialogOpen(true)}
+            sx={{ flexShrink: 0 }}
+          >
+            新建页面
+          </Button>
+        </Stack>
 
-        <Typography variant="h4" sx={{ mb: 2, mt: 3 }}>
-          页面
-        </Typography>
+        {pages && pages.length > 0 && <StatsStrip pages={pages} />}
 
         {pages === null ? (
-          <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 2.5 }}>
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} variant="rounded" width={280} height={260} sx={{ borderRadius: 4 }} />
-            ))}
-          </Stack>
+          <LoadingList />
         ) : pages.length === 0 ? (
-          <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              还没有页面
-            </Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-              新建页面
-            </Button>
-          </Box>
+          <EmptyInline onCreate={() => setDialogOpen(true)} />
         ) : (
-          <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 2.5 }}>
-            {pages.map((p) => (
-              <PageCard key={p.id} projectId={projectId} page={p} />
-            ))}
-          </Stack>
+          <PageList projectId={projectId} pages={pages} />
         )}
       </Container>
-
-      <Fab
-        color="primary"
-        onClick={() => setDialogOpen(true)}
-        sx={{ position: 'fixed', bottom: 32, right: 32 }}
-      >
-        <AddIcon />
-      </Fab>
 
       <NewPageDialog
         projectId={projectId}
@@ -194,72 +175,245 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
   )
 }
 
-function PageCard({
+// ─── Stats strip ────────────────────────────────────────────────────────────
+
+function StatsStrip({ pages }: { pages: PageListItem[] }): React.ReactElement {
+  const totals = pages.reduce(
+    (acc, p) => ({
+      states: acc.states + p.stats.state_count,
+      elements: acc.elements + p.stats.total_elements,
+      assets: acc.assets + p.stats.total_assets,
+      uploaded: acc.uploaded + p.stats.uploaded_assets,
+    }),
+    { states: 0, elements: 0, assets: 0, uploaded: 0 },
+  )
+  const lastRunAt = pages
+    .map((p) => p.stats.last_run?.at)
+    .filter((s): s is string => Boolean(s))
+    .sort((a, b) => b.localeCompare(a))[0]
+
+  const parts: string[] = [
+    `${pages.length} 页`,
+    `${totals.states} 状态`,
+    `${totals.elements} 元素`,
+    totals.assets > 0
+      ? `${totals.uploaded}/${totals.assets} 资产已上传`
+      : `${totals.assets} 资产`,
+  ]
+  if (lastRunAt) parts.push(`最近活动 ${formatRelative(lastRunAt)}`)
+
+  return (
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      {parts.join(' · ')}
+    </Typography>
+  )
+}
+
+// ─── Page list ──────────────────────────────────────────────────────────────
+
+function PageList({
+  projectId,
+  pages,
+}: {
+  projectId: string
+  pages: PageListItem[]
+}): React.ReactElement {
+  return (
+    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
+      <Stack divider={<Divider flexItem />}>
+        {pages.map((p) => (
+          <PageRow key={p.id} projectId={projectId} page={p} />
+        ))}
+      </Stack>
+    </Card>
+  )
+}
+
+function PageRow({
   projectId,
   page: p,
 }: {
   projectId: string
   page: PageListItem
 }): React.ReactElement {
-  const status = p.pipeline_status ?? 'idle'
+  const { kind, label } = describePageStatus(p.stats, p.has_state)
+
+  const metaParts: string[] = []
+  if (p.route_hint) metaParts.push(p.route_hint)
+  if (p.stats.total_elements > 0) {
+    metaParts.push(`${p.stats.total_elements} 元素`)
+  }
+  if (p.stats.total_assets > 0) {
+    metaParts.push(`${p.stats.uploaded_assets}/${p.stats.total_assets} 资产已上传`)
+  }
+  // 全无:显示「等待首次 Pass 1」
+  if (metaParts.length === 0) {
+    metaParts.push(p.has_state ? '等待首次 Pass 1' : '尚未上传设计稿')
+  }
+
   return (
-    <Card
+    <Box
+      component={Link}
+      href={`/projects/${projectId}/pages/${p.id}`}
       sx={{
-        width: 280,
-        transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, outline-color 0.18s ease',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        px: 2.5,
+        py: 1.75,
+        textDecoration: 'none',
+        color: 'inherit',
         outline: '1px solid transparent',
         outlineOffset: -1,
+        transition:
+          'background-color 0.15s ease, outline-color 0.15s ease',
         '&:hover': {
-          boxShadow: 3,
-          transform: 'translateY(-2px)',
-          outline: '1px solid rgba(13, 153, 255, 0.4)',
+          bgcolor: alpha('#0d99ff', 0.04),
+          outline: `1px solid ${alpha('#0d99ff', 0.4)}`,
         },
       }}
     >
-      <CardActionArea component={Link} href={`/projects/${projectId}/pages/${p.id}`}>
-        {p.thumbnail_url ? (
-          <CardMedia
-            component="img"
-            image={p.thumbnail_url}
-            alt={p.name}
-            sx={{ height: 160, objectFit: 'cover', bgcolor: 'background.default' }}
-          />
-        ) : (
-          <Box
-            sx={{
-              height: 160,
-              bgcolor: 'background.default',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'text.secondary',
-              fontSize: 12,
-            }}
+      <Thumbnail url={p.thumbnail_url} alt={p.name} />
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack
+          direction="row"
+          alignItems="baseline"
+          gap={2}
+          sx={{ minWidth: 0 }}
+        >
+          <Typography
+            variant="h5"
+            noWrap
+            sx={{ minWidth: 0, flex: 1 }}
           >
-            （未上传图）
-          </Box>
-        )}
-        <CardContent>
-          <Typography variant="h5" noWrap>
             {p.name}
           </Typography>
-          {p.route_hint && (
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {p.route_hint}
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={0.875}
+            sx={{ flexShrink: 0 }}
+          >
+            <StatusDot status={kind} />
+            <Typography
+              variant="caption"
+              sx={{
+                color: kind === 'idle' ? 'text.disabled' : 'text.secondary',
+              }}
+            >
+              {label}
             </Typography>
-          )}
-          <Box sx={{ mt: 1 }}>
-            {p.has_state ? (
-              <Chip size="small" label={status} color={STATUS_COLOR[status]} />
-            ) : (
-              <Chip size="small" label="未上传" variant="outlined" />
-            )}
-          </Box>
-        </CardContent>
-      </CardActionArea>
+          </Stack>
+        </Stack>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          noWrap
+          sx={{ mt: 0.25 }}
+        >
+          {metaParts.join(' · ')}
+        </Typography>
+      </Box>
+    </Box>
+  )
+}
+
+function Thumbnail({
+  url,
+  alt,
+}: {
+  url: string | undefined
+  alt: string
+}): React.ReactElement {
+  return (
+    <Box
+      sx={{
+        width: 64,
+        height: 40,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        bgcolor: 'background.default',
+        flexShrink: 0,
+        border: '1px solid',
+        borderColor: 'divider',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {url ? (
+        <Box
+          component="img"
+          src={url}
+          alt={alt}
+          sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <Typography
+          variant="caption"
+          sx={{ fontSize: 11, color: 'text.disabled' }}
+        >
+          —
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
+// ─── Empty / loading ────────────────────────────────────────────────────────
+
+function EmptyInline({
+  onCreate,
+}: {
+  onCreate: () => void
+}): React.ReactElement {
+  return (
+    <Card variant="outlined" sx={{ py: 8, textAlign: 'center' }}>
+      <Typography variant="h5" sx={{ mb: 1 }}>
+        还没有页面
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        新建页面后,上传设计稿截图,跑 Pass 1 / Pass 2 即可生成 coding agent 素材包
+      </Typography>
+      <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
+        新建页面
+      </Button>
     </Card>
   )
 }
+
+function LoadingList(): React.ReactElement {
+  return (
+    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
+      <Stack divider={<Divider flexItem />}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Stack
+            key={i}
+            direction="row"
+            alignItems="center"
+            gap={2}
+            sx={{ px: 2.5, py: 1.75 }}
+          >
+            <Skeleton
+              variant="rounded"
+              width={64}
+              height={40}
+              sx={{ borderRadius: 1.5, flexShrink: 0 }}
+            />
+            <Box sx={{ flex: 1 }}>
+              <Skeleton width="40%" height={20} />
+              <Skeleton width="60%" height={16} sx={{ mt: 0.5 }} />
+            </Box>
+            <Skeleton width={120} height={16} />
+          </Stack>
+        ))}
+      </Stack>
+    </Card>
+  )
+}
+
+// ─── New page dialog ────────────────────────────────────────────────────────
 
 function NewPageDialog({
   projectId,
@@ -334,4 +488,75 @@ function NewPageDialog({
       </DialogActions>
     </Dialog>
   )
+}
+
+// ─── helpers(MVP 期间复制 page.tsx 的 formatRelative / describeRunStatus / formatPassKind;
+//   第 3 处复用时再抽 lib/format.ts) ────────────────────────────────────────
+
+function describePageStatus(
+  stats: PageStats,
+  hasState: boolean,
+): { kind: StatusDotKind; label: string } {
+  // 优先看 last_run(更细:有时间 + pass kind)
+  if (stats.last_run) {
+    const passLabel = formatPassKind(stats.last_run.pass)
+    const ago = formatRelative(stats.last_run.at)
+    switch (stats.last_run.status) {
+      case 'running':
+        return { kind: 'running', label: `运行中 ${passLabel}` }
+      case 'completed':
+        return { kind: 'completed', label: `${passLabel} · ${ago}` }
+      case 'failed':
+        return { kind: 'failed', label: `${passLabel} 失败 · ${ago}` }
+    }
+  }
+  // last_run 缺失:用 pipeline_status 兜底
+  if (!hasState || stats.pipeline_status === null) {
+    return { kind: 'idle', label: '未上传' }
+  }
+  return { kind: 'idle', label: pipelineStatusLabel(stats.pipeline_status) }
+}
+
+function pipelineStatusLabel(status: StatePipelineStatus): string {
+  switch (status) {
+    case 'idle':
+      return '待 Pass 1'
+    case 'pass1_running':
+      return 'Pass 1 运行中'
+    case 'pass1_done':
+      return 'Pass 1 完成'
+    case 'pass1_failed':
+      return 'Pass 1 失败'
+    case 'pass2_running':
+      return 'Pass 2 运行中'
+    case 'pass2_done':
+      return 'Pass 2 完成'
+    case 'pass2_failed':
+      return 'Pass 2 失败'
+    case 'validating':
+      return '校验中'
+    case 'validated':
+      return '已校验'
+  }
+}
+
+function formatPassKind(pass: string): string {
+  if (pass.includes('_')) return pass.replace('_', '·')
+  return pass
+}
+
+function formatRelative(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  if (diffMs < 60_000) return '刚刚'
+  const min = Math.floor(diffMs / 60_000)
+  if (min < 60) return `${min} 分钟前`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} 小时前`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day} 天前`
+  return new Date(iso).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  })
 }
