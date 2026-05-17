@@ -7,25 +7,26 @@ import Box from '@mui/material/Box'
 import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 import Card from '@mui/material/Card'
-import CardActionArea from '@mui/material/CardActionArea'
-import CardContent from '@mui/material/CardContent'
-import CardMedia from '@mui/material/CardMedia'
-import Fab from '@mui/material/Fab'
 import Stack from '@mui/material/Stack'
 import Skeleton from '@mui/material/Skeleton'
+import Divider from '@mui/material/Divider'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
+import { alpha } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import { AppShell } from '@/components/AppShell'
+import { StatusDot, type StatusDotKind } from '@/components/StatusDot'
 import type { Project } from '@/lib/types'
+import type { ProjectStats } from '@/lib/projects-stats'
 
 interface ProjectListItem extends Project {
   sample_thumbnail_url?: string
   pages_count: number
+  stats: ProjectStats
 }
 
 export default function HomePage(): React.ReactElement {
@@ -46,48 +47,32 @@ export default function HomePage(): React.ReactElement {
   return (
     <AppShell>
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Typography variant="h2" sx={{ mb: 3 }}>
-          我的项目
-        </Typography>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          sx={{ mb: 1.5 }}
+        >
+          <Typography variant="h2">我的项目</Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setDialogOpen(true)}
+          >
+            新建项目
+          </Button>
+        </Stack>
+
+        {projects && projects.length > 0 && <StatsStrip projects={projects} />}
 
         {projects === null ? (
-          <Stack
-            direction="row"
-            useFlexGap
-            sx={{ flexWrap: 'wrap', gap: 2.5 }}
-          >
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton
-                key={i}
-                variant="rounded"
-                width={260}
-                height={300}
-                sx={{ borderRadius: 4 }}
-              />
-            ))}
-          </Stack>
+          <LoadingList />
         ) : projects.length === 0 ? (
-          <EmptyState onCreate={() => setDialogOpen(true)} />
+          <EmptyInline onCreate={() => setDialogOpen(true)} />
         ) : (
-          <Stack
-            direction="row"
-            useFlexGap
-            sx={{ flexWrap: 'wrap', gap: 2.5 }}
-          >
-            {projects.map((p) => (
-              <ProjectCard key={p.id} project={p} />
-            ))}
-          </Stack>
+          <ProjectList projects={projects} />
         )}
       </Container>
-
-      <Fab
-        color="primary"
-        onClick={() => setDialogOpen(true)}
-        sx={{ position: 'fixed', bottom: 32, right: 32 }}
-      >
-        <AddIcon />
-      </Fab>
 
       <NewProjectDialog
         open={dialogOpen}
@@ -101,82 +86,244 @@ export default function HomePage(): React.ReactElement {
   )
 }
 
-function ProjectCard({ project: p }: { project: ProjectListItem }): React.ReactElement {
+// ─── Stats strip ────────────────────────────────────────────────────────────
+
+function StatsStrip({
+  projects,
+}: {
+  projects: ProjectListItem[]
+}): React.ReactElement {
+  const totals = projects.reduce(
+    (acc, p) => ({
+      pages: acc.pages + p.stats.total_pages,
+      elements: acc.elements + p.stats.total_elements,
+      assets: acc.assets + p.stats.total_assets,
+      uploaded: acc.uploaded + p.stats.uploaded_assets,
+    }),
+    { pages: 0, elements: 0, assets: 0, uploaded: 0 },
+  )
+  const lastRunAt = projects
+    .map((p) => p.stats.last_run?.at)
+    .filter((s): s is string => Boolean(s))
+    .sort((a, b) => b.localeCompare(a))[0]
+
+  const parts: string[] = [
+    `${projects.length} 项目`,
+    `${totals.pages} 页`,
+    `${totals.elements} 元素`,
+    totals.assets > 0
+      ? `${totals.uploaded}/${totals.assets} 资产已上传`
+      : `${totals.assets} 资产`,
+  ]
+  if (lastRunAt) parts.push(`最近活动 ${formatRelative(lastRunAt)}`)
+
   return (
-    <Card
-      sx={{
-        width: 260,
-        transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, outline-color 0.18s ease',
-        outline: '1px solid transparent',
-        outlineOffset: -1,
-        '&:hover': {
-          boxShadow: 3,
-          transform: 'translateY(-2px)',
-          outline: '1px solid rgba(13, 153, 255, 0.4)',
-        },
-      }}
-    >
-      <CardActionArea component={Link} href={`/projects/${p.id}`}>
-        {p.sample_thumbnail_url ? (
-          <CardMedia
-            component="img"
-            image={p.sample_thumbnail_url}
-            alt={p.name}
-            sx={{
-              height: 180,
-              objectFit: 'cover',
-              bgcolor: 'background.default',
-            }}
-          />
-        ) : (
-          <Box
-            sx={{
-              height: 180,
-              bgcolor: 'background.default',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'text.secondary',
-              fontSize: 12,
-            }}
-          >
-            （无设计稿）
-          </Box>
-        )}
-        <CardContent>
-          <Typography variant="h5" noWrap>
-            {p.name}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
-            {p.pages_count} 页 · {new Date(p.created_at).toLocaleDateString('zh-CN')}
-          </Typography>
-        </CardContent>
-      </CardActionArea>
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      {parts.join(' · ')}
+    </Typography>
+  )
+}
+
+// ─── Project list ───────────────────────────────────────────────────────────
+
+function ProjectList({
+  projects,
+}: {
+  projects: ProjectListItem[]
+}): React.ReactElement {
+  return (
+    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
+      <Stack divider={<Divider flexItem />}>
+        {projects.map((p) => (
+          <ProjectRow key={p.id} project={p} />
+        ))}
+      </Stack>
     </Card>
   )
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }): React.ReactElement {
+function ProjectRow({
+  project: p,
+}: {
+  project: ProjectListItem
+}): React.ReactElement {
+  const { kind, label } = describeRunStatus(p.stats)
+
+  const metaParts: string[] = [
+    `${p.stats.total_pages} 页`,
+    p.stats.total_elements > 0 ? `${p.stats.total_elements} 元素` : null,
+    p.stats.total_assets > 0
+      ? `${p.stats.uploaded_assets}/${p.stats.total_assets} 资产已上传`
+      : null,
+  ].filter((s): s is string => s !== null)
+
+  const subtitleParts: string[] = []
+  if (p.description) subtitleParts.push(p.description)
+  subtitleParts.push(metaParts.join(' · '))
+
+  return (
+    <Box
+      component={Link}
+      href={`/projects/${p.id}`}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        px: 2.5,
+        py: 1.75,
+        textDecoration: 'none',
+        color: 'inherit',
+        outline: '1px solid transparent',
+        outlineOffset: -1,
+        transition:
+          'background-color 0.15s ease, outline-color 0.15s ease',
+        '&:hover': {
+          bgcolor: alpha('#0d99ff', 0.04),
+          outline: `1px solid ${alpha('#0d99ff', 0.4)}`,
+        },
+      }}
+    >
+      <Thumbnail url={p.sample_thumbnail_url} alt={p.name} />
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack
+          direction="row"
+          alignItems="baseline"
+          gap={2}
+          sx={{ minWidth: 0 }}
+        >
+          <Typography
+            variant="h5"
+            noWrap
+            sx={{ minWidth: 0, flex: 1 }}
+          >
+            {p.name}
+          </Typography>
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={0.875}
+            sx={{ flexShrink: 0 }}
+          >
+            <StatusDot status={kind} />
+            <Typography
+              variant="caption"
+              sx={{
+                color: kind === 'idle' ? 'text.disabled' : 'text.secondary',
+              }}
+            >
+              {label}
+            </Typography>
+          </Stack>
+        </Stack>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          noWrap
+          sx={{ mt: 0.25 }}
+        >
+          {subtitleParts.join(' · ')}
+        </Typography>
+      </Box>
+    </Box>
+  )
+}
+
+function Thumbnail({
+  url,
+  alt,
+}: {
+  url: string | undefined
+  alt: string
+}): React.ReactElement {
   return (
     <Box
       sx={{
-        textAlign: 'center',
-        py: 10,
-        color: 'text.secondary',
+        width: 64,
+        height: 40,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+        bgcolor: 'background.default',
+        flexShrink: 0,
+        border: '1px solid',
+        borderColor: 'divider',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
+      {url ? (
+        <Box
+          component="img"
+          src={url}
+          alt={alt}
+          sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <Typography
+          variant="caption"
+          sx={{ fontSize: 11, color: 'text.disabled' }}
+        >
+          —
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
+// ─── Empty / loading ────────────────────────────────────────────────────────
+
+function EmptyInline({
+  onCreate,
+}: {
+  onCreate: () => void
+}): React.ReactElement {
+  return (
+    <Card variant="outlined" sx={{ py: 8, textAlign: 'center' }}>
       <Typography variant="h5" sx={{ mb: 1 }}>
         还没有项目
       </Typography>
-      <Typography variant="body2" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         创建第一个项目,把 AI 生图设计稿转成 coding agent 可消费的素材包
       </Typography>
       <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
         新建项目
       </Button>
-    </Box>
+    </Card>
   )
 }
+
+function LoadingList(): React.ReactElement {
+  return (
+    <Card variant="outlined" sx={{ overflow: 'hidden' }}>
+      <Stack divider={<Divider flexItem />}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Stack
+            key={i}
+            direction="row"
+            alignItems="center"
+            gap={2}
+            sx={{ px: 2.5, py: 1.75 }}
+          >
+            <Skeleton
+              variant="rounded"
+              width={64}
+              height={40}
+              sx={{ borderRadius: 1.5, flexShrink: 0 }}
+            />
+            <Box sx={{ flex: 1 }}>
+              <Skeleton width="40%" height={20} />
+              <Skeleton width="65%" height={16} sx={{ mt: 0.5 }} />
+            </Box>
+            <Skeleton width={120} height={16} />
+          </Stack>
+        ))}
+      </Stack>
+    </Card>
+  )
+}
+
+// ─── New project dialog ─────────────────────────────────────────────────────
 
 function NewProjectDialog({
   open,
@@ -250,4 +397,47 @@ function NewProjectDialog({
       </DialogActions>
     </Dialog>
   )
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+function describeRunStatus(stats: ProjectStats): {
+  kind: StatusDotKind
+  label: string
+} {
+  if (!stats.last_run) {
+    return { kind: 'idle', label: '尚未跑' }
+  }
+  const passLabel = formatPassKind(stats.last_run.pass)
+  const ago = formatRelative(stats.last_run.at)
+  switch (stats.last_run.status) {
+    case 'running':
+      return { kind: 'running', label: `运行中 ${passLabel}` }
+    case 'completed':
+      return { kind: 'completed', label: `${passLabel} · ${ago}` }
+    case 'failed':
+      return { kind: 'failed', label: `${passLabel} 失败 · ${ago}` }
+  }
+}
+
+function formatPassKind(pass: string): string {
+  // pass1_subject → pass1·subject;pass2 → pass2;validate → validate
+  if (pass.includes('_')) return pass.replace('_', '·')
+  return pass
+}
+
+function formatRelative(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  if (diffMs < 60_000) return '刚刚'
+  const min = Math.floor(diffMs / 60_000)
+  if (min < 60) return `${min} 分钟前`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} 小时前`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day} 天前`
+  return new Date(iso).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  })
 }

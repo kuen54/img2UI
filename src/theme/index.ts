@@ -4,7 +4,7 @@ import { createTheme, alpha } from '@mui/material/styles'
 
 // PLAN §1.1 / §14.3:Material Design 3 视觉骨架 + Figma 蓝主色 + Linear/Vercel 风格的克制细节
 // 设计目标:从 "MUI default" 跳到 "production tool",通过:
-// 1. typography:Inter(英)+ 苹方/HarmonyOS Sans(中),scale + 字重对比拉开
+// 1. typography:Geist Sans(英)+ 苹方/HarmonyOS Sans(中),scale + 字重对比拉开
 // 2. neutral 9 阶 token,所有 text/border 走阶梯,不硬编码灰
 // 3. 圆角整体 -4(Card 12 / Button 8 / Chip 6),MD3 大圆角在工具类显幼稚
 // 4. 关 ripple,改为 outline ring hover(高级感核心)
@@ -30,9 +30,9 @@ const N = {
 const HAIRLINE = 'rgba(15, 23, 42, 0.06)'
 const HAIRLINE_STRONG = 'rgba(15, 23, 42, 0.1)'
 
-// 字体栈:Inter(latin)+ CJK fallback
+// 字体栈:Geist Sans(latin)+ CJK fallback
 const FONT_STACK =
-  'var(--font-inter), -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif'
+  'var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif'
 
 export const theme = createTheme({
   palette: {
@@ -144,12 +144,12 @@ export const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          fontFeatureSettings: '"cv11", "ss01"', // Inter 的优化字形(单层 a / 弧形 l)
+          // Geist 自带优化默认,不需要 Inter 的 cv11/ss01 alternates
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
         },
         '*': {
-          // 让 native confirm 类元素也用 Inter
+          // 让 native confirm 类元素也用 Geist
           fontFamily: 'inherit',
         },
       },
