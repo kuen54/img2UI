@@ -1,14 +1,22 @@
 import { customAlphabet } from 'nanoid'
 
-const alpha = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+// 避开易混淆字符,但保留大小写
+const ALPHABET = '0123456789ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz'
 
-export const nid6 = customAlphabet(alpha, 6)
-export const nid8 = customAlphabet(alpha, 8)
+const id6 = customAlphabet(ALPHABET, 6)
+const id8 = customAlphabet(ALPHABET, 8)
 
-export const newProviderId = () => `prv_${nid6()}`
-export const newProjectId = () => `proj_${nid8()}`
-export const newPageId = () => `page_${nid8()}`
-export const newStateId = () => `state_${nid8()}`
-export const newElementId = () => `el_${nid8()}`
-export const newAssetId = () => `asset_${nid8()}`
-export const newRunId = () => `run_${nid8()}`
+/** Provider id(短) */
+export const newProviderId = (): string => id6()
+
+/** Project / Page / State / Element / Asset / PipelineRun id */
+export const newId = (): string => id8()
+
+/** ISO datetime now */
+export const nowIso = (): string => new Date().toISOString()
+
+/** 严格 ID 校验:^[a-zA-Z0-9_-]{1,32}$,用于路由参数防注入 */
+const ID_RE = /^[a-zA-Z0-9_-]{1,32}$/
+export function isValidId(s: string): boolean {
+  return ID_RE.test(s)
+}

@@ -1,51 +1,51 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { promises as fs } from 'node:fs'
+import { getAsset, saveAsset, listAssetsForPage } from '@/lib/assets'
+import { getPage, getState } from '@/lib/projects'
+import { uploadAssetToCdn } from '@/lib/cdn-client'
+import { getActiveProvider } from '@/lib/config'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId, nowIso } from '@/lib/id'
+import { paths } from '@/lib/fs-utils'
+import type { Asset } from '@/lib/types'
 
-import { getAsset, readAssetBinary, patchAsset } from '@/lib/assets'
-import { getPage } from '@/lib/pages'
-import { getProject } from '@/lib/projects'
-import { loadConfig } from '@/lib/config'
-import { uploadAsset } from '@/lib/cdn-client'
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
 
-type RouteCtx = { params: Promise<{ id: string }> }
-
-export async function POST(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const asset = await getAsset(id)
-  if (!asset) return NextResponse.json({ error: 'asset not found' }, { status: 404 })
-
-  const page = await getPage(asset.page_id)
-  if (!page) return NextResponse.json({ error: 'page not found' }, { status: 404 })
-
-  const project = await getProject(page.project_id)
-  if (!project) return NextResponse.json({ error: 'project not found' }, { status: 404 })
-
-  const config = await loadConfig()
-  // project 优先指定 cdn provider;否则取 active cdn
-  const provider =
-    config.providers.find((p) => p.id === project.cdn_provider_id && p.kind === 'cdn') ??
-    config.providers.find((p) => p.kind === 'cdn' && p.active)
-  if (!provider) {
-    return NextResponse.json(
-      { error: '未配置 active 的 cdn provider(去 /settings/cdn 设置)' },
-      { status: 400 },
-    )
+async function uploadOne(asset: Asset, projectId: string): Promise<Asset> {
+  const provider = await getActiveProvider('cdn')
+  if (!provider) throw new Error('未配置 active cdn provider')
+  const buf = await fs.readFile(paths.assetBin(asset.id))
+  const key = `${projectId}/${asset.page_id}/${asset.id}.png`
+  const cdnUrl = await uploadAssetToCdn(provider, key, buf, 'image/png')
+  const updated: Asset = {
+    ...asset,
+    cdn_url: cdnUrl,
+    status: 'uploaded',
+    updated_at: nowIso(),
   }
+  await saveAsset(updated)
+  return updated
+}
 
-  const body = await readAssetBinary(asset.id)
-  if (!body) {
-    return NextResponse.json({ error: 'asset 二进制不存在' }, { status: 404 })
-  }
-
+/** POST /api/assets/[id]/upload — 单个 asset 上 CDN */
+export async function POST(_req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    const { cdn_url } = await uploadAsset(provider, {
-      body,
-      projectId: project.id,
-      pageId: page.id,
-      assetId: asset.id,
-    })
-    const updated = await patchAsset(asset.id, { cdn_url, status: 'uploaded' })
-    return NextResponse.json(updated)
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const asset = await getAsset(id)
+    if (!asset) return jsonResponse({ error: 'asset not found' }, { status: 404 })
+
+    // 找 project_id(asset.page_id → page.project_id)
+    const page = await getPage(asset.page_id)
+    if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
+    const updated = await uploadOne(asset, page.project_id)
+    return jsonResponse(updated)
+  } catch (err) {
+    return errorToResponse(err)
   }
 }
+
+void getState
+void listAssetsForPage

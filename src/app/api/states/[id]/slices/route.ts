@@ -1,25 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { listSlicesWithAssignment } from '@/lib/slices'
+import { getState } from '@/lib/projects'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
 
-import { listSlices } from '@/lib/slices'
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
 
-export const runtime = 'nodejs'
+/** GET /api/states/[id]/slices?page_id=... → 切片库 + assigned_to */
+export async function GET(req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id: stateId } = await params
+    if (!isValidId(stateId))
+      return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const state = await getState(stateId)
+    if (!state) return jsonResponse({ error: 'state not found' }, { status: 404 })
 
-const ID_RE = /^[a-zA-Z0-9_-]{1,32}$/
-const VALID_CATEGORIES = ['subject', 'button', 'container', 'background', 'decoration', 'other'] as const
+    const url = new URL(req.url)
+    const pageId = url.searchParams.get('page_id') ?? state.page_id
+    if (!isValidId(pageId))
+      return jsonResponse({ error: 'invalid page_id' }, { status: 400 })
 
-type RouteCtx = { params: Promise<{ id: string }> }
-
-// GET /api/states/[id]/slices?category=X — 返回 SliceManifest JSON
-export async function GET(req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  if (!id || !ID_RE.test(id)) {
-    return new NextResponse('invalid state id', { status: 400 })
+    const slices = await listSlicesWithAssignment(pageId, stateId)
+    return jsonResponse({ slices })
+  } catch (err) {
+    return errorToResponse(err)
   }
-  const category = req.nextUrl.searchParams.get('category')
-  if (!category || !(VALID_CATEGORIES as readonly string[]).includes(category)) {
-    return new NextResponse('invalid category', { status: 400 })
-  }
-  const manifest = await listSlices(id, category)
-  if (!manifest) return new NextResponse('not found', { status: 404 })
-  return NextResponse.json(manifest)
 }

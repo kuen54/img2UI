@@ -1,51 +1,135 @@
 import { promises as fs } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { nanoid } from 'nanoid'
 
-// 测试隔离:vitest 环境下重定向到 OS tmpdir,避免测试文件 afterEach 的
-// `fs.rm(DATA_ROOT, { recursive: true, force: true })` 把用户真实 data/ 删光。
-// 见 fix/test-data-isolation(2026-05-14 dogfood round 5 用户 data/ 被五件套删了 4+ 次)。
-const isVitest = !!process.env.VITEST
-export const DATA_ROOT = isVitest
-  ? path.join(os.tmpdir(), `img2ui-test-${process.pid}`)
-  : path.join(process.cwd(), 'data')
+/**
+ * 数据根目录:`data/`,启动时确保存在。所有持久化文件落在它下面。
+ */
+export const DATA_ROOT = path.resolve(process.cwd(), 'data')
 
-export async function writeAtomic(filepath: string, content: string | Buffer): Promise<void> {
-  const dir = path.dirname(filepath)
+const SUBDIRS = [
+  'projects',
+  'pages',
+  'states',
+  'elements',
+  'assets',
+  'pipelines',
+  'raw',
+  'thumbs',
+  'pass2',
+  'keyed',
+  'slices',
+  'assets-bin',
+] as const
+
+let ensureRootPromise: Promise<void> | null = null
+
+/** 首次调用建好 data/ 及全部子目录,后续调用 idempotent */
+export async function ensureDataRoot(): Promise<void> {
+  if (!ensureRootPromise) {
+    ensureRootPromise = (async () => {
+      await fs.mkdir(DATA_ROOT, { recursive: true })
+      await Promise.all(
+        SUBDIRS.map((d) =>
+          fs.mkdir(path.join(DATA_ROOT, d), { recursive: true }),
+        ),
+      )
+    })()
+  }
+  return ensureRootPromise
+}
+
+/**
+ * 原子写:写到 tmp 文件再 rename。
+ * 防止进程被 kill 时留下半截文件。
+ */
+export async function writeAtomic(
+  filePath: string,
+  content: string | Uint8Array,
+): Promise<void> {
+  const dir = path.dirname(filePath)
   await fs.mkdir(dir, { recursive: true })
-  const tmp = `${filepath}.tmp.${nanoid(8)}`
+  const tmp = `${filePath}.tmp.${nanoid(8)}`
   await fs.writeFile(tmp, content)
-  await fs.rename(tmp, filepath)
+  await fs.rename(tmp, filePath)
 }
 
-export async function readJson<T>(filepath: string): Promise<T | null> {
+/** 读 JSON,文件不存在返回 null */
+export async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
   try {
-    const content = await fs.readFile(filepath, 'utf8')
-    return JSON.parse(content) as T
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw e
+    const buf = await fs.readFile(filePath, 'utf-8')
+    return JSON.parse(buf) as T
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
   }
 }
 
-export async function writeJson<T>(filepath: string, data: T): Promise<void> {
-  await writeAtomic(filepath, JSON.stringify(data, null, 2))
+/** 读 JSON,文件不存在抛错 */
+export async function readJson<T>(filePath: string): Promise<T> {
+  const buf = await fs.readFile(filePath, 'utf-8')
+  return JSON.parse(buf) as T
 }
 
-export async function listJsonInDir<T>(dir: string): Promise<T[]> {
+/** 写 JSON(美化两空格,原子写) */
+export async function writeJsonAtomic(
+  filePath: string,
+  data: unknown,
+): Promise<void> {
+  await writeAtomic(filePath, JSON.stringify(data, null, 2))
+}
+
+/** 删文件,不存在不报错 */
+export async function unlinkIfExists(filePath: string): Promise<void> {
   try {
-    const files = await fs.readdir(dir)
-    const results: T[] = []
-    for (const f of files) {
-      if (f.endsWith('.json')) {
-        const j = await readJson<T>(path.join(dir, f))
-        if (j) results.push(j)
-      }
-    }
-    return results
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw e
+    await fs.unlink(filePath)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
   }
 }
+
+/** 递归删目录,不存在不报错 */
+export async function rmIfExists(dirPath: string): Promise<void> {
+  try {
+    await fs.rm(dirPath, { recursive: true, force: true })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+  }
+}
+
+/** 列目录,不存在返回空数组 */
+export async function readdirIfExists(dirPath: string): Promise<string[]> {
+  try {
+    return await fs.readdir(dirPath)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw err
+  }
+}
+
+// ─── 路径助手 ────────────────────────────────────────────────────────────────
+
+export const paths = {
+  config: () => path.join(DATA_ROOT, 'config.json'),
+  project: (id: string) => path.join(DATA_ROOT, 'projects', `${id}.json`),
+  page: (id: string) => path.join(DATA_ROOT, 'pages', `${id}.json`),
+  state: (id: string) => path.join(DATA_ROOT, 'states', `${id}.json`),
+  /** elements 是按 page 整文件存(整批替换,非字段级 patch) */
+  elements: (pageId: string) => path.join(DATA_ROOT, 'elements', `${pageId}.json`),
+  asset: (id: string) => path.join(DATA_ROOT, 'assets', `${id}.json`),
+  pipelineRun: (id: string) => path.join(DATA_ROOT, 'pipelines', `${id}.json`),
+  raw: (stateId: string) => path.join(DATA_ROOT, 'raw', `${stateId}.png`),
+  thumb: (id: string) => path.join(DATA_ROOT, 'thumbs', `${id}.png`),
+  pass2GreenScreen: (stateId: string, category: string) =>
+    path.join(DATA_ROOT, 'pass2', `${stateId}-${category}.png`),
+  keyed: (stateId: string, category: string) =>
+    path.join(DATA_ROOT, 'keyed', `${stateId}-${category}.png`),
+  sliceDir: (stateId: string, category: string) =>
+    path.join(DATA_ROOT, 'slices', `${stateId}-${category}`),
+  slice: (stateId: string, category: string, idx: number) =>
+    path.join(DATA_ROOT, 'slices', `${stateId}-${category}`, `${idx}.png`),
+  sliceSidecar: (stateId: string, category: string, idx: number) =>
+    path.join(DATA_ROOT, 'slices', `${stateId}-${category}`, `${idx}.json`),
+  assetBin: (assetId: string) =>
+    path.join(DATA_ROOT, 'assets-bin', `${assetId}.png`),
+} as const

@@ -1,79 +1,70 @@
-import path from 'node:path'
-import os from 'node:os'
-
-import type { AppConfig } from '@/lib/types'
-import { DATA_ROOT, readJson, writeJson } from '@/lib/fs-utils'
-import { defaultProviders } from '@/lib/seeds/default-providers'
 import {
-  DEFAULT_PASS1_LAYOUT,
-  DEFAULT_PASS2_EXTRACT,
-  DEFAULT_PASS2_VALIDATE,
-  DEFAULT_CODING_AGENT_INTRO,
-} from '@/lib/seeds/default-prompts'
-import { maskKey, isMasked } from '@/lib/mask'
+  paths,
+  readJsonIfExists,
+  writeJsonAtomic,
+  ensureDataRoot,
+} from './fs-utils'
+import { buildDefaultAppConfig } from './seeds/default-config'
+import type { AppConfig, ProviderConfig, ProviderKind } from './types'
 
-// 重新导出,旧调用点不破
-export { maskKey, isMasked } from '@/lib/mask'
+let cached: AppConfig | null = null
+let initPromise: Promise<AppConfig> | null = null
 
-const CONFIG_PATH = path.join(DATA_ROOT, 'config.json')
-const SCHEMA_VERSION = '0.1.0'
+/**
+ * 读 data/config.json。
+ * 不存在时:写入 default seed 并返回。
+ * 存在时:直接返回。
+ * 内部缓存,避免每次请求都读盘。
+ */
+export async function getConfig(): Promise<AppConfig> {
+  if (cached) return cached
+  if (initPromise) return initPromise
 
-function defaultConfig(): AppConfig {
-  return {
-    version: SCHEMA_VERSION,
-    providers: defaultProviders(),
-    prompts: {
-      pass1_layout: DEFAULT_PASS1_LAYOUT,
-      pass2_extract: DEFAULT_PASS2_EXTRACT,
-      pass2_validate: DEFAULT_PASS2_VALIDATE,
-      coding_agent_intro: DEFAULT_CODING_AGENT_INTRO,
-    },
-    settings: {
-      auto_run_pass1_on_upload: true,
-      auto_run_validation_after_pass2: true,
-      default_export_dir: path.join(os.homedir(), 'img2ui-out'),
-    },
+  initPromise = (async () => {
+    await ensureDataRoot()
+    const existing = await readJsonIfExists<AppConfig>(paths.config())
+    if (existing) {
+      cached = existing
+      return existing
+    }
+    const fresh = buildDefaultAppConfig()
+    await writeJsonAtomic(paths.config(), fresh)
+    cached = fresh
+    return fresh
+  })()
+
+  try {
+    return await initPromise
+  } finally {
+    initPromise = null
   }
 }
 
-export async function loadConfig(): Promise<AppConfig> {
-  const existing = await readJson<AppConfig>(CONFIG_PATH)
-  if (existing) return existing
-  // 首启动 seed
-  const seed = defaultConfig()
-  await writeJson(CONFIG_PATH, seed)
-  return seed
+/** 保存(覆盖)整个 AppConfig,更新缓存 */
+export async function saveConfig(config: AppConfig): Promise<AppConfig> {
+  await ensureDataRoot()
+  await writeJsonAtomic(paths.config(), config)
+  cached = config
+  return config
 }
 
-export async function saveConfig(config: AppConfig): Promise<void> {
-  await writeJson(CONFIG_PATH, config)
+/** 测试 / dev HMR 用,清缓存 */
+export function resetConfigCache(): void {
+  cached = null
+  initPromise = null
 }
 
-// =============================================================================
-// API key 双向 mask(直接复用 evalyst 模式)
-// 纯字符串变换在 @/lib/mask;这里只放需要 fs 的「从磁盘还原」逻辑
-// =============================================================================
-
-// GET /api/config 用:把所有 api_key 替换成 mask
-export function maskConfig(config: AppConfig): AppConfig {
-  return {
-    ...config,
-    providers: config.providers.map((p) => ({
-      ...p,
-      api_key: maskKey(p.api_key),
-    })),
-  }
+/** 拿当前 active 的 mllm / image_gen / cdn / matting provider */
+export async function getActiveProvider(
+  kind: ProviderKind,
+): Promise<ProviderConfig | undefined> {
+  const config = await getConfig()
+  return config.providers.find((p) => p.kind === kind && p.active)
 }
 
-// PUT /api/config 用:遮罩字符串视为「未改动」,从磁盘读原值还原
-export async function unmaskApiKeys(incoming: AppConfig): Promise<AppConfig> {
-  const onDisk = await readJson<AppConfig>(CONFIG_PATH)
-  return {
-    ...incoming,
-    providers: incoming.providers.map((p) => {
-      if (!isMasked(p.api_key)) return p  // 用户改过,采纳新值
-      const original = onDisk?.providers.find((op) => op.id === p.id)
-      return { ...p, api_key: original?.api_key ?? '' }
-    }),
-  }
+export async function getProviderById(
+  id: string,
+): Promise<ProviderConfig | undefined> {
+  const config = await getConfig()
+  return config.providers.find((p) => p.id === id)
 }

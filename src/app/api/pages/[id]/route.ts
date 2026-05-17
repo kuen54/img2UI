@@ -1,34 +1,50 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import {
+  getPage,
+  updatePage,
+  deletePage,
+  listStatesByPage,
+} from '@/lib/projects'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
 
-import { getPage, updatePage, deletePage } from '@/lib/pages'
-import { listStatesByPage, deleteStatesByPage } from '@/lib/states'
-import { deleteElementsForPage } from '@/lib/elements'
-import type { Page } from '@/lib/types'
-
-type RouteCtx = { params: Promise<{ id: string }> }
-
-export async function GET(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const page = await getPage(id)
-  if (!page) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json(page)
+interface RouteParams {
+  params: Promise<{ id: string }>
 }
 
-export async function PUT(req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const patch = (await req.json().catch(() => null)) as Partial<Page> | null
-  if (!patch) return NextResponse.json({ error: 'invalid body' }, { status: 400 })
-  const updated = await updatePage(id, patch)
-  if (!updated) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json(updated)
+export async function GET(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const page = await getPage(id)
+    if (!page) return jsonResponse({ error: 'not found' }, { status: 404 })
+    const states = await listStatesByPage(id)
+    return jsonResponse({ ...page, states })
+  } catch (err) {
+    return errorToResponse(err)
+  }
 }
 
-// 级联删除:page → 全部 states + raw PNG + elements 文件
-export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const states = await listStatesByPage(id)
-  if (states.length > 0) await deleteStatesByPage(id)
-  await deleteElementsForPage(id)
-  await deletePage(id)
-  return new NextResponse(null, { status: 204 })
+export async function PUT(req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const patch = (await req.json()) as Record<string, unknown>
+    const updated = await updatePage(id, patch)
+    if (!updated) return jsonResponse({ error: 'not found' }, { status: 404 })
+    return jsonResponse(updated)
+  } catch (err) {
+    return errorToResponse(err)
+  }
+}
+
+export async function DELETE(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    await deletePage(id)
+    return new Response(null, { status: 204 })
+  } catch (err) {
+    return errorToResponse(err)
+  }
 }

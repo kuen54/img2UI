@@ -1,19 +1,117 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import {
+  getState,
+  getPage,
+  getProject,
+  updateState,
+} from '@/lib/projects'
+import { runPass1MultiRoute } from '@/lib/pass1-runner'
+import { createPipelineRun, updatePipelineRun } from '@/lib/elements'
+import { getActiveProvider } from '@/lib/config'
+import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { newId, nowIso, isValidId } from '@/lib/id'
+import { paths } from '@/lib/fs-utils'
 
-import { runPass1 } from '@/lib/pass1-runner'
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
 
-export const runtime = 'nodejs'
-export const maxDuration = 180  // Pass 1 真实跑可能 ~50s,留余量
+/**
+ * POST /api/states/[id]/pass1
+ * Phase 4:5 路并行 + IoU 合并;< 3/5 抛 PASS1_ERROR。
+ * 总 audit run(pass='pass1')+ 5 个 sub-runs。前端轮询总 run。
+ */
+export async function POST(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id: stateId } = await params
+    if (!isValidId(stateId))
+      return jsonResponse({ error: 'invalid id' }, { status: 400 })
 
-type RouteCtx = { params: Promise<{ id: string }> }
+    const state = await getState(stateId)
+    if (!state) return jsonResponse({ error: 'state not found' }, { status: 404 })
+    if (isStateLocked(stateId))
+      return jsonResponse({ error: 'state busy' }, { status: 409 })
 
-// fire-and-forget:立即 202 返回,Pass 1 在后台跑(setPipelineStatus 在 runner 里维护状态)
-// 失败时 runner 会标 pass1_failed,前端 2s 轮询能感知
-export async function POST(_req: NextRequest, ctx: RouteCtx) {
-  const { id: stateId } = await ctx.params
-  // 不 await:让 dialog/前端立即关闭,UI 立刻显示「布局分析中」
-  void runPass1(stateId).catch((e) => {
-    console.error(`[pass1 background] state=${stateId}:`, (e as Error).message)
-  })
-  return NextResponse.json({ status: 'accepted' }, { status: 202 })
+    const page = await getPage(state.page_id)
+    if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
+    const project = await getProject(page.project_id)
+    if (!project) return jsonResponse({ error: 'project not found' }, { status: 404 })
+    const provider = await getActiveProvider('mllm')
+    if (!provider) {
+      return jsonResponse(
+        { error: '未配置 active mllm provider' },
+        { status: 412 },
+      )
+    }
+
+    // 总 audit run(stub)
+    const auditRun = {
+      id: newId(),
+      state_id: stateId,
+      pass: 'pass1' as const,
+      status: 'running' as const,
+      started_at: nowIso(),
+      llm_request: {
+        provider_id: provider.id,
+        model: provider.model ?? '',
+        prompt: '(audit stub - 见 pass1_<category> sub-runs)',
+        images: [paths.raw(stateId)],
+        extra: {},
+      },
+      llm_response: null,
+    }
+    await createPipelineRun(auditRun)
+    await updateState(stateId, {
+      pipeline_status: 'pass1_running',
+      pass1_run_id: auditRun.id,
+    })
+
+    void (async () => {
+      try {
+        await withStateLock(stateId, async () => {
+          const result = await runPass1MultiRoute({
+            state,
+            pageName: page.name,
+            ...(project.description !== undefined ? { pageDescription: project.description } : {}),
+            ...(project.tech_stack_hint !== undefined
+              ? { techStackHint: project.tech_stack_hint }
+              : {}),
+          })
+          await updatePipelineRun(auditRun.id, {
+            status: 'completed',
+            completed_at: nowIso(),
+            parsed_result: {
+              successful_routes: result.successes.map((s) => ({
+                category: s.category,
+                count: s.elements.length,
+                sub_run_id: s.subRunId,
+              })),
+              failed_routes: result.failures.map((f) => ({
+                category: f.category,
+                error: f.error,
+              })),
+              merged_count: result.mergedElements.length,
+              filtered_tiny_count: result.filteredTiny.length,
+            },
+          })
+        })
+        await updateState(stateId, { pipeline_status: 'pass1_done' })
+      } catch (err) {
+        if (err instanceof StateBusyError) return
+        const message = err instanceof Error ? err.message : String(err)
+        console.error(`[pass1 audit ${auditRun.id}]`, message)
+        await updatePipelineRun(auditRun.id, {
+          status: 'failed',
+          completed_at: nowIso(),
+          error: { code: 'PASS1_ERROR', message, retryable: true },
+        }).catch(() => {})
+        await updateState(stateId, { pipeline_status: 'pass1_failed' }).catch(() => {})
+      }
+    })()
+
+    return jsonResponse({ run_id: auditRun.id }, { status: 202 })
+  } catch (err) {
+    return errorToResponse(err)
+  }
 }

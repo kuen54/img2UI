@@ -1,35 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'node:fs'
+import { paths } from '@/lib/fs-utils'
+import { isValidId } from '@/lib/id'
 
-import { thumbnailPathFor } from '@/lib/thumbnails'
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
 
-export const runtime = 'nodejs'
-
-type RouteCtx = { params: Promise<{ id: string }> }
-
-// nanoid 字符集 + page_ 前缀,严格限制防 path-traversal
-const ID_RE = /^[a-zA-Z0-9_-]{1,32}$/
-
-// GET /api/thumbs/[id] → 返回 data/thumbs/{id}.png(Phase 8e)
-export async function GET(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  if (!id || !ID_RE.test(id)) {
-    return new NextResponse('invalid thumbnail id', { status: 400 })
+export async function GET(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  const { id } = await params
+  if (!isValidId(id)) {
+    return NextResponse.json({ error: 'invalid id' }, { status: 400 })
   }
-
   try {
-    const buffer = await fs.readFile(thumbnailPathFor(id))
-    return new NextResponse(buffer as unknown as BodyInit, {
+    const buf = await fs.readFile(paths.thumb(id))
+    return new NextResponse(buf, {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=86400',
       },
     })
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-      return new NextResponse('thumbnail not found', { status: 404 })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return NextResponse.json({ error: 'not found' }, { status: 404 })
     }
-    throw e
+    return NextResponse.json({ error: 'internal' }, { status: 500 })
   }
 }

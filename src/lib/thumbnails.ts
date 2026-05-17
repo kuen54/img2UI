@@ -1,29 +1,24 @@
-// 缩略图生成:把设计稿原图缩到最长边 512px(retina 1:1 显示),写入 data/thumbs/{page-id}.png
-// 见 SPEC.md § 缩略图生成 + CLAUDE.md(Phase 8e/8f dogfood feedback)
-
-import path from 'node:path'
-import { promises as fs } from 'node:fs'
 import sharp from 'sharp'
+import { paths, writeAtomic } from './fs-utils'
 
-import { DATA_ROOT } from '@/lib/fs-utils'
+/** 生成 256×256 cover 缩略图 PNG,落 data/thumbs/{id}.png */
+export async function generateThumbnail(
+  imageBuffer: Buffer,
+  id: string,
+): Promise<void> {
+  const thumb = await sharp(imageBuffer)
+    .resize(256, 256, { fit: 'cover', position: 'centre' })
+    .png({ quality: 85 })
+    .toBuffer()
+  await writeAtomic(paths.thumb(id), thumb)
+}
 
-const THUMBS_DIR = path.join(DATA_ROOT, 'thumbs')
-
-export const thumbnailPathFor = (pageId: string): string =>
-  path.join(THUMBS_DIR, `${pageId}.png`)
-
-/**
- * 把 PNG buffer 缩到最长边 512px,写入 data/thumbs/{pageId}.png 并返回路径
- * - fit: 'inside' 保留宽高比,不裁切
- * - withoutEnlargement: true,小图不放大
- * - quality 85,目标 < 100KB(retina 显示需要 2x DPR,256 → 512)
- */
-export async function generateThumbnail(pageId: string, src: Buffer): Promise<string> {
-  await fs.mkdir(THUMBS_DIR, { recursive: true })
-  const outPath = thumbnailPathFor(pageId)
-  await sharp(src)
-    .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
-    .png({ quality: 85, compressionLevel: 9 })
-    .toFile(outPath)
-  return outPath
+export async function getImageDimensions(
+  imageBuffer: Buffer,
+): Promise<{ width: number; height: number }> {
+  const meta = await sharp(imageBuffer).metadata()
+  if (!meta.width || !meta.height) {
+    throw new Error('failed to read image dimensions')
+  }
+  return { width: meta.width, height: meta.height }
 }

@@ -1,121 +1,144 @@
-// 切片:基于 scipy.ndimage.binary_dilation + connected component
-// 参考 ref/split_elements.py,纯 TS port
+// HANDOFF §9 + ref/split_elements.py 算法移植到 TS。
+// 不引 OpenCV/scipy:binary_dilation 8-connectivity 自实现 + connected-component union-find 自实现。
 
 import sharp from 'sharp'
 
-export type SliceOptions = {
-  gap?: number              // binary_dilation 迭代次数,默认 15
-  padding?: number          // bbox padding(像素),默认 5
-  min_size?: number         // bbox 任一边 < min_size 视为噪点,默认 30
-  min_opaque_pct?: number   // 二级过滤:bbox 内 opaque(α>200)像素 % 低于此值剔除,默认 1.0
-  alpha_threshold?: number  // 视为前景的 alpha 阈值,默认 10
+export interface SliceOptions {
+  /** dilation 迭代次数(桥接同元素内部小断裂),默认 15 */
+  gap?: number
+  /** 每个连通块 bbox padding 像素,默认 5 */
+  padding?: number
+  /** bbox 任一边 < min_size 视为噪点过滤,默认 30 */
+  min_size?: number
+  /** bbox 内 opaque(α>200)像素百分比 < 此值过滤(微弱半透残留),默认 1.0 */
+  min_opaque_pct?: number
+  /** alpha mask 阈值,默认 10 */
+  alpha_threshold?: number
 }
 
-export type Slice = {
+export interface Slice {
   buffer: Buffer
-  bbox: [number, number, number, number]  // [x, y, w, h] 像素坐标
+  /** 像素坐标 [x, y, w, h] */
+  bbox: [number, number, number, number]
+  /** 0-100 */
   opaque_pct: number
+  width: number
+  height: number
 }
 
-export async function sliceAssets(transparentPng: Buffer, opts: SliceOptions = {}): Promise<Slice[]> {
+export async function sliceAssets(
+  transparentPng: Buffer,
+  opts: SliceOptions = {},
+): Promise<Slice[]> {
   const gap = opts.gap ?? 15
   const padding = opts.padding ?? 5
   const minSize = opts.min_size ?? 30
   const minOpaquePct = opts.min_opaque_pct ?? 1.0
-  const alphaThreshold = opts.alpha_threshold ?? 10
+  const alphaT = opts.alpha_threshold ?? 10
 
-  const { data, info } = await sharp(transparentPng).raw().toBuffer({ resolveWithObject: true })
-  const { width, height, channels } = info
-  if (channels !== 4) throw new Error('sliceAssets 需要 RGBA PNG 输入')
+  const { data, info } = await sharp(transparentPng)
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  const { width: W, height: H, channels: ch } = info
+  if (ch !== 4) throw new Error('sliceAssets needs RGBA')
 
-  // 1. 取 alpha mask
-  const N = width * height
-  const mask = new Uint8Array(N)  // 0/1
+  // Step 1: alpha mask
+  const N = W * H
+  const mask = new Uint8Array(N)
   for (let i = 0; i < N; i++) {
-    mask[i] = data[i * 4 + 3]! > alphaThreshold ? 1 : 0
+    mask[i] = data[i * 4 + 3]! > alphaT ? 1 : 0
   }
 
-  // 2. binary_dilation:8 邻接,gap 步
-  const dilated = binaryDilate(mask, width, height, gap)
+  // Step 2: binary_dilation (8-connectivity, gap iterations)
+  const dilated = binaryDilate8(mask, W, H, gap)
 
-  // 3. connected component labeling(8 邻接,union-find)
-  const labels = connectedComponents8(dilated, width, height)
+  // Step 3: connected component labeling (8-connectivity, two-pass union-find)
+  const labels = ccLabel8(dilated, W, H)
 
-  // 4. 每个 label 算 bbox(在 dilated mask 上)
-  const bboxes = new Map<number, { minX: number; minY: number; maxX: number; maxY: number }>()
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const lbl = labels[y * width + x]!
-      if (lbl === 0) continue
-      const cur = bboxes.get(lbl)
-      if (!cur) {
-        bboxes.set(lbl, { minX: x, minY: y, maxX: x, maxY: y })
+  // Step 4: per-label bbox
+  const bboxes = new Map<number, { x0: number; y0: number; x1: number; y1: number }>()
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const l = labels[y * W + x]!
+      if (l === 0) continue
+      const b = bboxes.get(l)
+      if (!b) {
+        bboxes.set(l, { x0: x, y0: y, x1: x, y1: y })
       } else {
-        if (x < cur.minX) cur.minX = x
-        if (x > cur.maxX) cur.maxX = x
-        if (y < cur.minY) cur.minY = y
-        if (y > cur.maxY) cur.maxY = y
+        if (x < b.x0) b.x0 = x
+        if (x > b.x1) b.x1 = x
+        if (y < b.y0) b.y0 = y
+        if (y > b.y1) b.y1 = y
       }
     }
   }
 
-  // 5. 过滤 + 切图
+  // Step 5: filter + crop
   const slices: Slice[] = []
-  for (const [, b] of bboxes) {
-    let x = b.minX - padding
-    let y = b.minY - padding
-    let w = b.maxX - b.minX + 1 + padding * 2
-    let h = b.maxY - b.minY + 1 + padding * 2
+  for (const b of bboxes.values()) {
+    let x = b.x0 - padding
+    let y = b.y0 - padding
+    let w = b.x1 - b.x0 + 1 + padding * 2
+    let h = b.y1 - b.y0 + 1 + padding * 2
     if (x < 0) { w += x; x = 0 }
     if (y < 0) { h += y; y = 0 }
-    if (x + w > width) w = width - x
-    if (y + h > height) h = height - y
+    if (x + w > W) w = W - x
+    if (y + h > H) h = H - y
     if (w < minSize || h < minSize) continue
 
-    // 算 bbox 内 opaque 像素 %(走原 mask,不是 dilated)
-    let opaqueCount = 0
+    // opaque% 在原 mask(非 dilated)上算
+    let opaque = 0
     for (let yy = y; yy < y + h; yy++) {
       for (let xx = x; xx < x + w; xx++) {
-        if (data[(yy * width + xx) * 4 + 3]! > 200) opaqueCount++
+        if (data[(yy * W + xx) * 4 + 3]! > 200) opaque++
       }
     }
-    const opaquePct = (opaqueCount / (w * h)) * 100
-    if (opaquePct < minOpaquePct) continue
+    const pct = (opaque / (w * h)) * 100
+    if (pct < minOpaquePct) continue
 
-    const buffer = await sharp(transparentPng).extract({ left: x, top: y, width: w, height: h }).png().toBuffer()
-    slices.push({ buffer, bbox: [x, y, w, h], opaque_pct: opaquePct })
+    // crop 走 sharp.extract,从原 RGBA buf,不从 dilated mask
+    const buffer = await sharp(transparentPng)
+      .extract({ left: x, top: y, width: w, height: h })
+      .png()
+      .toBuffer()
+    slices.push({ buffer, bbox: [x, y, w, h], opaque_pct: pct, width: w, height: h })
   }
 
-  // 排序:y 中心 → x 中心(便于跟 elements 数组顺序对齐)
+  // 排序:按 y 中心 → x 中心(便于跟 element 顺序大致对齐)
   slices.sort((a, b) => {
-    const yCenterA = a.bbox[1] + a.bbox[3] / 2
-    const yCenterB = b.bbox[1] + b.bbox[3] / 2
-    if (Math.abs(yCenterA - yCenterB) > 50) return yCenterA - yCenterB
-    return (a.bbox[0] + a.bbox[2] / 2) - (b.bbox[0] + b.bbox[2] / 2)
+    const ay = a.bbox[1] + a.bbox[3] / 2
+    const by = b.bbox[1] + b.bbox[3] / 2
+    if (Math.abs(ay - by) > 50) return ay - by
+    const ax = a.bbox[0] + a.bbox[2] / 2
+    const bx = b.bbox[0] + b.bbox[2] / 2
+    return ax - bx
   })
   return slices
 }
 
-// 8 邻接膨胀,N 步
-function binaryDilate(mask: Uint8Array, w: number, h: number, iters: number): Uint8Array {
+// ─── 8-connectivity binary dilation ────────────────────────────────────────
+
+function binaryDilate8(mask: Uint8Array, W: number, H: number, iters: number): Uint8Array {
   let cur = mask
   for (let it = 0; it < iters; it++) {
     const next = new Uint8Array(cur.length)
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = y * w + x
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const idx = y * W + x
         if (cur[idx] === 1) {
           next[idx] = 1
           continue
         }
-        // 8 邻接看一圈
         let hit = 0
-        for (let dy = -1; dy <= 1 && !hit; dy++) {
-          for (let dx = -1; dx <= 1 && !hit; dx++) {
+        outer: for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
             const nx = x + dx
             const ny = y + dy
-            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-            if (cur[ny * w + nx] === 1) hit = 1
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue
+            if (cur[ny * W + nx] === 1) {
+              hit = 1
+              break outer
+            }
           }
         }
         next[idx] = hit
@@ -126,16 +149,16 @@ function binaryDilate(mask: Uint8Array, w: number, h: number, iters: number): Ui
   return cur
 }
 
-// connected component labeling(8 邻接,union-find)
-function connectedComponents8(mask: Uint8Array, w: number, h: number): Int32Array {
+// ─── 8-connectivity connected component labeling (union-find, two pass) ───
+
+function ccLabel8(mask: Uint8Array, W: number, H: number): Int32Array {
   const labels = new Int32Array(mask.length)
-  const parent: number[] = [0]  // index 0 reserved
-  let nextLabel = 1
+  const parent: number[] = [0] // 0 reserved
+  let next = 1
 
   const find = (x: number): number => {
     let r = x
     while (parent[r] !== r) r = parent[r]!
-    // path compression
     while (parent[x] !== r) {
       const p = parent[x]!
       parent[x] = r
@@ -143,51 +166,48 @@ function connectedComponents8(mask: Uint8Array, w: number, h: number): Int32Arra
     }
     return r
   }
-  const union = (a: number, b: number) => {
-    const ra = find(a)
-    const rb = find(b)
+  const union = (a: number, b: number): void => {
+    const ra = find(a), rb = find(b)
     if (ra !== rb) parent[ra] = rb
   }
 
-  // 第一遍:扫描,看左 / 上左 / 上 / 上右 邻居
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (mask[y * w + x] !== 1) continue
-      const neighbors: number[] = []
-      // 上排 (x-1, y-1) (x, y-1) (x+1, y-1)
+  // Pass 1: scan, look at NW / N / NE / W neighbors
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (mask[y * W + x] !== 1) continue
+      const ns: number[] = []
       if (y > 0) {
-        if (x > 0 && mask[(y - 1) * w + x - 1] === 1) neighbors.push(labels[(y - 1) * w + x - 1]!)
-        if (mask[(y - 1) * w + x] === 1) neighbors.push(labels[(y - 1) * w + x]!)
-        if (x < w - 1 && mask[(y - 1) * w + x + 1] === 1) neighbors.push(labels[(y - 1) * w + x + 1]!)
+        if (x > 0 && mask[(y - 1) * W + x - 1] === 1) ns.push(labels[(y - 1) * W + x - 1]!)
+        if (mask[(y - 1) * W + x] === 1) ns.push(labels[(y - 1) * W + x]!)
+        if (x < W - 1 && mask[(y - 1) * W + x + 1] === 1)
+          ns.push(labels[(y - 1) * W + x + 1]!)
       }
-      // 左 (x-1, y)
-      if (x > 0 && mask[y * w + x - 1] === 1) neighbors.push(labels[y * w + x - 1]!)
-
-      const filtered = neighbors.filter((l) => l > 0)
-      if (filtered.length === 0) {
-        labels[y * w + x] = nextLabel
-        parent[nextLabel] = nextLabel
-        nextLabel++
+      if (x > 0 && mask[y * W + x - 1] === 1) ns.push(labels[y * W + x - 1]!)
+      const valid = ns.filter((l) => l > 0)
+      if (valid.length === 0) {
+        labels[y * W + x] = next
+        parent[next] = next
+        next++
       } else {
-        const minLabel = Math.min(...filtered)
-        labels[y * w + x] = minLabel
-        for (const l of filtered) if (l !== minLabel) union(l, minLabel)
+        const min = Math.min(...valid)
+        labels[y * W + x] = min
+        for (const l of valid) if (l !== min) union(l, min)
       }
     }
   }
 
-  // 第二遍:resolve labels
-  const finalLabel = new Map<number, number>()
-  let outLabel = 0
+  // Pass 2: resolve to compact final labels
+  const final = new Map<number, number>()
+  let out = 0
   for (let i = 0; i < labels.length; i++) {
     const l = labels[i]!
     if (l === 0) continue
     const root = find(l)
-    let mapped = finalLabel.get(root)
+    let mapped = final.get(root)
     if (mapped === undefined) {
-      outLabel++
-      mapped = outLabel
-      finalLabel.set(root, mapped)
+      out++
+      mapped = out
+      final.set(root, mapped)
     }
     labels[i] = mapped
   }

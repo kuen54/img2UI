@@ -1,36 +1,57 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import {
+  createProject,
+  listProjects,
+  listPagesByProject,
+  listStatesByPage,
+} from '@/lib/projects'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
 
-import { listProjects, createProject } from '@/lib/projects'
-import { listPages } from '@/lib/pages'
-import type { Project } from '@/lib/types'
-
-export async function GET() {
-  const [projects, pages] = await Promise.all([listProjects(), listPages()])
-  // 给每个 project 找一张 thumbnail(优先 created_at 早的)挂到 sample_thumbnail_url
-  // pages 已通过 listPages 拿到全量,内存做映射开销可忽略(MVP 无 pagination)
-  const sortedPages = [...pages].sort((a, b) => a.created_at.localeCompare(b.created_at))
-  const decorated: Project[] = projects.map((proj) => {
-    const sample = sortedPages.find((p) => p.project_id === proj.id && p.thumbnail_path)
-    if (sample) {
-      return { ...proj, sample_thumbnail_url: `/api/thumbs/${sample.id}` }
-    }
-    return proj
-  })
-  return NextResponse.json(decorated)
+export async function GET(): Promise<Response> {
+  try {
+    const projects = await listProjects()
+    // 给列表 Card 用的 sample_thumbnail_url:取该项目第一个 page 的 canonical state 的 thumb
+    const enriched = await Promise.all(
+      projects.map(async (p) => {
+        const pages = await listPagesByProject(p.id)
+        const firstPage = pages[0]
+        let sample_thumbnail_url: string | undefined
+        if (firstPage?.canonical_state_id) {
+          sample_thumbnail_url = `/api/thumbs/${firstPage.canonical_state_id}`
+        } else if (firstPage) {
+          // canonical 没设(state 还没上传):看看是否有任何 state
+          const states = await listStatesByPage(firstPage.id)
+          const s = states[0]
+          if (s) sample_thumbnail_url = `/api/thumbs/${s.id}`
+        }
+        return { ...p, ...(sample_thumbnail_url ? { sample_thumbnail_url } : {}), pages_count: pages.length }
+      }),
+    )
+    return jsonResponse(enriched)
+  } catch (err) {
+    return errorToResponse(err)
+  }
 }
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => null)) as
-    | { name?: string; description?: string; tech_stack_hint?: string; cdn_provider_id?: string }
-    | null
-  if (!body || typeof body.name !== 'string' || !body.name.trim()) {
-    return NextResponse.json({ error: 'name 必填' }, { status: 400 })
+export async function POST(req: NextRequest): Promise<Response> {
+  try {
+    const body = (await req.json()) as {
+      name: string
+      description?: string
+      tech_stack_hint?: string
+      cdn_provider_id?: string
+    }
+    if (!body.name?.trim()) {
+      return jsonResponse({ error: 'name required' }, { status: 400 })
+    }
+    const project = await createProject({
+      name: body.name.trim(),
+      ...(body.description ? { description: body.description } : {}),
+      ...(body.tech_stack_hint ? { tech_stack_hint: body.tech_stack_hint } : {}),
+      ...(body.cdn_provider_id ? { cdn_provider_id: body.cdn_provider_id } : {}),
+    })
+    return jsonResponse(project, { status: 201 })
+  } catch (err) {
+    return errorToResponse(err)
   }
-  const project = await createProject({
-    name: body.name.trim(),
-    ...(body.description !== undefined && { description: body.description }),
-    ...(body.tech_stack_hint !== undefined && { tech_stack_hint: body.tech_stack_hint }),
-    ...(body.cdn_provider_id !== undefined && { cdn_provider_id: body.cdn_provider_id }),
-  })
-  return NextResponse.json(project, { status: 201 })
 }

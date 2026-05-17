@@ -1,34 +1,53 @@
-import { NextRequest, NextResponse } from 'next/server'
-
-import { loadConfig } from '@/lib/config'
+import { NextRequest } from 'next/server'
+import { getProviderById } from '@/lib/config'
 import { pingMllm, pingImageGen } from '@/lib/llm-client'
 import { pingCdn } from '@/lib/cdn-client'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => null)) as { provider_id?: string } | null
-  const providerId = body?.provider_id
-  if (!providerId) {
-    return NextResponse.json({ ok: false, error: 'provider_id 缺失' }, { status: 400 })
+export async function POST(req: NextRequest): Promise<Response> {
+  try {
+    const body = (await req.json()) as { provider_id: string }
+    const provider = await getProviderById(body.provider_id)
+    if (!provider) {
+      return jsonResponse(
+        { ok: false, message: 'provider not found' },
+        { status: 404 },
+      )
+    }
+    const start = Date.now()
+    try {
+      switch (provider.kind) {
+        case 'mllm':
+          await pingMllm(provider)
+          break
+        case 'image_gen':
+          await pingImageGen(provider)
+          break
+        case 'cdn':
+          await pingCdn(provider)
+          break
+        case 'matting':
+          // koukoutu 没有免费 ping endpoint,sync 调用每次扣 1 积分。
+          // Settings UI 提示用户「请到 Asset Review 实测」(HANDOFF §7.7)
+          return jsonResponse({
+            ok: false,
+            message:
+              'matting (koukoutu) 不支持 ping;请到 Asset Review 实测「用 API 抠图」',
+          })
+      }
+      return jsonResponse({
+        ok: true,
+        latency_ms: Date.now() - start,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return jsonResponse({
+        ok: false,
+        message,
+        latency_ms: Date.now() - start,
+      })
+    }
+  } catch (err) {
+    return errorToResponse(err)
   }
-
-  const config = await loadConfig()
-  const provider = config.providers.find((p) => p.id === providerId)
-  if (!provider) {
-    return NextResponse.json({ ok: false, error: 'provider 不存在' }, { status: 404 })
-  }
-
-  // ★ 测试结果只暴露 { ok, error?, latency_ms? },绝对不返回 raw api_key
-  // matting kind 暂不支持 ping(没有免费 ping endpoint,koukoutu 每次 1 积分)
-  const result =
-    provider.kind === 'mllm'
-      ? await pingMllm(provider)
-      : provider.kind === 'image_gen'
-        ? await pingImageGen(provider)
-        : provider.kind === 'cdn'
-          ? await pingCdn(provider)
-          : provider.kind === 'matting'
-            ? ({ ok: false as const, error: '抠图 provider 暂不支持连通测试,请到 Asset Review 实测' })
-            : ({ ok: false as const, error: `unsupported kind: ${String(provider.kind)}` })
-
-  return NextResponse.json(result)
 }

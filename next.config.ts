@@ -1,7 +1,9 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  // localhost-only tool; no remote image domains
+  images: { unoptimized: true },
+  // CSRF gate is in middleware.ts; no need for additional rewrites
+}
 
-export default nextConfig;
+export default nextConfig

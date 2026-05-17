@@ -1,27 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { getState, deleteState, getPage, updatePage } from '@/lib/projects'
+import { errorToResponse, jsonResponse } from '@/lib/api-response'
+import { isValidId } from '@/lib/id'
 
-import { getState, deleteState } from '@/lib/states'
-import { getPage, updatePage } from '@/lib/pages'
-
-type RouteCtx = { params: Promise<{ id: string }> }
-
-export async function GET(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const state = await getState(id)
-  if (!state) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json(state)
+interface RouteParams {
+  params: Promise<{ id: string }>
 }
 
-export async function DELETE(_req: NextRequest, ctx: RouteCtx) {
-  const { id } = await ctx.params
-  const state = await getState(id)
-  if (state) {
-    // 如果是该 page 的 canonical,清空那个字段
-    const page = await getPage(state.page_id)
-    if (page && page.canonical_state_id === id) {
-      await updatePage(page.id, { canonical_state_id: '' })
-    }
+export async function GET(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const state = await getState(id)
+    if (!state) return jsonResponse({ error: 'not found' }, { status: 404 })
+    return jsonResponse(state)
+  } catch (err) {
+    return errorToResponse(err)
   }
-  await deleteState(id)
-  return new NextResponse(null, { status: 204 })
+}
+
+export async function DELETE(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+  try {
+    const { id } = await params
+    if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    const state = await getState(id)
+    if (!state) return new Response(null, { status: 204 }) // idempotent
+    // 顺手清 page.canonical_state_id(若指向本 state)
+    const page = await getPage(state.page_id)
+    if (page?.canonical_state_id === id) {
+      await updatePage(state.page_id, { canonical_state_id: '' })
+    }
+    await deleteState(id)
+    return new Response(null, { status: 204 })
+  } catch (err) {
+    return errorToResponse(err)
+  }
 }
