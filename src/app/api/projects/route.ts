@@ -5,15 +5,20 @@ import {
   listPagesByProject,
   listStatesByPage,
 } from '@/lib/projects'
+import { getProjectStats } from '@/lib/projects-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 
 export async function GET(): Promise<Response> {
   try {
     const projects = await listProjects()
     // 给列表 Card 用的 sample_thumbnail_url:取该项目第一个 page 的 canonical state 的 thumb
+    // 同时聚合项目级 stats(总页/状态/元素/资产数 + 最近一次 PipelineRun + pipeline_status 分布)
     const enriched = await Promise.all(
       projects.map(async (p) => {
-        const pages = await listPagesByProject(p.id)
+        const [pages, stats] = await Promise.all([
+          listPagesByProject(p.id),
+          getProjectStats(p.id),
+        ])
         const firstPage = pages[0]
         let sample_thumbnail_url: string | undefined
         if (firstPage?.canonical_state_id) {
@@ -24,7 +29,12 @@ export async function GET(): Promise<Response> {
           const s = states[0]
           if (s) sample_thumbnail_url = `/api/thumbs/${s.id}`
         }
-        return { ...p, ...(sample_thumbnail_url ? { sample_thumbnail_url } : {}), pages_count: pages.length }
+        return {
+          ...p,
+          ...(sample_thumbnail_url ? { sample_thumbnail_url } : {}),
+          pages_count: pages.length,
+          stats,
+        }
       }),
     )
     return jsonResponse(enriched)
