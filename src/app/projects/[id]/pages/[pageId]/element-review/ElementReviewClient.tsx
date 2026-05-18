@@ -29,7 +29,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import RestoreIcon from '@mui/icons-material/Restore'
 import SaveIcon from '@mui/icons-material/Save'
 import { AppShell } from '@/components/AppShell'
-import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN } from '@/lib/visual-category'
+import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
 import type {
   LayoutElement,
   Page,
@@ -40,14 +40,7 @@ import type {
 } from '@/lib/types'
 
 // ─── color per category ───────────────────────────────────────────────────
-const CATEGORY_COLOR: Record<VisualCategory, string> = {
-  subject: '#0d99ff',
-  button: '#f59e0b',
-  container: '#10b981',
-  background: '#a78bfa',
-  decoration: '#ec4899',
-  other: '#6b7280',
-}
+const CATEGORY_COLOR = VISUAL_CATEGORY_COLOR
 
 interface PageWithStates extends Page {
   states: StateRecord[]
