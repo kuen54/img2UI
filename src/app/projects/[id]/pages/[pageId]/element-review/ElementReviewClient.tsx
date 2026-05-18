@@ -388,9 +388,22 @@ function ElementSidebar({
                 size="small"
                 label={`${t} ${typeCounts[t]}`}
                 onClick={() => onToggleType(t)}
-                color={active ? 'primary' : 'default'}
                 variant={active ? 'filled' : 'outlined'}
-                sx={{ opacity: active ? 1 : 0.55 }}
+                {...(active
+                  ? {
+                      icon: <CheckIcon sx={{ fontSize: 14 }} />,
+                      sx: {
+                        // 嵌 &.MuiChip-filled 提升 specificity,
+                        // 否则会被 theme 的 colorDefault 浅灰底吃掉
+                        '&.MuiChip-filled': {
+                          bgcolor: 'text.primary',
+                          color: 'background.paper',
+                          '&:hover': { bgcolor: 'text.primary' },
+                        },
+                        '& .MuiChip-icon': { color: 'background.paper' },
+                      },
+                    }
+                  : {})}
               />
             )
           })}
@@ -407,24 +420,36 @@ function ElementSidebar({
                 variant={active ? 'filled' : 'outlined'}
                 label={
                   <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: color,
-                        flexShrink: 0,
-                      }}
-                    />
+                    {active ? (
+                      <CheckIcon sx={{ fontSize: 14, color: '#fff' }} />
+                    ) : (
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: color,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
                     <span>
                       {VISUAL_CATEGORY_CN[c]} {categoryCounts[c]}
                     </span>
                   </Stack>
                 }
                 sx={{
-                  opacity: active ? 1 : 0.5,
-                  bgcolor: active ? `${color}1f` : undefined,
-                  borderColor: active ? color : undefined,
+                  // 同样:active 态 bgcolor 必须嵌 &.MuiChip-filled 才能压过 theme
+                  ...(active
+                    ? {
+                        '&.MuiChip-filled': {
+                          bgcolor: color,
+                          color: '#fff',
+                          borderColor: color,
+                          '&:hover': { bgcolor: color },
+                        },
+                      }
+                    : {}),
                   '& .MuiChip-label': { display: 'flex', px: 0.75 },
                 }}
               />

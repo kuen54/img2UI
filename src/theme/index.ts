@@ -61,15 +61,23 @@ export const theme = createTheme({
     divider: HAIRLINE,
     text: {
       primary: N[900],
-      secondary: N[600],
+      // 上轮误把 text.secondary 跟 caption 都用了 N[500]/N[600],中文字符在 14px 下显薄看不清。
+      // 拉到 N[700] 提升对比度,接近 MD3 on-surface-variant 的语义深度
+      secondary: N[700],
       disabled: N[400],
     },
     grey: N,
     action: {
-      hover: 'rgba(15, 23, 42, 0.04)',
-      selected: 'rgba(13, 153, 255, 0.08)',
+      // MD3 state-layer:hover 8% / focus & pressed 12% / dragged 16%(以 on-surface 为底)
+      hover: 'rgba(15, 23, 42, 0.08)',
+      hoverOpacity: 0.08,
+      selected: 'rgba(13, 153, 255, 0.12)',
+      selectedOpacity: 0.12,
+      focus: 'rgba(15, 23, 42, 0.12)',
+      focusOpacity: 0.12,
       disabled: N[300],
       disabledBackground: N[100],
+      disabledOpacity: 0.38,
     },
   },
   shape: {
@@ -88,11 +96,11 @@ export const theme = createTheme({
       fontWeight: 600,
       textTransform: 'uppercase',
       letterSpacing: '0.06em',
-      color: N[500],
+      color: N[700],
     },
     body1: { fontSize: '0.9375rem', lineHeight: 1.55 },
     body2: { fontSize: '0.875rem', lineHeight: 1.5 },
-    caption: { fontSize: '0.75rem', lineHeight: 1.45, color: N[500] },
+    caption: { fontSize: '0.75rem', lineHeight: 1.45, color: N[700] },
     button: {
       fontSize: '0.875rem',
       fontWeight: 500,
@@ -104,7 +112,7 @@ export const theme = createTheme({
       fontWeight: 600,
       letterSpacing: '0.08em',
       textTransform: 'uppercase',
-      color: N[500],
+      color: N[700],
     },
   },
   // 自定义阴影栈 — hairline + 微妙偏移 + 真实 lift,不要 MUI 默认"模糊大球"也不要削太狠
@@ -137,7 +145,8 @@ export const theme = createTheme({
     `0 84px 176px ${alpha(N[900], 0.46)}, 0 42px 84px ${alpha(N[900], 0.23)}, 0 0 0 1px ${HAIRLINE}`, // 24
   ],
   components: {
-    // 全局关 ripple — Material 默认水波纹是廉价感的最大来源之一
+    // MD3 state layer 是 hover/focus/press 时叠的颜色 overlay,实现机制是 CSS bg overlay
+    // 而非动画 ripple。MUI 的 ripple 动效偏 MD2 风格,这里关闭以避免和 state layer 重复
     MuiButtonBase: {
       defaultProps: { disableRipple: true },
     },
@@ -154,90 +163,178 @@ export const theme = createTheme({
         },
       },
     },
+    // MD3 spec (v0.192):container 40h / corner-full(9999px = pill)
+    // / label-large 14/20 medium tracking 0.1px / leading-trailing 24px
+    // / with-icon side 16px / icon 18px / state layer hover 8% focus/pressed 12%
     MuiButton: {
       defaultProps: {
         disableElevation: true,
       },
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 9999,
           textTransform: 'none',
           fontWeight: 500,
-          letterSpacing: 0,
+          fontSize: '0.875rem',
+          lineHeight: '1.25rem',
+          letterSpacing: '0.00625rem',
+          minHeight: 40,
+          paddingLeft: 24,
+          paddingRight: 24,
+          // 注:不要在这里设 gap — startIcon/endIcon 自己有 marginRight/Left 控制间距,
+          // 设 gap 会跟 marginRight 叠加,icon 离文字越来越远
+          '& .MuiButton-startIcon': { marginLeft: -8, marginRight: 8 },
+          '& .MuiButton-endIcon': { marginLeft: 8, marginRight: -8 },
+          '& .MuiButton-startIcon > *:nth-of-type(1), & .MuiButton-endIcon > *:nth-of-type(1)':
+            { fontSize: 18 },
         },
+        // size="small" 是 MUI 习惯,MD3 没有官方 small button — 这里用 32h 作为紧凑变体
         sizeSmall: {
           fontSize: '0.8125rem',
-          padding: '4px 12px',
-          minHeight: 28,
+          paddingLeft: 16,
+          paddingRight: 16,
+          minHeight: 32,
         },
         sizeMedium: {
-          padding: '6px 14px',
-          minHeight: 34,
+          minHeight: 40,
+        },
+        sizeLarge: {
+          minHeight: 48,
+          fontSize: '0.9375rem',
         },
         outlined: {
           borderColor: HAIRLINE_STRONG,
+          // MD3 outlined hover:state layer = primary @ 8%
           '&:hover': {
             borderColor: N[400],
-            backgroundColor: alpha(N[900], 0.03),
+            backgroundColor: alpha('#0d99ff', 0.08),
+          },
+          '&:focus-visible': {
+            backgroundColor: alpha('#0d99ff', 0.12),
+          },
+          '&:active': {
+            backgroundColor: alpha('#0d99ff', 0.12),
           },
         },
         contained: {
           boxShadow: 'none',
-          '&:hover': { boxShadow: 'none' },
+          // MD3 filled hover:state layer = on-primary @ 8%(白色叠加 8%)
+          '&:hover': {
+            boxShadow: 'none',
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.08))',
+          },
+          '&:focus-visible': {
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.12))',
+          },
+          '&:active': {
+            boxShadow: 'none',
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.12))',
+          },
         },
         text: {
+          paddingLeft: 12,
+          paddingRight: 12,
+          // MD3 text hover:state layer = primary @ 8%
           '&:hover': {
-            backgroundColor: alpha(N[900], 0.04),
+            backgroundColor: alpha('#0d99ff', 0.08),
+          },
+          '&:focus-visible': {
+            backgroundColor: alpha('#0d99ff', 0.12),
+          },
+          '&:active': {
+            backgroundColor: alpha('#0d99ff', 0.12),
           },
         },
       },
     },
+    // MD3 spec:state-layer 40×40 / icon 24px / corner-full / state layer hover 8% focus/pressed 12%
+    // 注:icon 比文字需要更强对比才显形,resting color 用 N[800]
     MuiIconButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
-          color: N[600],
+          width: 40,
+          height: 40,
+          borderRadius: '50%',
+          color: N[800],
           '&:hover': {
-            backgroundColor: alpha(N[900], 0.05),
-            color: N[800],
+            backgroundColor: alpha(N[900], 0.08),
+            color: N[900],
           },
+          '&:focus-visible': {
+            backgroundColor: alpha(N[900], 0.12),
+          },
+          '&:active': {
+            backgroundColor: alpha(N[900], 0.12),
+          },
+        },
+        sizeSmall: {
+          width: 32,
+          height: 32,
+        },
+        sizeLarge: {
+          width: 48,
+          height: 48,
         },
       },
     },
+    // MD3 spec:assist/filter chip container 32h / corner-small(8) / outline 1px
+    // / label-large 14/20 medium / state layer hover 8% focus/pressed 12%
+    // size="small" 保留为 24h 紧凑变体(MUI 习惯,MD3 无官方 small chip)
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
+          borderRadius: 8,
+          height: 32,
+          fontSize: '0.875rem',
           fontWeight: 500,
-          letterSpacing: 0,
+          letterSpacing: '0.00625rem',
+          // MD3 chip hover:state layer = on-surface @ 8%
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+          },
         },
         sizeSmall: {
-          height: 22,
+          height: 24,
           fontSize: '0.75rem',
+          letterSpacing: '0.03125rem',
         },
         outlined: {
           borderColor: HAIRLINE_STRONG,
+        },
+        filled: {
+          // 只给 color="default" 的 filled chip 加浅灰底,不要盖 color="primary" 等的语义色
+          '&.MuiChip-colorDefault': {
+            backgroundColor: N[100],
+          },
         },
       },
     },
     MuiTextField: {
       defaultProps: { size: 'small', variant: 'outlined' },
     },
+    // MD3 spec:outlined text-field corner-extra-small(4) / outline 1px / focus outline 2px
+    // / body-large 16/24 regular(我们 size="small" 用 14)
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
           backgroundColor: '#ffffff',
-          borderRadius: 8,
+          borderRadius: 4,
           fontSize: '0.875rem',
           '& fieldset': {
             borderColor: HAIRLINE_STRONG,
-            transition: 'border-color 0.15s ease',
+            borderWidth: '1px',
+            transition: 'border-color 0.15s ease, border-width 0.15s ease',
           },
           '&:hover fieldset': {
-            borderColor: `${N[400]} !important`,
+            borderColor: `${N[500]} !important`,
           },
+          // MD3 focus:outline 提到 2px(标志性视觉反馈),不再覆盖回 1px
           '&.Mui-focused fieldset': {
-            borderWidth: '1px !important',
+            borderColor: '#0d99ff !important',
+            borderWidth: '2px !important',
           },
         },
         input: {
@@ -249,10 +346,115 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           fontSize: '0.875rem',
+          color: N[700],
+        },
+      },
+    },
+    // MD3 spec:radio state-layer 40×40 / icon 20px / state layer hover 8% focus/pressed 12%
+    MuiRadio: {
+      styleOverrides: {
+        root: {
+          width: 40,
+          height: 40,
+          padding: 0,
+          color: N[600],
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+          },
+          '&.Mui-checked': {
+            color: '#0d99ff',
+            '&:hover': {
+              backgroundColor: alpha('#0d99ff', 0.08),
+            },
+          },
+          '& .MuiSvgIcon-root': { fontSize: 20 },
+        },
+      },
+    },
+    // MD3 spec:checkbox state-layer 40 / container 18 / shape corner-extra-small(2) / icon 18
+    MuiCheckbox: {
+      styleOverrides: {
+        root: {
+          width: 40,
+          height: 40,
+          padding: 0,
+          color: N[600],
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+          },
+          '&.Mui-checked': {
+            color: '#0d99ff',
+            '&:hover': {
+              backgroundColor: alpha('#0d99ff', 0.08),
+            },
+          },
+          '& .MuiSvgIcon-root': { fontSize: 20 },
+        },
+      },
+    },
+    // MD3 spec:menu container corner-extra-small(4) / level-2 elevation
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 4,
+          marginTop: 4,
+        },
+        list: {
+          paddingTop: 8,
+          paddingBottom: 8,
+        },
+      },
+    },
+    // MD3 spec:list-item one-line 56h / leading-trailing 16px / icon 24 / label-large 14/20
+    // / state layer hover 8% focus/pressed 12% / selected = secondary-container fill
+    // 紧凑 dense 变体保留 40h(MUI 习惯,适合 Select 弹窗)
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+          paddingLeft: 16,
+          paddingRight: 16,
+          fontSize: '0.875rem',
+          lineHeight: '1.25rem',
+          letterSpacing: '0.00625rem',
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+          },
+          '&.Mui-selected': {
+            backgroundColor: alpha('#0d99ff', 0.12),
+            '&:hover': {
+              backgroundColor: alpha('#0d99ff', 0.16),
+            },
+          },
+        },
+        dense: {
+          minHeight: 40,
+          paddingTop: 4,
+          paddingBottom: 4,
+        },
+      },
+    },
+    // MD3 spec:dialog supporting-text body-medium 14/20 regular tracking 0.25px
+    MuiDialogContentText: {
+      styleOverrides: {
+        root: {
+          fontSize: '0.875rem',
+          lineHeight: '1.25rem',
+          letterSpacing: '0.015625rem',
+        },
+      },
+    },
+    // breadcrumb separator 不属于 MD3 标准组件,保持现有视觉,只确保 link 状态层一致
+    MuiBreadcrumbs: {
+      styleOverrides: {
+        separator: {
+          marginLeft: 8,
+          marginRight: 8,
           color: N[500],
         },
       },
     },
+    // MD3 spec:elevated/filled/outlined card 都是 corner-medium(12) / outline 1px(outlined)
     MuiCard: {
       defaultProps: { elevation: 1 },
       styleOverrides: {
@@ -327,6 +529,8 @@ export const theme = createTheme({
         },
       },
     },
+    // MD3 spec:plain tooltip corner-extra-small(4) / body-small 12/16 regular tracking 0.4px
+    // / 容器深色 inverse-surface 背景
     MuiTooltip: {
       defaultProps: {
         arrow: false,
@@ -334,10 +538,12 @@ export const theme = createTheme({
       styleOverrides: {
         tooltip: {
           fontSize: '0.75rem',
-          fontWeight: 500,
+          fontWeight: 400,
+          lineHeight: '1rem',
+          letterSpacing: '0.025rem',
           backgroundColor: N[900],
-          padding: '6px 10px',
-          borderRadius: 6,
+          padding: '4px 8px',
+          borderRadius: 4,
         },
       },
     },
@@ -346,41 +552,46 @@ export const theme = createTheme({
         root: { borderColor: HAIRLINE },
       },
     },
+    // MD3 spec:basic dialog corner-extra-large(28) / headline-small 24/32 regular
+    // / 24px padding / level 3 elevation
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 16,
-          // dialog 提一档 — 让弹层从背景"浮"出来
+          borderRadius: 28,
         },
       },
     },
     MuiDialogTitle: {
       styleOverrides: {
         root: {
-          fontSize: '1.0625rem',
-          fontWeight: 600,
-          padding: '20px 24px 8px',
+          fontSize: '1.5rem',
+          fontWeight: 400,
+          lineHeight: '2rem',
+          letterSpacing: 0,
+          padding: '24px 24px 16px',
         },
       },
     },
     MuiDialogContent: {
       styleOverrides: {
         root: {
-          padding: '8px 24px 16px',
+          padding: '0 24px 24px',
         },
       },
     },
     MuiDialogActions: {
       styleOverrides: {
         root: {
-          padding: '12px 24px 20px',
+          padding: '16px 24px 24px',
           gap: 8,
         },
       },
     },
+    // MD3 spec:track 52×32 / corner-full / outline 2px / handle off 16(outline 色) on 24(白)
+    //          pressed 28 / state-layer 40×40 / track on 填 primary off 填 surface-container-highest
+    // 偏离 spec:为本工具内紧凑布局,track 缩到 36×20(handle 比例同步),
+    //          其余视觉规则(off 描边 / on 填色 / handle 大小差异 / 过渡)按 spec
     MuiSwitch: {
-      // MD3 Switch 紧凑版 (36×20):OFF thumb 10(outline 色),ON thumb 16(白)。
-      // OFF 状态 track 1.5px outline 描边、ON 状态填充 primary。
       styleOverrides: {
         root: {
           width: 36,
@@ -389,15 +600,31 @@ export const theme = createTheme({
           overflow: 'visible',
         },
         switchBase: {
-          // OFF:padding 5 → 10px thumb 居中在 20×20 switchBase 内
           padding: 5,
           transitionDuration: '180ms',
+          // MD3 state layer:hover 8% / focus & pressed 12%(unchecked 用 on-surface,checked 用 primary)
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+          },
+          '&:focus-visible': {
+            backgroundColor: alpha(N[900], 0.12),
+          },
+          '&:active': {
+            backgroundColor: alpha(N[900], 0.12),
+          },
           '&.Mui-checked': {
-            // 36(root) - 20(switchBase) = 16 行程
             transform: 'translateX(16px)',
-            // ON:padding 2 → 16px thumb 居中
             padding: 2,
             color: '#fff',
+            '&:hover': {
+              backgroundColor: alpha('#0d99ff', 0.08),
+            },
+            '&:focus-visible': {
+              backgroundColor: alpha('#0d99ff', 0.12),
+            },
+            '&:active': {
+              backgroundColor: alpha('#0d99ff', 0.12),
+            },
             '& + .MuiSwitch-track': {
               opacity: 1,
               backgroundColor: '#0d99ff',
@@ -431,15 +658,50 @@ export const theme = createTheme({
         },
       },
     },
+    // 我们 override 了 Switch/Checkbox/Radio 的 padding=0 让控件紧贴 track,
+    // 后果是 FormControlLabel 的 label 直接贴到控件右边。补 8px 间距。
+    MuiFormControlLabel: {
+      styleOverrides: {
+        label: {
+          marginLeft: 8,
+        },
+      },
+    },
+    // MD3 spec:primary fab 56×56 / corner-large(16) / icon 24px / level-3 elevation
     MuiFab: {
+      defaultProps: { color: 'primary' },
       styleOverrides: {
         root: {
-          boxShadow: `0 4px 12px ${alpha('#0d99ff', 0.3)}, 0 0 0 1px ${alpha('#0d99ff', 0.15)}`,
+          width: 56,
+          height: 56,
+          borderRadius: 16,
+          // MD3 level-3 elevation:resting,hover 提到 level-4
+          boxShadow:
+            '0 4px 8px 3px rgba(0,0,0,0.10), 0 1px 3px 0 rgba(0,0,0,0.12)',
           '&:hover': {
-            boxShadow: `0 8px 20px ${alpha('#0d99ff', 0.4)}, 0 0 0 1px ${alpha('#0d99ff', 0.2)}`,
-            transform: 'translateY(-1px)',
+            boxShadow:
+              '0 6px 10px 4px rgba(0,0,0,0.12), 0 2px 3px 0 rgba(0,0,0,0.14)',
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.08))',
           },
-          transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:focus-visible': {
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.12))',
+          },
+          '&:active': {
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.12))',
+          },
+          transition:
+            'box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1), background-image 0.18s ease',
+        },
+        sizeSmall: { width: 40, height: 40, borderRadius: 12 },
+        sizeMedium: { width: 56, height: 56, borderRadius: 16 },
+        extended: {
+          width: 'auto',
+          height: 56,
+          paddingLeft: 16,
+          paddingRight: 20,
         },
       },
     },
@@ -450,23 +712,26 @@ export const theme = createTheme({
         },
       },
     },
+    // MD3 spec:linear progress active-indicator-height 4px
+    // 偏离 spec:track/bar shape 用 pill(9999) 而非 corner-none(0)。pill 是
+    // 现代 web 通行做法(GitHub / Vercel / Linear 都是 pill),保留
     MuiLinearProgress: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          borderRadius: 9999,
           height: 4,
           backgroundColor: alpha(N[900], 0.06),
         },
         bar: {
-          borderRadius: 999,
+          borderRadius: 9999,
         },
       },
     },
+    // MD3 spec:circular progress active-indicator-width 4px / size 48px
     MuiCircularProgress: {
+      defaultProps: { thickness: 4, size: 48 },
       styleOverrides: {
-        root: {
-          // 默认 thickness 太细
-        },
+        root: {},
       },
     },
   },
