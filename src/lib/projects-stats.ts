@@ -3,6 +3,10 @@
 // 成本说明:本函数对每个项目独立扫一遍 data/pipelines + data/assets。
 // MVP 规模(< 20 项目 / < 200 pipeline runs)实测可接受;Promise.all 并行 +
 // OS file cache 去重让多项目的 wall time 接近单项目。规模上来再批处理。
+//
+// TTL 缓存:5 秒,用来吃掉 Home / ProjectDetail 同帧多次拉的 burst,以及避免
+// 短时间内重复扫 data/{pipelines,assets} 的成本。dev hot-reload 模块重载会
+// 自动清空,prod 长进程下定期 ttl 失效。
 
 import path from 'node:path'
 import {
@@ -38,7 +42,19 @@ export interface ProjectStats {
   }
 }
 
+const CACHE = new Map<string, { data: ProjectStats; expiresAt: number }>()
+const TTL_MS = 5_000
+
 export async function getProjectStats(projectId: string): Promise<ProjectStats> {
+  const now = Date.now()
+  const hit = CACHE.get(projectId)
+  if (hit && hit.expiresAt > now) return hit.data
+  const data = await computeProjectStats(projectId)
+  CACHE.set(projectId, { data, expiresAt: now + TTL_MS })
+  return data
+}
+
+async function computeProjectStats(projectId: string): Promise<ProjectStats> {
   await ensureDataRoot()
 
   const pages = await listPagesByProject(projectId)
