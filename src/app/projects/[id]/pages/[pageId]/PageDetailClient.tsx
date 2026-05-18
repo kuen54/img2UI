@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import Container from '@mui/material/Container'
@@ -20,6 +21,9 @@ import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
+import Switch from '@mui/material/Switch'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import { alpha } from '@mui/material/styles'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -35,7 +39,17 @@ import {
   pipelineStatusLabel,
   type RunStatusKind,
 } from '@/lib/format'
-import type { Project, Page, StateRecord, StatePipelineStatus } from '@/lib/types'
+import {
+  VISUAL_CATEGORY_CN,
+  VISUAL_CATEGORY_COLOR,
+} from '@/lib/visual-category'
+import type {
+  Project,
+  Page,
+  StateRecord,
+  StatePipelineStatus,
+  LayoutElement,
+} from '@/lib/types'
 import type { PageStats } from '@/lib/page-stats'
 
 interface PageWithStates extends Page {
@@ -301,7 +315,19 @@ function DesignWithPipeline({
   const [reUploading, setReUploading] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [elements, setElements] = useState<LayoutElement[]>([])
+  const [showBboxes, setShowBboxes] = useState(true)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  // 拉 elements 给 bbox overlay。无条件拉(无 element 文件返回 []),简单
+  useEffect(() => {
+    void fetch(`/api/pages/${pageId}/elements`)
+      .then((r) => (r.ok ? r.json() : { elements: [] }))
+      .then((data: { elements: LayoutElement[] }) => {
+        setElements(data.elements ?? [])
+      })
+      .catch(() => setElements([]))
+  }, [pageId, state.pipeline_status])
 
   const inFlight = state.pipeline_status.endsWith('_running') || state.pipeline_status === 'validating'
   const inFlightWarning = inFlight ? (
@@ -367,11 +393,11 @@ function DesignWithPipeline({
             minHeight: 240,
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/raw/${state.id}`}
-            alt="design mockup"
-            style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', display: 'block' }}
+          <DesignWithBboxOverlay
+            stateId={state.id}
+            elements={showBboxes ? elements : []}
+            projectId={projectId}
+            pageId={pageId}
           />
         </Box>
         <Divider />
@@ -382,9 +408,28 @@ function DesignWithPipeline({
           gap={1}
           sx={{ px: 2, py: 1.25 }}
         >
-          <Typography variant="body2" color="text.secondary">
-            {state.width} × {state.height} px · {state.name}
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              {state.width} × {state.height} px · {state.name}
+            </Typography>
+            {elements.length > 0 && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={showBboxes}
+                    onChange={(e) => setShowBboxes(e.target.checked)}
+                  />
+                }
+                label={
+                  <Typography variant="body2" color="text.secondary">
+                    显示元素 ({elements.length})
+                  </Typography>
+                }
+                sx={{ ml: 0, mr: 0 }}
+              />
+            )}
+          </Stack>
           <Stack direction="row" spacing={1}>
             <Button
               size="small"
@@ -465,6 +510,79 @@ function DesignWithPipeline({
         onConfirm={remove}
       />
     </Stack>
+  )
+}
+
+// ─── DesignWithBboxOverlay ──────────────────────────────────────────────────
+// 设计稿 img + 在它上面叠 element bbox(只读,click 跳 element-review 深链)。
+// 用 inline-block 包装让外层 box 紧贴 img 的实际渲染尺寸,bbox 用百分比定位
+// 自动随 img 缩放;img 设 pointerEvents none + bbox div pointerEvents auto
+// 让 click 只在 bbox 边框区域生效。
+
+function DesignWithBboxOverlay({
+  stateId,
+  elements,
+  projectId,
+  pageId,
+}: {
+  stateId: string
+  elements: LayoutElement[]
+  projectId: string
+  pageId: string
+}): React.ReactElement {
+  const router = useRouter()
+
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/raw/${stateId}`}
+        alt="design mockup"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '70vh',
+          objectFit: 'contain',
+          display: 'block',
+        }}
+      />
+      {elements.map((e) => {
+        const color = VISUAL_CATEGORY_COLOR[e.visual_category]
+        const [x, y, w, h] = e.bbox
+        return (
+          <Tooltip
+            key={e.id}
+            title={`${e.name} · ${VISUAL_CATEGORY_CN[e.visual_category]}`}
+            placement="top"
+            arrow
+          >
+            <Box
+              onClick={() =>
+                router.push(
+                  `/projects/${projectId}/pages/${pageId}/element-review?selected=${e.id}`,
+                )
+              }
+              sx={{
+                position: 'absolute',
+                left: `${x * 100}%`,
+                top: `${y * 100}%`,
+                width: `${w * 100}%`,
+                height: `${h * 100}%`,
+                border: '1.5px solid',
+                borderColor: color,
+                bgcolor: alpha(color, 0.06),
+                cursor: 'pointer',
+                transition: 'background-color 0.12s ease, box-shadow 0.12s ease',
+                '&:hover': {
+                  bgcolor: alpha(color, 0.18),
+                  boxShadow: `0 0 0 1px ${alpha(color, 0.6)}`,
+                  zIndex: 2,
+                },
+              }}
+            />
+          </Tooltip>
+        )
+      })}
+    </Box>
   )
 }
 
