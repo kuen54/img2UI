@@ -395,7 +395,7 @@ function DesignWithPipeline({
         >
           <DesignWithBboxOverlay
             stateId={state.id}
-            elements={showBboxes ? elements : []}
+            elements={showBboxes ? elements.filter((e) => e.type === 'static') : []}
             projectId={projectId}
             pageId={pageId}
           />
@@ -412,23 +412,25 @@ function DesignWithPipeline({
             <Typography variant="body2" color="text.secondary">
               {state.width} × {state.height} px · {state.name}
             </Typography>
-            {elements.length > 0 && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={showBboxes}
-                    onChange={(e) => setShowBboxes(e.target.checked)}
-                  />
-                }
-                label={
-                  <Typography variant="body2" color="text.secondary">
-                    显示元素 ({elements.length})
-                  </Typography>
-                }
-                sx={{ ml: 0, mr: 0 }}
-              />
-            )}
+            {elements.length > 0 && (() => {
+              const staticCount = elements.filter((e) => e.type === 'static').length
+              return (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showBboxes}
+                      onChange={(e) => setShowBboxes(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" color="text.secondary">
+                      显示 static 元素 ({staticCount})
+                    </Typography>
+                  }
+                  sx={{ ml: 0, mr: 0 }}
+                />
+              )
+            })()}
           </Stack>
           <Stack direction="row" spacing={1}>
             <Button
