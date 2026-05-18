@@ -379,31 +379,55 @@ export const theme = createTheme({
       },
     },
     MuiSwitch: {
+      // MD3 Switch 紧凑版 (36×20):OFF thumb 10(outline 色),ON thumb 16(白)。
+      // OFF 状态 track 1.5px outline 描边、ON 状态填充 primary。
       styleOverrides: {
         root: {
           width: 36,
           height: 20,
           padding: 0,
+          overflow: 'visible',
         },
         switchBase: {
-          padding: 2,
+          // OFF:padding 5 → 10px thumb 居中在 20×20 switchBase 内
+          padding: 5,
+          transitionDuration: '180ms',
           '&.Mui-checked': {
+            // 36(root) - 20(switchBase) = 16 行程
             transform: 'translateX(16px)',
+            // ON:padding 2 → 16px thumb 居中
+            padding: 2,
+            color: '#fff',
             '& + .MuiSwitch-track': {
               opacity: 1,
               backgroundColor: '#0d99ff',
+              borderColor: 'transparent',
             },
+            '& .MuiSwitch-thumb': {
+              width: 16,
+              height: 16,
+              backgroundColor: '#fff',
+            },
+          },
+          '&.Mui-disabled + .MuiSwitch-track': {
+            opacity: 0.38,
           },
         },
         thumb: {
-          width: 16,
-          height: 16,
-          boxShadow: `0 1px 2px ${alpha(N[900], 0.2)}`,
+          width: 10,
+          height: 10,
+          boxShadow: 'none',
+          backgroundColor: N[500],
+          transition:
+            'width 180ms ease, height 180ms ease, background-color 180ms ease',
         },
         track: {
           borderRadius: 10,
-          backgroundColor: N[300],
+          border: `1.5px solid ${N[400]}`,
+          backgroundColor: N[100],
           opacity: 1,
+          boxSizing: 'border-box',
+          transition: 'background-color 180ms ease, border-color 180ms ease',
         },
       },
     },

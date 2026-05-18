@@ -73,6 +73,14 @@ export function ElementReviewClient({
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  // 默认隐藏 code 类型(只画 static 的 bbox + 列表)
+  const [visibleTypes, setVisibleTypes] = useState<Set<'static' | 'code'>>(
+    () => new Set(['static']),
+  )
+  // 视觉类别:默认全选
+  const [visibleCategories, setVisibleCategories] = useState<Set<VisualCategory>>(
+    () => new Set(ALL_VISUAL_CATEGORIES),
+  )
 
   // 深链:?selected=<element_id> → 加载完元素后自动选中
   const searchParams = useSearchParams()
@@ -111,6 +119,8 @@ export function ElementReviewClient({
   }, [reload])
 
   // 深链:首次加载完元素后,如 ?selected=<id> 命中已存在元素,选中并滚动到对应 row
+  // 注:不自动改 type/category 过滤(尊重 default static-only);若目标被过滤掉,
+  // 右侧详情仍会显示(detail 基于全集查找),用户可点 chip 自行展开。
   const didDeepLinkRef = useRef(false)
   useEffect(() => {
     if (didDeepLinkRef.current) return
@@ -118,7 +128,7 @@ export function ElementReviewClient({
     if (!elements.some((e) => e.id === initialSelectedId)) return
     setSelectedId(initialSelectedId)
     didDeepLinkRef.current = true
-    // wait next tick for highlight + 滚动到中央
+    // wait next tick for highlight + 滚动到中央(若 row 被过滤掉,scrollIntoView 静默 no-op)
     setTimeout(() => {
       const row = document.querySelector(
         `[data-element-id="${initialSelectedId}"]`,
@@ -173,6 +183,57 @@ export function ElementReviewClient({
     () => elements.find((e) => e.id === selectedId) ?? null,
     [elements, selectedId],
   )
+  const typeCounts = useMemo(() => {
+    const counts: Record<'static' | 'code', number> = { static: 0, code: 0 }
+    // 计算 type 计数时,只考虑当前 category 过滤后的元素(faceted filtering)
+    for (const el of elements) {
+      if (visibleCategories.has(el.visual_category)) counts[el.type]++
+    }
+    return counts
+  }, [elements, visibleCategories])
+  const categoryCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      ALL_VISUAL_CATEGORIES.map((c) => [c, 0]),
+    ) as Record<VisualCategory, number>
+    // 计算 category 计数时,只考虑当前 type 过滤后的元素
+    for (const el of elements) {
+      if (visibleTypes.has(el.type)) counts[el.visual_category]++
+    }
+    return counts
+  }, [elements, visibleTypes])
+  const visibleElements = useMemo(
+    () => {
+      const filtered = elements.filter(
+        (e) => visibleTypes.has(e.type) && visibleCategories.has(e.visual_category),
+      )
+      // 排序:category 顺序 → bbox y(上→下) → bbox x(左→右)
+      const catIdx = (c: VisualCategory): number => ALL_VISUAL_CATEGORIES.indexOf(c)
+      return filtered.sort((a, b) => {
+        const dc = catIdx(a.visual_category) - catIdx(b.visual_category)
+        if (dc !== 0) return dc
+        const dy = a.bbox[1] - b.bbox[1]
+        if (dy !== 0) return dy
+        return a.bbox[0] - b.bbox[0]
+      })
+    },
+    [elements, visibleTypes, visibleCategories],
+  )
+  const toggleType = useCallback((t: 'static' | 'code'): void => {
+    setVisibleTypes((prev) => {
+      const next = new Set(prev)
+      if (next.has(t)) next.delete(t)
+      else next.add(t)
+      return next
+    })
+  }, [])
+  const toggleCategory = useCallback((c: VisualCategory): void => {
+    setVisibleCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(c)) next.delete(c)
+      else next.add(c)
+      return next
+    })
+  }, [])
   const state = page?.states[0]
   const breadcrumbs = useMemo(
     () =>
@@ -212,6 +273,13 @@ export function ElementReviewClient({
             {/* 左:Element 列表 */}
             <ElementSidebar
               elements={elements}
+              visibleElements={visibleElements}
+              typeCounts={typeCounts}
+              visibleTypes={visibleTypes}
+              onToggleType={toggleType}
+              categoryCounts={categoryCounts}
+              visibleCategories={visibleCategories}
+              onToggleCategory={toggleCategory}
               selectedId={selectedId}
               onSelect={setSelectedId}
               onMarkAllReviewed={() => {
@@ -240,7 +308,7 @@ export function ElementReviewClient({
             {/* 中:Canvas + bbox 叠加 */}
             <ElementCanvas
               state={state}
-              elements={elements}
+              elements={visibleElements}
               selectedId={selectedId}
               onSelect={setSelectedId}
               onChangeBbox={(id, bbox) => updateElement(id, { bbox })}
@@ -262,6 +330,13 @@ export function ElementReviewClient({
 
 function ElementSidebar({
   elements,
+  visibleElements,
+  typeCounts,
+  visibleTypes,
+  onToggleType,
+  categoryCounts,
+  visibleCategories,
+  onToggleCategory,
   selectedId,
   onSelect,
   onMarkAllReviewed,
@@ -271,6 +346,13 @@ function ElementSidebar({
   onProceed,
 }: {
   elements: LayoutElement[]
+  visibleElements: LayoutElement[]
+  typeCounts: Record<'static' | 'code', number>
+  visibleTypes: Set<'static' | 'code'>
+  onToggleType: (t: 'static' | 'code') => void
+  categoryCounts: Record<VisualCategory, number>
+  visibleCategories: Set<VisualCategory>
+  onToggleCategory: (c: VisualCategory) => void
   selectedId: string | null
   onSelect: (id: string | null) => void
   onMarkAllReviewed: () => void
@@ -281,62 +363,120 @@ function ElementSidebar({
 }): React.ReactElement {
   const [tinyOpen, setTinyOpen] = useState(false)
   const reviewedCount = elements.filter((e) => e.reviewed).length
+  const filteringActive =
+    visibleTypes.size < 2 || visibleCategories.size < ALL_VISUAL_CATEGORIES.length
 
   return (
     <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h5">
-          Elements ({elements.length})
+          Elements ({filteringActive ? `${visibleElements.length}/${elements.length}` : elements.length})
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {reviewedCount}/{elements.length} 已确认
         </Typography>
       </Box>
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 1, pb: 2 }}>
-        <Stack spacing={1}>
-          {elements.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              没有元素
-            </Typography>
-          ) : (
-            elements.map((el) => (
-              <Card
-                key={el.id}
-                variant="outlined"
-                data-element-id={el.id}
-                sx={{
-                  borderLeft: 4,
-                  borderLeftColor: CATEGORY_COLOR[el.visual_category],
-                  bgcolor: selectedId === el.id ? 'action.hover' : undefined,
-                  borderColor: selectedId === el.id ? 'primary.main' : 'divider',
-                  borderWidth: selectedId === el.id ? 2 : 1,
-                }}
-              >
-                <CardActionArea onClick={() => onSelect(el.id)} sx={{ p: 1.25 }}>
-                  <Stack direction="row" spacing={1} alignItems="center">
+
+      {/* 过滤:type + visual_category */}
+      <Box sx={{ px: 1.5, pb: 1 }}>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
+          {(['static', 'code'] as const).map((t) => {
+            const active = visibleTypes.has(t)
+            return (
+              <Chip
+                key={t}
+                size="small"
+                label={`${t} ${typeCounts[t]}`}
+                onClick={() => onToggleType(t)}
+                color={active ? 'primary' : 'default'}
+                variant={active ? 'filled' : 'outlined'}
+                sx={{ opacity: active ? 1 : 0.55 }}
+              />
+            )
+          })}
+        </Stack>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+          {ALL_VISUAL_CATEGORIES.map((c) => {
+            const active = visibleCategories.has(c)
+            const color = CATEGORY_COLOR[c]
+            return (
+              <Chip
+                key={c}
+                size="small"
+                onClick={() => onToggleCategory(c)}
+                variant={active ? 'filled' : 'outlined'}
+                label={
+                  <Stack direction="row" spacing={0.5} alignItems="center">
                     <Box
                       sx={{
                         width: 8,
                         height: 8,
                         borderRadius: '50%',
-                        bgcolor: el.reviewed ? 'primary.main' : 'transparent',
-                        border: el.reviewed ? 'none' : '2px solid',
-                        borderColor: 'action.disabled',
+                        bgcolor: color,
                         flexShrink: 0,
                       }}
                     />
-                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                    <span>
+                      {VISUAL_CATEGORY_CN[c]} {categoryCounts[c]}
+                    </span>
+                  </Stack>
+                }
+                sx={{
+                  opacity: active ? 1 : 0.5,
+                  bgcolor: active ? `${color}1f` : undefined,
+                  borderColor: active ? color : undefined,
+                  '& .MuiChip-label': { display: 'flex', px: 0.75 },
+                }}
+              />
+            )
+          })}
+        </Stack>
+      </Box>
+
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 1, pb: 2 }}>
+        <Stack spacing={1}>
+          {visibleElements.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              {elements.length === 0 ? '没有元素' : '当前过滤无匹配'}
+            </Typography>
+          ) : (
+            visibleElements.map((el) => {
+              const color = CATEGORY_COLOR[el.visual_category]
+              const isSel = selectedId === el.id
+              return (
+                <Card
+                  key={el.id}
+                  variant="outlined"
+                  data-element-id={el.id}
+                  sx={{
+                    borderLeft: 4,
+                    borderLeftColor: color,
+                    bgcolor: isSel ? `${color}1f` : undefined,
+                    borderColor: isSel ? color : 'divider',
+                    borderWidth: isSel ? 2 : 1,
+                  }}
+                >
+                  <CardActionArea onClick={() => onSelect(el.id)} sx={{ p: 1.25 }}>
+                    <Box sx={{ minWidth: 0 }}>
                       <Typography variant="body2" noWrap fontWeight={500}>
                         {el.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        {el.type} · {VISUAL_CATEGORY_CN[el.visual_category]}
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        noWrap
+                        component="div"
+                      >
+                        {el.reviewed ? '✅' : '⏳'} {el.type} ·{' '}
+                        <Box component="span" sx={{ color, fontWeight: 500 }}>
+                          {VISUAL_CATEGORY_CN[el.visual_category]}
+                        </Box>
                       </Typography>
                     </Box>
-                  </Stack>
-                </CardActionArea>
-              </Card>
-            ))
+                  </CardActionArea>
+                </Card>
+              )
+            })
           )}
         </Stack>
 
@@ -577,15 +717,17 @@ function ElementCanvas({
               {/* resize handles (only on selected) */}
               {isSelected &&
                 (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const).map((h) => {
-                  const positions: Record<typeof h, { left?: string; right?: string; top?: string; bottom?: string; cursor: string }> = {
-                    nw: { left: '-4px', top: '-4px', cursor: 'nwse-resize' },
-                    n: { left: '50%', top: '-4px', cursor: 'ns-resize' },
-                    ne: { right: '-4px', top: '-4px', cursor: 'nesw-resize' },
-                    e: { right: '-4px', top: '50%', cursor: 'ew-resize' },
-                    se: { right: '-4px', bottom: '-4px', cursor: 'nwse-resize' },
-                    s: { left: '50%', bottom: '-4px', cursor: 'ns-resize' },
-                    sw: { left: '-4px', bottom: '-4px', cursor: 'nesw-resize' },
-                    w: { left: '-4px', top: '50%', cursor: 'ew-resize' },
+                  // 用百分比 + translate(-50%, -50%) 让 handle 中心精确落在 bbox
+                  // 角点 / 边中点的几何位置上(handle 跨框线居中,Figma 标准)
+                  const positions: Record<typeof h, { left: string; top: string; cursor: string }> = {
+                    nw: { left: '0%', top: '0%', cursor: 'nwse-resize' },
+                    n: { left: '50%', top: '0%', cursor: 'ns-resize' },
+                    ne: { left: '100%', top: '0%', cursor: 'nesw-resize' },
+                    e: { left: '100%', top: '50%', cursor: 'ew-resize' },
+                    se: { left: '100%', top: '100%', cursor: 'nwse-resize' },
+                    s: { left: '50%', top: '100%', cursor: 'ns-resize' },
+                    sw: { left: '0%', top: '100%', cursor: 'nesw-resize' },
+                    w: { left: '0%', top: '50%', cursor: 'ew-resize' },
                   }
                   return (
                     <Box
@@ -593,12 +735,18 @@ function ElementCanvas({
                       onMouseDown={(e) => startDrag(e, el.id, el.bbox, 'resize', h)}
                       sx={{
                         position: 'absolute',
-                        width: 8,
-                        height: 8,
-                        bgcolor: color,
-                        border: '1px solid white',
-                        borderRadius: '50%',
+                        width: 10,
+                        height: 10,
+                        bgcolor: 'background.paper',
+                        border: `1.5px solid ${color}`,
+                        borderRadius: '2px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.18)',
                         transform: 'translate(-50%, -50%)',
+                        transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+                        '&:hover': {
+                          transform: 'translate(-50%, -50%) scale(1.25)',
+                          boxShadow: `0 0 0 3px ${color}33, 0 1px 2px rgba(0,0,0,0.22)`,
+                        },
                         ...positions[h],
                       }}
                     />
