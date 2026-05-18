@@ -27,7 +27,7 @@ import HealingIcon from '@mui/icons-material/Healing'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN } from '@/lib/visual-category'
+import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
 import type {
   Asset,
   LayoutElement,
@@ -44,14 +44,7 @@ interface PageWithStates extends Page {
   states: StateRecord[]
 }
 
-const CATEGORY_COLOR: Record<VisualCategory, string> = {
-  subject: '#0d99ff',
-  button: '#f59e0b',
-  container: '#10b981',
-  background: '#a78bfa',
-  decoration: '#ec4899',
-  other: '#6b7280',
-}
+const CATEGORY_COLOR = VISUAL_CATEGORY_COLOR
 
 const DRAG_MIME = 'application/x-img2ui-slice'
 
@@ -763,6 +756,12 @@ function ElementList({
   )
 }
 
+function alphaQualityColor(quality: number): string {
+  if (quality >= 0.7) return '#16a34a' // success
+  if (quality >= 0.3) return '#d97706' // warning
+  return '#b91c1c' // error
+}
+
 function ElementRow({
   element,
   asset,
@@ -813,21 +812,21 @@ function ElementRow({
       onDragLeave={() => setHover(false)}
       onDrop={onDrop}
       sx={{
-        p: 1.5,
+        p: 1.25,
         cursor: 'pointer',
-        borderLeft: 4,
+        borderLeft: 3,
         borderLeftColor: color,
         borderColor: isSelected ? 'primary.main' : 'divider',
         borderWidth: isSelected ? 2 : 1,
         bgcolor: hover ? 'action.hover' : undefined,
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="center">
+      <Stack direction="row" spacing={1.25} alignItems="center">
         {/* asset preview / placeholder */}
         <Box
           sx={{
-            width: 64,
-            height: 64,
+            width: 56,
+            height: 56,
             flexShrink: 0,
             border: '1px dashed',
             borderColor: asset ? 'transparent' : 'divider',
@@ -838,7 +837,7 @@ function ElementRow({
             bgcolor: 'background.default',
             backgroundImage: asset
               ? undefined
-              : 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/12px 12px',
+              : 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/10px 10px',
           }}
         >
           {asset ? (
@@ -863,25 +862,30 @@ function ElementRow({
             <Typography variant="body1" fontWeight={500} noWrap>
               {element.name}
             </Typography>
-            <Chip size="small" label={element.visual_category} variant="outlined" />
+            <Chip size="small" label={VISUAL_CATEGORY_CN[element.visual_category]} variant="outlined" />
           </Stack>
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
             {element.description}
           </Typography>
           {asset && (
-            <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-              <Chip
-                size="small"
-                label={`α ${asset.alpha_quality.toFixed(2)}`}
-                color={
-                  asset.alpha_quality >= 0.7
-                    ? 'success'
-                    : asset.alpha_quality >= 0.3
-                      ? 'warning'
-                      : 'error'
-                }
-                variant="outlined"
-              />
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+              {/* α 质量:小色点 + 数值,跟 home/project-detail StatusDot 风格一致但用 warning 色当中段 */}
+              <Stack direction="row" alignItems="center" gap={0.5}>
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'inline-block',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    bgcolor: alphaQualityColor(asset.alpha_quality),
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  α {asset.alpha_quality.toFixed(2)}
+                </Typography>
+              </Stack>
               {asset.validation_notes?.includes('contamination=true') && (
                 <Chip size="small" label="⚠ 污染" color="warning" />
               )}

@@ -3,6 +3,8 @@
 // 成本说明:每个 page 调一次,内部走 listAssetsForPage(扫一遍 data/assets)
 // + listPipelineRunsByState 每 state 一次(扫一遍 data/pipelines)。MVP 单
 // 项目 < 10 页 + 单 page 1-2 state 实测可接受(Promise.all 并行 + OS file cache)。
+//
+// TTL 缓存:5 秒,跟 projects-stats 一致,吃掉 burst 调用 + 重复扫描成本。
 
 import { getState, listStatesByPage } from './projects'
 import { getElementsForPage, listPipelineRunsByState } from './elements'
@@ -28,7 +30,23 @@ export interface PageStats {
   }
 }
 
+const CACHE = new Map<string, { data: PageStats; expiresAt: number }>()
+const TTL_MS = 5_000
+
 export async function getPageStats(
+  pageId: string,
+  canonicalStateId: string | null,
+): Promise<PageStats> {
+  const key = `${pageId}:${canonicalStateId ?? 'null'}`
+  const now = Date.now()
+  const hit = CACHE.get(key)
+  if (hit && hit.expiresAt > now) return hit.data
+  const data = await computePageStats(pageId, canonicalStateId)
+  CACHE.set(key, { data, expiresAt: now + TTL_MS })
+  return data
+}
+
+async function computePageStats(
   pageId: string,
   canonicalStateId: string | null,
 ): Promise<PageStats> {

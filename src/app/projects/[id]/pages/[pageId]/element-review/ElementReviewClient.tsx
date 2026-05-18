@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import Container from '@mui/material/Container'
 import Box from '@mui/material/Box'
@@ -29,7 +30,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import RestoreIcon from '@mui/icons-material/Restore'
 import SaveIcon from '@mui/icons-material/Save'
 import { AppShell } from '@/components/AppShell'
-import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN } from '@/lib/visual-category'
+import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
 import type {
   LayoutElement,
   Page,
@@ -40,14 +41,7 @@ import type {
 } from '@/lib/types'
 
 // ─── color per category ───────────────────────────────────────────────────
-const CATEGORY_COLOR: Record<VisualCategory, string> = {
-  subject: '#0d99ff',
-  button: '#f59e0b',
-  container: '#10b981',
-  background: '#a78bfa',
-  decoration: '#ec4899',
-  other: '#6b7280',
-}
+const CATEGORY_COLOR = VISUAL_CATEGORY_COLOR
 
 interface PageWithStates extends Page {
   states: StateRecord[]
@@ -80,6 +74,10 @@ export function ElementReviewClient({
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // 深链:?selected=<element_id> → 加载完元素后自动选中
+  const searchParams = useSearchParams()
+  const initialSelectedId = searchParams?.get('selected') ?? null
+
   const reload = useCallback(async (): Promise<void> => {
     try {
       const [proj, pg, els] = await Promise.all([
@@ -111,6 +109,23 @@ export function ElementReviewClient({
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // 深链:首次加载完元素后,如 ?selected=<id> 命中已存在元素,选中并滚动到对应 row
+  const didDeepLinkRef = useRef(false)
+  useEffect(() => {
+    if (didDeepLinkRef.current) return
+    if (!initialSelectedId || elements.length === 0) return
+    if (!elements.some((e) => e.id === initialSelectedId)) return
+    setSelectedId(initialSelectedId)
+    didDeepLinkRef.current = true
+    // wait next tick for highlight + 滚动到中央
+    setTimeout(() => {
+      const row = document.querySelector(
+        `[data-element-id="${initialSelectedId}"]`,
+      ) as HTMLElement | null
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  }, [elements, initialSelectedId])
 
   const updateElement = useCallback(
     (id: string, patch: Partial<LayoutElement>): void => {
@@ -288,6 +303,7 @@ function ElementSidebar({
               <Card
                 key={el.id}
                 variant="outlined"
+                data-element-id={el.id}
                 sx={{
                   borderLeft: 4,
                   borderLeftColor: CATEGORY_COLOR[el.visual_category],
