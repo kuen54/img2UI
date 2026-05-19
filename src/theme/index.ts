@@ -83,14 +83,51 @@ export const theme = createTheme({
   shape: {
     borderRadius: 12,
   },
+  // MD3 motion token(v0.192):
+  //   duration:short1=50 / short2=100 / short3=150 / short4=200
+  //            medium1=250 / medium2=300 / medium3=350 / medium4=400
+  //   easing: standard=cubic-bezier(0.2, 0, 0, 1)
+  //           emphasized=cubic-bezier(0.2, 0, 0, 1)
+  //           emphasized-accelerate=cubic-bezier(0.3, 0, 0.8, 0.15)
+  //           emphasized-decelerate=cubic-bezier(0.05, 0.7, 0.1, 1)
+  //           legacy=cubic-bezier(0.4, 0, 0.2, 1) (即 MUI default)
+  // 把 MUI transitions 槽对齐到 MD3 standard easing,duration 槽用 short3-medium2
+  transitions: {
+    duration: {
+      shortest: 150, // short3
+      shorter: 200, // short4
+      short: 250, // medium1
+      standard: 300, // medium2
+      complex: 350, // medium3
+      enteringScreen: 250, // medium1
+      leavingScreen: 200, // short4
+    },
+    easing: {
+      easeInOut: 'cubic-bezier(0.2, 0, 0, 1)', // MD3 standard
+      easeOut: 'cubic-bezier(0.05, 0.7, 0.1, 1)', // MD3 emphasized-decelerate
+      easeIn: 'cubic-bezier(0.3, 0, 0.8, 0.15)', // MD3 emphasized-accelerate
+      sharp: 'cubic-bezier(0.2, 0, 0, 1)', // MD3 emphasized
+    },
+  },
   typography: {
     fontFamily: FONT_STACK,
-    // h1-h6:大处更大,letter-spacing 紧 — Inter 在大字号下需要负 spacing 才精致
-    h1: { fontSize: '2.25rem', fontWeight: 600, letterSpacing: '-0.025em', lineHeight: 1.15 },
-    h2: { fontSize: '1.75rem', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 },
-    h3: { fontSize: '1.25rem', fontWeight: 600, letterSpacing: '-0.015em', lineHeight: 1.3 },
-    h4: { fontSize: '1.0625rem', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.35 },
-    h5: { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.4 },
+    // MD3 typescale 对齐(v0.192)。intentional 偏离声明:
+    //   1. display/headline/title 全部保留 600 weight(spec 是 regular 400)—— Geist 在 400 下中文偏细,
+    //      整个 app 的层级感会塌
+    //   2. 与 weight=600 配套,大字号 letter-spacing 收紧到 -0.01em ~ -0.025em(spec 是 0)——
+    //      Geist 600 在 24px+ 下默认 spacing 显散,负 tracking 是视觉补偿
+    //   3. h6 当 section-label 用(uppercase / 12px),不直接映射 MD3 title-small (14px)
+    // h1 → display-small : 36/44/0 → 我们 36/44/-0.025em/600
+    h1: { fontSize: '2.25rem', fontWeight: 600, letterSpacing: '-0.025em', lineHeight: '2.75rem' },
+    // h2 → headline-medium : 28/36/0 → 我们 28/36/-0.02em/600
+    h2: { fontSize: '1.75rem', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: '2.25rem' },
+    // h3 → headline-small : 24/32/0 → 我们 24/32/-0.015em/600
+    h3: { fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.015em', lineHeight: '2rem' },
+    // h4 → title-large : 22/28/0 regular → 我们 22/28/-0.01em/600(项目无使用,提前 spec)
+    h4: { fontSize: '1.375rem', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: '1.75rem' },
+    // h5 → title-medium : 16/24/0.15px medium → 我们 16/24/0.009375rem/600
+    h5: { fontSize: '1rem', fontWeight: 600, letterSpacing: '0.009375rem', lineHeight: '1.5rem' },
+    // h6:section label,自定义不映射 MD3 title-small
     h6: {
       fontSize: '0.75rem',
       fontWeight: 600,
@@ -98,20 +135,32 @@ export const theme = createTheme({
       letterSpacing: '0.06em',
       color: N[700],
     },
-    body1: { fontSize: '0.9375rem', lineHeight: 1.55 },
-    body2: { fontSize: '0.875rem', lineHeight: 1.5 },
-    caption: { fontSize: '0.75rem', lineHeight: 1.45, color: N[700] },
+    // body1 → body-large : 16/24/0.5px(从 15px 微调到 16px)
+    body1: { fontSize: '1rem', lineHeight: '1.5rem', letterSpacing: '0.03125rem' },
+    // body2 → body-medium : 14/20/0.25px ✓
+    body2: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: '0.015625rem' },
+    // caption → body-small : 12/16/0.4px
+    caption: {
+      fontSize: '0.75rem',
+      lineHeight: '1rem',
+      letterSpacing: '0.025rem',
+      color: N[700],
+    },
+    // button → label-large : 14/20/0.1px medium ✓(已在 Button override 复用)
     button: {
       fontSize: '0.875rem',
       fontWeight: 500,
+      lineHeight: '1.25rem',
+      letterSpacing: '0.00625rem',
       textTransform: 'none',
-      letterSpacing: 0,
     },
+    // overline → label-small : 11/16/0.5px medium uppercase
     overline: {
       fontSize: '0.6875rem',
       fontWeight: 600,
-      letterSpacing: '0.08em',
+      letterSpacing: '0.03125rem',
       textTransform: 'uppercase',
+      lineHeight: '1rem',
       color: N[700],
     },
   },
@@ -160,6 +209,15 @@ export const theme = createTheme({
         '*': {
           // 让 native confirm 类元素也用 Geist
           fontFamily: 'inherit',
+        },
+        // MD3 focus indicator:2px outline + 2px offset,只在键盘 focus 时显示
+        '*:focus-visible': {
+          outline: `2px solid #0d99ff`,
+          outlineOffset: 2,
+        },
+        // 已 override state-layer 的组件不需要再叠 outline
+        '.MuiButtonBase-root:focus-visible, .MuiChip-root:focus-visible': {
+          outline: 'none',
         },
       },
     },
@@ -326,7 +384,8 @@ export const theme = createTheme({
           '& fieldset': {
             borderColor: HAIRLINE_STRONG,
             borderWidth: '1px',
-            transition: 'border-color 0.15s ease, border-width 0.15s ease',
+            transition:
+              'border-color 150ms cubic-bezier(0.2, 0, 0, 1), border-width 150ms cubic-bezier(0.2, 0, 0, 1)',
           },
           '&:hover fieldset': {
             borderColor: `${N[500]} !important`,
@@ -394,6 +453,7 @@ export const theme = createTheme({
     },
     // MD3 spec:menu container corner-extra-small(4) / level-2 elevation
     MuiMenu: {
+      defaultProps: { elevation: 2 },
       styleOverrides: {
         paper: {
           borderRadius: 4,
@@ -462,7 +522,7 @@ export const theme = createTheme({
           borderRadius: 12,
           // 用 elevation 1 的 hairline+ shadow,不要 MUI default 的模糊大球
           transition:
-            'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease',
+            'transform 200ms cubic-bezier(0.2, 0, 0, 1), box-shadow 200ms cubic-bezier(0.2, 0, 0, 1)',
         },
       },
     },
@@ -506,7 +566,7 @@ export const theme = createTheme({
           borderRadius: '12px !important',
           boxShadow: 'none',
           overflow: 'hidden',
-          transition: 'border-color 0.15s ease',
+          transition: 'border-color 150ms cubic-bezier(0.2, 0, 0, 1)',
           '&:hover': {
             borderColor: N[300],
           },
@@ -646,7 +706,7 @@ export const theme = createTheme({
           boxShadow: 'none',
           backgroundColor: N[500],
           transition:
-            'width 180ms ease, height 180ms ease, background-color 180ms ease',
+            'width 200ms cubic-bezier(0.2, 0, 0, 1), height 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms cubic-bezier(0.2, 0, 0, 1)',
         },
         track: {
           borderRadius: 10,
@@ -654,7 +714,8 @@ export const theme = createTheme({
           backgroundColor: N[100],
           opacity: 1,
           boxSizing: 'border-box',
-          transition: 'background-color 180ms ease, border-color 180ms ease',
+          transition:
+            'background-color 200ms cubic-bezier(0.2, 0, 0, 1), border-color 200ms cubic-bezier(0.2, 0, 0, 1)',
         },
       },
     },
@@ -693,7 +754,7 @@ export const theme = createTheme({
               'linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.12))',
           },
           transition:
-            'box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1), background-image 0.18s ease',
+            'box-shadow 200ms cubic-bezier(0.2, 0, 0, 1), background-image 200ms cubic-bezier(0.2, 0, 0, 1)',
         },
         sizeSmall: { width: 40, height: 40, borderRadius: 12 },
         sizeMedium: { width: 56, height: 56, borderRadius: 16 },
@@ -705,10 +766,238 @@ export const theme = createTheme({
         },
       },
     },
+    // MD3 spec:outlined segmented button container 40h / outline 1px / icon 18px
+    // / label-large / state layer hover 8% focus/pressed 12% / 选中 = secondary-container
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          minHeight: 40,
+          paddingLeft: 16,
+          paddingRight: 16,
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          lineHeight: '1.25rem',
+          letterSpacing: '0.00625rem',
+          textTransform: 'none',
+          borderColor: HAIRLINE_STRONG,
+          color: N[800],
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+          },
+          '&.Mui-selected': {
+            backgroundColor: alpha('#0d99ff', 0.12),
+            color: '#0d99ff',
+            '&:hover': {
+              backgroundColor: alpha('#0d99ff', 0.16),
+            },
+          },
+          '& .MuiSvgIcon-root': { fontSize: 18 },
+        },
+      },
+    },
+    MuiToggleButtonGroup: {
+      styleOverrides: {
+        grouped: {
+          // segmented button:相邻 button 共享边、首末做圆角
+          '&:not(:first-of-type)': { marginLeft: -1 },
+        },
+      },
+    },
+    // MD3 spec:slider track 4h / handle 20×20 / state-layer 40 / handle shape corner-full
+    // / track shape corner-full / active-track 填 primary
+    MuiSlider: {
+      styleOverrides: {
+        root: {
+          height: 4,
+          padding: '13px 0',
+        },
+        rail: {
+          height: 4,
+          opacity: 1,
+          backgroundColor: alpha(N[900], 0.12),
+        },
+        track: {
+          height: 4,
+          border: 'none',
+        },
+        thumb: {
+          width: 20,
+          height: 20,
+          backgroundColor: '#0d99ff',
+          boxShadow: 'none',
+          '&:hover, &.Mui-focusVisible': {
+            boxShadow: `0 0 0 8px ${alpha('#0d99ff', 0.16)}`,
+          },
+          '&.Mui-active': {
+            boxShadow: `0 0 0 12px ${alpha('#0d99ff', 0.16)}`,
+          },
+        },
+        valueLabel: {
+          backgroundColor: N[900],
+          fontSize: '0.75rem',
+          padding: '4px 8px',
+          borderRadius: 4,
+        },
+      },
+    },
+    // MD3 spec:primary tab container 48h / with-icon-and-label 64h / icon 24
+    // / label-large 14/20 medium / active indicator 3px primary
+    // / state layer hover 8% focus/pressed 12%
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+          paddingLeft: 16,
+          paddingRight: 16,
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          lineHeight: '1.25rem',
+          letterSpacing: '0.00625rem',
+          textTransform: 'none',
+          color: N[700],
+          '&:hover': {
+            backgroundColor: alpha(N[900], 0.08),
+            color: N[900],
+          },
+          '&.Mui-selected': {
+            color: '#0d99ff',
+            fontWeight: 500,
+          },
+          '& .MuiSvgIcon-root': { fontSize: 24 },
+        },
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+          borderBottom: `1px solid ${HAIRLINE_STRONG}`,
+        },
+        indicator: {
+          height: 3,
+          borderRadius: '3px 3px 0 0',
+          backgroundColor: '#0d99ff',
+        },
+      },
+    },
+    // MD3 spec:navigation drawer container-width 360 / item 56h / icon 24
+    // / label-large 14/20 medium / item shape corner-full / active = secondary-container
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          borderRight: `1px solid ${HAIRLINE_STRONG}`,
+          boxShadow: 'none',
+        },
+        paperAnchorLeft: {
+          // modal drawer:右侧 corner-large 圆角(spec:corner-large-end = 0 16 16 0)
+          borderTopRightRadius: 16,
+          borderBottomRightRadius: 16,
+        },
+        paperAnchorRight: {
+          borderTopLeftRadius: 16,
+          borderBottomLeftRadius: 16,
+        },
+      },
+    },
     MuiSkeleton: {
       styleOverrides: {
         root: {
           backgroundColor: alpha(N[900], 0.04),
+        },
+      },
+    },
+    // MD3 通用 floating surface:corner-extra-small(4) / level-3 elevation
+    // / supporting-text body-medium 14/20 / action label-large 14/20 medium
+    // / 容器深色 inverse-surface (我们用 N[900])
+    MuiSnackbarContent: {
+      styleOverrides: {
+        root: {
+          borderRadius: 4,
+          backgroundColor: N[900],
+          color: '#ffffff',
+          fontSize: '0.875rem',
+          lineHeight: '1.25rem',
+          letterSpacing: '0.015625rem',
+          minHeight: 48,
+          paddingLeft: 16,
+          paddingRight: 16,
+        },
+        action: { paddingLeft: 16 },
+      },
+    },
+    // MD3 spec:alert/banner corner-extra-small(4) / leading-icon 24 / body-medium 14/20
+    MuiAlert: {
+      defaultProps: { variant: 'standard' },
+      styleOverrides: {
+        root: {
+          borderRadius: 4,
+          padding: '8px 16px',
+          fontSize: '0.875rem',
+          lineHeight: '1.25rem',
+          letterSpacing: '0.015625rem',
+          alignItems: 'center',
+        },
+        icon: { fontSize: 24 },
+        message: { padding: '8px 0' },
+      },
+    },
+    // MD3 spec:avatar 是 corner-full / 头像尺寸 list-item 用 40
+    MuiAvatar: {
+      styleOverrides: {
+        root: {
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          backgroundColor: N[200],
+          color: N[700],
+        },
+      },
+    },
+    // MD3 scrim:rgba(0,0,0,0.32) — 比 MUI 默认 0.5 浅,polished surface 更通透
+    MuiBackdrop: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(0, 0, 0, 0.32)',
+          '&.MuiBackdrop-invisible': {
+            backgroundColor: 'transparent',
+          },
+        },
+      },
+    },
+    // MD3 spec:menu/popover container corner-extra-small(4) / level-2 elevation
+    MuiPopover: {
+      defaultProps: { elevation: 2 },
+      styleOverrides: {
+        paper: {
+          borderRadius: 4,
+          marginTop: 4,
+        },
+      },
+    },
+    // Autocomplete listbox 复用 menu 视觉:48h item / hover 8% / selected 12%
+    MuiAutocomplete: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 4,
+        },
+        listbox: {
+          padding: '8px 0',
+          '& .MuiAutocomplete-option': {
+            minHeight: 48,
+            paddingLeft: 16,
+            paddingRight: 16,
+            fontSize: '0.875rem',
+            lineHeight: '1.25rem',
+            letterSpacing: '0.00625rem',
+            '&:hover, &.Mui-focused': {
+              backgroundColor: alpha(N[900], 0.08),
+            },
+            '&[aria-selected="true"]': {
+              backgroundColor: alpha('#0d99ff', 0.12),
+              '&:hover, &.Mui-focused': {
+                backgroundColor: alpha('#0d99ff', 0.16),
+              },
+            },
+          },
         },
       },
     },
