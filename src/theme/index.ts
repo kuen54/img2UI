@@ -26,9 +26,31 @@ const N = {
   900: '#0a0a0a',
 } as const
 
-// 1px hairline border / divider
-const HAIRLINE = 'rgba(15, 23, 42, 0.06)'
-const HAIRLINE_STRONG = 'rgba(15, 23, 42, 0.1)'
+// ─── MD3 surface 色阶(light scheme) ──────────────────────────────────────
+// spec(v0.192):surface=neutral98 / surface-container-lowest=neutral100
+//                container-low=neutral96 / container=neutral94
+//                container-high=neutral92 / container-highest=neutral90
+// 我们品牌色是蓝(#0d99ff),neutral 用蓝调中性灰而非 MD3 默认紫调
+// 下列值是在 N[50]~N[200] 之间内插出的对应 neutral 阶
+const SURFACE = {
+  containerLowest: '#ffffff',
+  containerLow: '#f7f8fa', // ≈ neutral96
+  container: N[100], //       ≈ neutral94 = #f4f5f7
+  containerHigh: '#eceef1', // ≈ neutral92
+  containerHighest: N[200], // ≈ neutral90 = #e8ebee
+  outline: N[400], //           outline = neutral-variant50
+  outlineVariant: N[300], //    outline-variant = neutral-variant80
+} as const
+
+// MD3 不在 MUI palette 默认 schema 里,需要 module augmentation 让 sx 能消费
+declare module '@mui/material/styles' {
+  interface Palette {
+    surface: typeof SURFACE
+  }
+  interface PaletteOptions {
+    surface?: typeof SURFACE
+  }
+}
 
 // 字体栈:Geist Sans(latin)+ CJK fallback
 const FONT_STACK =
@@ -55,10 +77,13 @@ export const theme = createTheme({
     warning: { main: '#d97706', light: '#fef3c7', dark: '#b45309', contrastText: '#fff' },
     info: { main: '#0ea5e9', light: '#e0f2fe', dark: '#0369a1', contrastText: '#fff' },
     background: {
-      default: '#eef0f3', // 暗半阶 — 让 Card paper(#fff) 真"浮"出来,Linear/Vercel 关键 surface elevation
-      paper: '#ffffff',
+      // MD3 light scheme:page 用 surface(near-white),container 在 paper / Card / Dialog 上分级
+      // 偏离过去「page 略灰 + paper 纯白」的 Linear/Vercel 路线
+      default: '#fdfdfd', // surface ≈ neutral98
+      paper: SURFACE.containerLow, // 默认 paper = surface-container-low(Card 等吸收这层)
     },
-    divider: HAIRLINE,
+    divider: SURFACE.outlineVariant,
+    surface: SURFACE,
     text: {
       primary: N[900],
       // 上轮误把 text.secondary 跟 caption 都用了 N[500]/N[600],中文字符在 14px 下显薄看不清。
@@ -164,35 +189,36 @@ export const theme = createTheme({
       color: N[700],
     },
   },
-  // 自定义阴影栈 — hairline + 微妙偏移 + 真实 lift,不要 MUI 默认"模糊大球"也不要削太狠
-  // resting (1) → hover (3) → popover (5+) 三档跳跃要可见
-  shadows: [
-    'none',
-    `0 1px 2px ${alpha(N[900], 0.06)}, 0 1px 1px ${alpha(N[900], 0.04)}, 0 0 0 1px ${HAIRLINE}`, // 1 resting
-    `0 2px 4px ${alpha(N[900], 0.07)}, 0 1px 2px ${alpha(N[900], 0.05)}, 0 0 0 1px ${HAIRLINE}`, // 2
-    `0 4px 12px ${alpha(N[900], 0.08)}, 0 2px 4px ${alpha(N[900], 0.04)}, 0 0 0 1px ${HAIRLINE}`, // 3 hover
-    `0 6px 16px ${alpha(N[900], 0.09)}, 0 2px 6px ${alpha(N[900], 0.05)}, 0 0 0 1px ${HAIRLINE}`, // 4
-    `0 8px 24px ${alpha(N[900], 0.1)}, 0 4px 8px ${alpha(N[900], 0.05)}, 0 0 0 1px ${HAIRLINE}`, // 5 popover
-    `0 12px 32px ${alpha(N[900], 0.11)}, 0 6px 12px ${alpha(N[900], 0.06)}, 0 0 0 1px ${HAIRLINE}`, // 6
-    `0 16px 40px ${alpha(N[900], 0.12)}, 0 8px 16px ${alpha(N[900], 0.07)}, 0 0 0 1px ${HAIRLINE}`, // 7
-    `0 20px 48px ${alpha(N[900], 0.14)}, 0 10px 20px ${alpha(N[900], 0.07)}, 0 0 0 1px ${HAIRLINE}`, // 8 dialog
-    `0 24px 56px ${alpha(N[900], 0.16)}, 0 12px 24px ${alpha(N[900], 0.08)}, 0 0 0 1px ${HAIRLINE}`, // 9
-    `0 28px 64px ${alpha(N[900], 0.18)}, 0 14px 28px ${alpha(N[900], 0.09)}, 0 0 0 1px ${HAIRLINE}`, // 10
-    `0 32px 72px ${alpha(N[900], 0.2)}, 0 16px 32px ${alpha(N[900], 0.1)}, 0 0 0 1px ${HAIRLINE}`, // 11
-    `0 36px 80px ${alpha(N[900], 0.22)}, 0 18px 36px ${alpha(N[900], 0.11)}, 0 0 0 1px ${HAIRLINE}`, // 12
-    `0 40px 88px ${alpha(N[900], 0.24)}, 0 20px 40px ${alpha(N[900], 0.12)}, 0 0 0 1px ${HAIRLINE}`, // 13
-    `0 44px 96px ${alpha(N[900], 0.26)}, 0 22px 44px ${alpha(N[900], 0.13)}, 0 0 0 1px ${HAIRLINE}`, // 14
-    `0 48px 104px ${alpha(N[900], 0.28)}, 0 24px 48px ${alpha(N[900], 0.14)}, 0 0 0 1px ${HAIRLINE}`, // 15
-    `0 52px 112px ${alpha(N[900], 0.3)}, 0 26px 52px ${alpha(N[900], 0.15)}, 0 0 0 1px ${HAIRLINE}`, // 16
-    `0 56px 120px ${alpha(N[900], 0.32)}, 0 28px 56px ${alpha(N[900], 0.16)}, 0 0 0 1px ${HAIRLINE}`, // 17
-    `0 60px 128px ${alpha(N[900], 0.34)}, 0 30px 60px ${alpha(N[900], 0.17)}, 0 0 0 1px ${HAIRLINE}`, // 18
-    `0 64px 136px ${alpha(N[900], 0.36)}, 0 32px 64px ${alpha(N[900], 0.18)}, 0 0 0 1px ${HAIRLINE}`, // 19
-    `0 68px 144px ${alpha(N[900], 0.38)}, 0 34px 68px ${alpha(N[900], 0.19)}, 0 0 0 1px ${HAIRLINE}`, // 20
-    `0 72px 152px ${alpha(N[900], 0.4)}, 0 36px 72px ${alpha(N[900], 0.2)}, 0 0 0 1px ${HAIRLINE}`, // 21
-    `0 76px 160px ${alpha(N[900], 0.42)}, 0 38px 76px ${alpha(N[900], 0.21)}, 0 0 0 1px ${HAIRLINE}`, // 22
-    `0 80px 168px ${alpha(N[900], 0.44)}, 0 40px 80px ${alpha(N[900], 0.22)}, 0 0 0 1px ${HAIRLINE}`, // 23
-    `0 84px 176px ${alpha(N[900], 0.46)}, 0 42px 84px ${alpha(N[900], 0.23)}, 0 0 0 1px ${HAIRLINE}`, // 24
-  ],
+  // MD3 elevation level 0-5(v0.192 web spec):
+  //   level0:none
+  //   level1:0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15)
+  //   level2:0 1px 2px rgba(0,0,0,.30), 0 2px 6px 2px rgba(0,0,0,.15)
+  //   level3:0 1px 3px rgba(0,0,0,.30), 0 4px 8px 3px rgba(0,0,0,.15)
+  //   level4:0 2px 3px rgba(0,0,0,.30), 0 6px 10px 4px rgba(0,0,0,.15)
+  //   level5:0 4px 4px rgba(0,0,0,.30), 0 8px 12px 6px rgba(0,0,0,.15)
+  // 把 5 个 level 映射到 MUI 25 槽 shadows 数组(0 / 1-2:lv1 / 3-5:lv2 /
+  // 6-7:lv3 / 8-11:lv4 / 12-24:lv5)
+  shadows: (() => {
+    const lv1 =
+      '0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 1px 3px 1px rgba(0, 0, 0, 0.15)'
+    const lv2 =
+      '0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 2px 6px 2px rgba(0, 0, 0, 0.15)'
+    const lv3 =
+      '0px 1px 3px 0px rgba(0, 0, 0, 0.30), 0px 4px 8px 3px rgba(0, 0, 0, 0.15)'
+    const lv4 =
+      '0px 2px 3px 0px rgba(0, 0, 0, 0.30), 0px 6px 10px 4px rgba(0, 0, 0, 0.15)'
+    const lv5 =
+      '0px 4px 4px 0px rgba(0, 0, 0, 0.30), 0px 8px 12px 6px rgba(0, 0, 0, 0.15)'
+    return [
+      'none', // 0
+      lv1, lv1, // 1-2 resting
+      lv2, lv2, lv2, // 3-5 hover Card
+      lv3, lv3, // 6-7 FAB / dropdown
+      lv4, lv4, lv4, lv4, // 8-11 modal-ish
+      lv5, lv5, lv5, lv5, lv5, lv5, lv5, lv5, lv5, lv5, lv5, lv5, // 12-23
+      lv5, // 24 Dialog default
+    ] as unknown as import('@mui/material/styles').Shadows
+  })(),
   components: {
     // MD3 state layer 是 hover/focus/press 时叠的颜色 overlay,实现机制是 CSS bg overlay
     // 而非动画 ripple。MUI 的 ripple 动效偏 MD2 风格,这里关闭以避免和 state layer 重复
@@ -261,7 +287,7 @@ export const theme = createTheme({
           fontSize: '0.9375rem',
         },
         outlined: {
-          borderColor: HAIRLINE_STRONG,
+          borderColor: SURFACE.outline,
           // MD3 outlined hover:state layer = primary @ 8%
           '&:hover': {
             borderColor: N[400],
@@ -360,7 +386,7 @@ export const theme = createTheme({
           letterSpacing: '0.03125rem',
         },
         outlined: {
-          borderColor: HAIRLINE_STRONG,
+          borderColor: SURFACE.outline,
         },
         filled: {
           // 只给 color="default" 的 filled chip 加浅灰底,不要盖 color="primary" 等的语义色
@@ -382,7 +408,7 @@ export const theme = createTheme({
           borderRadius: 4,
           fontSize: '0.875rem',
           '& fieldset': {
-            borderColor: HAIRLINE_STRONG,
+            borderColor: SURFACE.outline,
             borderWidth: '1px',
             transition:
               'border-color 150ms cubic-bezier(0.2, 0, 0, 1), border-width 150ms cubic-bezier(0.2, 0, 0, 1)',
@@ -452,12 +478,14 @@ export const theme = createTheme({
       },
     },
     // MD3 spec:menu container corner-extra-small(4) / level-2 elevation
+    // / surface-container bg(比 menu 触发位置略深的 tint)
     MuiMenu: {
       defaultProps: { elevation: 2 },
       styleOverrides: {
         paper: {
           borderRadius: 4,
           marginTop: 4,
+          backgroundColor: SURFACE.container,
         },
         list: {
           paddingTop: 8,
@@ -515,12 +543,13 @@ export const theme = createTheme({
       },
     },
     // MD3 spec:elevated/filled/outlined card 都是 corner-medium(12) / outline 1px(outlined)
+    // / elevated card 默认 surface-container-low / level-1 elevation
     MuiCard: {
       defaultProps: { elevation: 1 },
       styleOverrides: {
         root: {
           borderRadius: 12,
-          // 用 elevation 1 的 hairline+ shadow,不要 MUI default 的模糊大球
+          backgroundColor: SURFACE.containerLow,
           transition:
             'transform 200ms cubic-bezier(0.2, 0, 0, 1), box-shadow 200ms cubic-bezier(0.2, 0, 0, 1)',
         },
@@ -530,7 +559,7 @@ export const theme = createTheme({
       defaultProps: { elevation: 0 },
       styleOverrides: {
         outlined: {
-          borderColor: HAIRLINE_STRONG,
+          borderColor: SURFACE.outlineVariant,
         },
       },
     },
@@ -538,10 +567,11 @@ export const theme = createTheme({
       defaultProps: { elevation: 0, color: 'inherit' },
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          // MD3 small top app bar:bg = surface(基本纯白),无 shadow
+          backgroundColor: 'rgba(253, 253, 253, 0.85)',
           backdropFilter: 'blur(12px) saturate(180%)',
           WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-          borderBottom: `1px solid ${HAIRLINE}`,
+          borderBottom: `1px solid ${SURFACE.outlineVariant}`,
           color: N[900],
           boxShadow: 'none',
         },
@@ -561,14 +591,14 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '&:before': { display: 'none' },
-          backgroundColor: '#ffffff',
-          border: `1px solid ${HAIRLINE_STRONG}`,
+          backgroundColor: SURFACE.containerLow,
+          border: `1px solid ${SURFACE.outlineVariant}`,
           borderRadius: '12px !important',
           boxShadow: 'none',
           overflow: 'hidden',
           transition: 'border-color 150ms cubic-bezier(0.2, 0, 0, 1)',
           '&:hover': {
-            borderColor: N[300],
+            borderColor: SURFACE.outline,
           },
           '&.Mui-expanded': {
             borderColor: alpha('#0d99ff', 0.3),
@@ -609,15 +639,16 @@ export const theme = createTheme({
     },
     MuiDivider: {
       styleOverrides: {
-        root: { borderColor: HAIRLINE },
+        root: { borderColor: SURFACE.outlineVariant },
       },
     },
     // MD3 spec:basic dialog corner-extra-large(28) / headline-small 24/32 regular
-    // / 24px padding / level 3 elevation
+    // / 24px padding / level 3 elevation / surface-container-high bg
     MuiDialog: {
       styleOverrides: {
         paper: {
           borderRadius: 28,
+          backgroundColor: SURFACE.containerHigh,
         },
       },
     },
@@ -779,7 +810,7 @@ export const theme = createTheme({
           lineHeight: '1.25rem',
           letterSpacing: '0.00625rem',
           textTransform: 'none',
-          borderColor: HAIRLINE_STRONG,
+          borderColor: SURFACE.outline,
           color: N[800],
           '&:hover': {
             backgroundColor: alpha(N[900], 0.08),
@@ -871,7 +902,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           minHeight: 48,
-          borderBottom: `1px solid ${HAIRLINE_STRONG}`,
+          borderBottom: `1px solid ${SURFACE.outlineVariant}`,
         },
         indicator: {
           height: 3,
@@ -885,7 +916,7 @@ export const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          borderRight: `1px solid ${HAIRLINE_STRONG}`,
+          borderRight: `1px solid ${SURFACE.outlineVariant}`,
           boxShadow: 'none',
         },
         paperAnchorLeft: {
@@ -964,12 +995,14 @@ export const theme = createTheme({
       },
     },
     // MD3 spec:menu/popover container corner-extra-small(4) / level-2 elevation
+    // / surface-container bg
     MuiPopover: {
       defaultProps: { elevation: 2 },
       styleOverrides: {
         paper: {
           borderRadius: 4,
           marginTop: 4,
+          backgroundColor: SURFACE.container,
         },
       },
     },
