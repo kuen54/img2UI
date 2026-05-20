@@ -6,6 +6,7 @@ import {
   paths,
   readdirIfExists,
   readJsonIfExists,
+  listPass2Batches,
 } from './fs-utils'
 import { getProject, listPagesByProject, listStatesByPage, getPage } from './projects'
 import { getElementsForPage } from './elements'
@@ -87,14 +88,22 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
       // raw 缺失就跳过
     }
     for (const cat of ALL_VISUAL_CATEGORIES) {
-      try {
-        const buf = await fs.readFile(paths.pass2GreenScreen(s.id, cat))
-        await fs.writeFile(
-          path.join(pageDir, 'raw', `extracted-${sanitize(s.name)}-${cat}.png`),
-          buf,
-        )
-      } catch {
-        // 该 cat 无产物
+      const batches = await listPass2Batches(s.id, cat)
+      for (const b of batches) {
+        try {
+          const buf = await fs.readFile(b.pass2Path)
+          const suffix = b.batchIdx > 0 ? `-batch${b.batchIdx}` : ''
+          await fs.writeFile(
+            path.join(
+              pageDir,
+              'raw',
+              `extracted-${sanitize(s.name)}-${cat}${suffix}.png`,
+            ),
+            buf,
+          )
+        } catch {
+          // 该 cat batch 无产物
+        }
       }
     }
   }

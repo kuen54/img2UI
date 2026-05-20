@@ -15,6 +15,8 @@ import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { newId, nowIso, isValidId } from '@/lib/id'
 import { paths } from '@/lib/fs-utils'
+import { ALL_VISUAL_CATEGORIES } from '@/lib/visual-category'
+import type { VisualCategory } from '@/lib/types'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -23,12 +25,34 @@ interface RouteParams {
 /**
  * POST /api/states/[id]/pass2
  * 前置:state.pipeline_status === 'pass1_done' 且所有 element.reviewed === true
+ *
+ * 可选 body: { categories?: VisualCategory[] }
+ *   - 不传 → 跑全部有 element 的 category(常规首跑)
+ *   - 传白名单 → 只跑这些 category(常用于「只重跑失败 route」)
  */
-export async function POST(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+export async function POST(req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id: stateId } = await params
     if (!isValidId(stateId))
       return jsonResponse({ error: 'invalid id' }, { status: 400 })
+
+    // 解析 categories 白名单(body 可空)
+    let categoryFilter: VisualCategory[] | undefined
+    try {
+      const body = (await req.json().catch(() => null)) as
+        | { categories?: unknown }
+        | null
+      if (body && Array.isArray(body.categories)) {
+        const allowed = new Set<string>(ALL_VISUAL_CATEGORIES)
+        const cats = body.categories.filter(
+          (c): c is VisualCategory =>
+            typeof c === 'string' && allowed.has(c),
+        )
+        if (cats.length > 0) categoryFilter = cats
+      }
+    } catch {
+      // 非 JSON body 也允许,等同于不带 filter
+    }
 
     const state = await getState(stateId)
     if (!state) return jsonResponse({ error: 'state not found' }, { status: 404 })
@@ -74,7 +98,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
         model: '',
         prompt: '(audit stub - 见 pass2_<category> sub-runs)',
         images: [paths.raw(stateId)],
-        extra: {},
+        extra: categoryFilter ? { category_filter: categoryFilter } : {},
       },
       llm_response: null,
     }
@@ -92,6 +116,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
             page,
             project,
             elements,
+            ...(categoryFilter ? { categoryFilter } : {}),
           })
           await updatePipelineRun(auditRun.id, {
             status: 'completed',

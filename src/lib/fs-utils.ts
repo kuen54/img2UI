@@ -120,10 +120,18 @@ export const paths = {
   pipelineRun: (id: string) => path.join(DATA_ROOT, 'pipelines', `${id}.json`),
   raw: (stateId: string) => path.join(DATA_ROOT, 'raw', `${stateId}.png`),
   thumb: (id: string) => path.join(DATA_ROOT, 'thumbs', `${id}.png`),
-  pass2GreenScreen: (stateId: string, category: string) =>
-    path.join(DATA_ROOT, 'pass2', `${stateId}-${category}.png`),
-  keyed: (stateId: string, category: string) =>
-    path.join(DATA_ROOT, 'keyed', `${stateId}-${category}.png`),
+  pass2GreenScreen: (stateId: string, category: string, batchIdx?: number) =>
+    path.join(
+      DATA_ROOT,
+      'pass2',
+      `${stateId}-${category}${batchIdx && batchIdx > 0 ? `-batch${batchIdx}` : ''}.png`,
+    ),
+  keyed: (stateId: string, category: string, batchIdx?: number) =>
+    path.join(
+      DATA_ROOT,
+      'keyed',
+      `${stateId}-${category}${batchIdx && batchIdx > 0 ? `-batch${batchIdx}` : ''}.png`,
+    ),
   sliceDir: (stateId: string, category: string) =>
     path.join(DATA_ROOT, 'slices', `${stateId}-${category}`),
   slice: (stateId: string, category: string, idx: number) =>
@@ -133,3 +141,44 @@ export const paths = {
   assetBin: (assetId: string) =>
     path.join(DATA_ROOT, 'assets-bin', `${assetId}.png`),
 } as const
+
+/**
+ * 列出某 (state, category) 对应所有 pass2 / keyed batch 文件。
+ * 返回 [{batchIdx, pass2Path, keyedPath}, ...] 按 idx 排序。
+ * 兼容老数据(无 batch 后缀的视为 batch 0)。
+ */
+export async function listPass2Batches(
+  stateId: string,
+  category: string,
+): Promise<Array<{ batchIdx: number; pass2Path: string; keyedPath: string }>> {
+  const dir = path.join(DATA_ROOT, 'keyed')
+  let names: string[] = []
+  try {
+    names = await fs.readdir(dir)
+  } catch {
+    return []
+  }
+  const out: Array<{ batchIdx: number; pass2Path: string; keyedPath: string }> = []
+  // 兼容老数据(无 batch 后缀的视为 batch 0)
+  if (names.includes(`${stateId}-${category}.png`)) {
+    out.push({
+      batchIdx: 0,
+      pass2Path: paths.pass2GreenScreen(stateId, category),
+      keyedPath: paths.keyed(stateId, category),
+    })
+  }
+  const re = new RegExp(`^${stateId}-${category}-batch(\\d+)\\.png$`)
+  for (const n of names) {
+    const m = re.exec(n)
+    if (m) {
+      const idx = parseInt(m[1]!, 10)
+      out.push({
+        batchIdx: idx,
+        pass2Path: paths.pass2GreenScreen(stateId, category, idx),
+        keyedPath: paths.keyed(stateId, category, idx),
+      })
+    }
+  }
+  out.sort((a, b) => a.batchIdx - b.batchIdx)
+  return out
+}

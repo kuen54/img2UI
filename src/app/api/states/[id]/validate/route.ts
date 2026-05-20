@@ -15,7 +15,7 @@ import { listAssetsForPage, saveAsset } from '@/lib/assets'
 import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { newId, nowIso, isValidId } from '@/lib/id'
-import { paths } from '@/lib/fs-utils'
+import { listPass2Batches } from '@/lib/fs-utils'
 import { getActiveProvider } from '@/lib/config'
 import { callMllm, type MllmMessage } from '@/lib/llm-client'
 import { ALL_VISUAL_CATEGORIES } from '@/lib/visual-category'
@@ -78,67 +78,68 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
           const assetByElement = new Map<string, Asset>()
           for (const a of assets) assetByElement.set(a.element_id, a)
 
-          // 按 category 分组(只看有 keyed/{state}-{cat}.png 存在的 category)
+          // 按 category 分组(只看至少有一个 keyed batch 存在的 category)
           const perCategory: Array<{
             category: VisualCategory
             elements: typeof statics
+            batches: Array<{ batchIdx: number; pass2Path: string; keyedPath: string }>
           }> = []
           for (const cat of ALL_VISUAL_CATEGORIES) {
             const els = statics.filter((e) => e.visual_category === cat)
             if (els.length === 0) continue
-            // 检查 keyed 存在
-            try {
-              await fs.access(paths.keyed(state.id, cat))
-            } catch {
-              continue
-            }
-            perCategory.push({ category: cat, elements: els })
+            const batches = await listPass2Batches(state.id, cat)
+            if (batches.length === 0) continue
+            perCategory.push({ category: cat, elements: els, batches })
           }
 
           let totalParsed = 0
-          for (const { category, elements: catEls } of perCategory) {
-            const keyedBuf = await fs.readFile(paths.keyed(state.id, category))
-            const dataUrl = `data:image/png;base64,${keyedBuf.toString('base64')}`
-            const messages: MllmMessage[] = [
-              { role: 'system', content: renderValidateSystemPrompt() },
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: renderValidateUserText({ elements: catEls }) },
-                  { type: 'image_url', image_url: { url: dataUrl } },
-                ],
-              },
-            ]
-            try {
-              const result = await callMllm(provider, {
-                messages,
-                max_tokens: 4096,
-                temperature: 0,
-                response_format: { type: 'json_object' },
-              })
-              const parsed = parseValidateResponse(result.content)
-              totalParsed += parsed.length
+          for (const { category, elements: catEls, batches } of perCategory) {
+            // 每个 batch 单独 validate(共享同一组 element 列表 — LLM 看每张
+            // 绿幕图的元素并校验)
+            for (const b of batches) {
+              const keyedBuf = await fs.readFile(b.keyedPath)
+              const dataUrl = `data:image/png;base64,${keyedBuf.toString('base64')}`
+              const messages: MllmMessage[] = [
+                { role: 'system', content: renderValidateSystemPrompt() },
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: renderValidateUserText({ elements: catEls }) },
+                    { type: 'image_url', image_url: { url: dataUrl } },
+                  ],
+                },
+              ]
+              try {
+                const result = await callMllm(provider, {
+                  messages,
+                  max_tokens: 4096,
+                  temperature: 0,
+                  response_format: { type: 'json_object' },
+                })
+                const parsed = parseValidateResponse(result.content)
+                totalParsed += parsed.length
 
-              // match by entity_name back to element → asset
-              for (const ve of parsed) {
-                const el = catEls.find((e) => e.name === ve.entity_name)
-                if (!el) continue
-                const asset = assetByElement.get(el.id)
-                if (!asset) continue
-                const updated: Asset = {
-                  ...asset,
-                  alpha_quality: typeof ve.alpha_quality === 'number'
-                    ? Math.max(0, Math.min(1, ve.alpha_quality))
-                    : asset.alpha_quality,
-                  validation_notes:
-                    `complete=${ve.complete} style_match=${ve.style_match} contamination=${ve.contamination} ${ve.notes ?? ''}`.trim(),
-                  status: 'validated',
-                  updated_at: nowIso(),
+                // match by entity_name back to element → asset
+                for (const ve of parsed) {
+                  const el = catEls.find((e) => e.name === ve.entity_name)
+                  if (!el) continue
+                  const asset = assetByElement.get(el.id)
+                  if (!asset) continue
+                  const updated: Asset = {
+                    ...asset,
+                    alpha_quality: typeof ve.alpha_quality === 'number'
+                      ? Math.max(0, Math.min(1, ve.alpha_quality))
+                      : asset.alpha_quality,
+                    validation_notes:
+                      `complete=${ve.complete} style_match=${ve.style_match} contamination=${ve.contamination} ${ve.notes ?? ''}`.trim(),
+                    status: 'validated',
+                    updated_at: nowIso(),
+                  }
+                  await saveAsset(updated)
                 }
-                await saveAsset(updated)
+              } catch (err) {
+                console.warn(`[validate ${category} batch${b.batchIdx}]`, err)
               }
-            } catch (err) {
-              console.warn(`[validate ${category}]`, err)
             }
           }
 
