@@ -51,14 +51,18 @@ export interface Pass2MultiResult {
 /**
  * Pass 2 multi-route:按 visual_category 分组并行。
  * 部分失败容忍:单路 fail 不阻断其他路。
+ *
+ * @param input.categoryFilter 可选的白名单 —— 只跑这些 category。常用于「只重跑失败 route」
+ *                              工作流(从上次 audit run 的 failed_routes 取 category)
  */
 export async function runPass2MultiRoute(input: {
   state: StateRecord
   page: Page
   project: Project
   elements: LayoutElement[]
+  categoryFilter?: ReadonlyArray<VisualCategory>
 }): Promise<Pass2MultiResult> {
-  const { state, page, project, elements } = input
+  const { state, page, project, elements, categoryFilter } = input
 
   const provider = await getActiveProvider('image_gen')
   if (!provider) {
@@ -81,9 +85,34 @@ export async function runPass2MultiRoute(input: {
   const pageDescription = project.description ?? page.name
   const rawBuf = await fs.readFile(paths.raw(state.id))
 
-  const tasks: Array<{ category: VisualCategory; els: LayoutElement[] }> = []
+  const filterSet = categoryFilter ? new Set(categoryFilter) : null
+  // apimart `gpt-image-2-official` 服务端硬限 max 16 image_urls(1 raw + 15 crops)。
+  // 元素 > 15 时按面积降序分多个 batch,每 batch 跑独立 LLM call,产出独立 keyed 文件
+  // 和切片(切片 idx 用 batch_idx*BATCH_SIZE 做 offset 避免冲突)。
+  const MAX_CROPS_PER_BATCH = 15
+  const tasks: Array<{
+    category: VisualCategory
+    els: LayoutElement[]
+    batchIdx: number
+    totalBatches: number
+  }> = []
   for (const [cat, els] of byCat) {
-    if (els.length > 0) tasks.push({ category: cat, els })
+    if (els.length === 0) continue
+    if (filterSet && !filterSet.has(cat)) continue
+    if (els.length <= MAX_CROPS_PER_BATCH) {
+      tasks.push({ category: cat, els, batchIdx: 0, totalBatches: 1 })
+    } else {
+      // 按 bbox 面积降序排,大元素分到 batch 0(更准确),小元素分到后面 batch
+      const sorted = [...els].sort(
+        (a, b) => b.bbox[2] * b.bbox[3] - a.bbox[2] * a.bbox[3],
+      )
+      const totalBatches = Math.ceil(sorted.length / MAX_CROPS_PER_BATCH)
+      for (let b = 0; b < totalBatches; b++) {
+        const start = b * MAX_CROPS_PER_BATCH
+        const slice = sorted.slice(start, start + MAX_CROPS_PER_BATCH)
+        tasks.push({ category: cat, els: slice, batchIdx: b, totalBatches })
+      }
+    }
   }
 
   const settled = await Promise.allSettled(
@@ -95,6 +124,8 @@ export async function runPass2MultiRoute(input: {
         elements: t.els,
         pageDescription,
         rawBuf,
+        batchIdx: t.batchIdx,
+        totalBatches: t.totalBatches,
       }),
     ),
   )
@@ -128,8 +159,10 @@ async function runRoute(input: {
   elements: LayoutElement[]
   pageDescription: string
   rawBuf: Buffer
+  batchIdx: number
+  totalBatches: number
 }): Promise<Pass2RouteResult> {
-  const { state, provider, category, elements, pageDescription, rawBuf } = input
+  const { state, provider, category, elements, pageDescription, rawBuf, batchIdx, totalBatches } = input
 
   const subRun: PipelineRun = {
     id: newId(),
@@ -142,7 +175,11 @@ async function runRoute(input: {
       model: provider.model ?? '',
       prompt: '(待 prompt 渲染后填)',
       images: [paths.raw(state.id)],
-      extra: { category, element_count: elements.length },
+      extra: {
+        category,
+        element_count: elements.length,
+        ...(totalBatches > 1 ? { batch_idx: batchIdx, total_batches: totalBatches } : {}),
+      },
     },
     llm_response: null,
   }
@@ -150,6 +187,7 @@ async function runRoute(input: {
 
   try {
     // 1. 准备多参考图:[原图, ...每个 element 的 crop]
+    // chunking 已在 caller 完成,这里 elements.length ≤ MAX_CROPS_PER_BATCH = 15
     const validElements: LayoutElement[] = []
     const cropDataUrls: string[] = []
     for (const el of elements) {
@@ -193,20 +231,30 @@ async function runRoute(input: {
       n: 1,
     })
 
-    // 4. 落 data/pass2/{state}-{cat}.png(留底,re-key-via-api 复用)
-    await writeAtomic(paths.pass2GreenScreen(state.id, category), result.image)
+    // 4. 落 data/pass2/{state}-{cat}[-batchN].png(留底,re-key-via-api 复用)
+    await writeAtomic(
+      paths.pass2GreenScreen(state.id, category, batchIdx),
+      result.image,
+    )
 
     // 5. chroma key
     const transparent = await chromaGreenKey(result.image)
-    await writeAtomic(paths.keyed(state.id, category), transparent)
+    await writeAtomic(
+      paths.keyed(state.id, category, batchIdx),
+      transparent,
+    )
 
     // 6. slice
     const slices = await sliceAssets(transparent)
 
     // 7. 写到切片库(MVP S3:不创建 Asset)
+    // batchIdx > 0 时,切片 idx 加 offset = batchIdx * 50 避免跟其他 batch 冲突。
+    // 用 50 而不是 MAX_CROPS_PER_BATCH(15)是因为 slicer 可能产出 > 15 的切片
+    // (LLM 渲染分布、绿幕碎片 → 实测 15 element 可出 16 slice),需要安全余量
+    const sliceIdxOffset = batchIdx * 50
     for (let i = 0; i < slices.length; i++) {
       const s = slices[i]!
-      await writeSlice(state.id, category, i, s.buffer, {
+      await writeSlice(state.id, category, sliceIdxOffset + i, s.buffer, {
         opaque_pct: s.opaque_pct,
         bbox: s.bbox,
       })
@@ -219,6 +267,9 @@ async function runRoute(input: {
       parsed_result: {
         slice_count: slices.length,
         element_count: validElements.length,
+        ...(totalBatches > 1
+          ? { batch_idx: batchIdx, total_batches: totalBatches }
+          : {}),
       },
     })
 

@@ -621,6 +621,8 @@ function PipelinePanel({
 
   const [running, setRunning] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // 上次 pass2 audit 报告里失败的 categories(若有,可只重跑这些路省钱)
+  const [failedRoutes, setFailedRoutes] = useState<string[]>([])
 
   // 失败时拉 PipelineRun.error.message 显示在 banner
   useEffect(() => {
@@ -640,6 +642,22 @@ function PipelinePanel({
       .catch(() => {})
   }, [status, state.pass1_run_id, state.pass2_run_id])
 
+  // 拉 pass2 audit 报告里的 failed_routes(无论 done / failed 都看,
+  // 因为部分失败容忍模式下 status=done 也可能有 failed_routes)
+  useEffect(() => {
+    setFailedRoutes([])
+    if (status !== 'pass2_done' && status !== 'pass2_failed' && status !== 'validated')
+      return
+    if (!state.pass2_run_id) return
+    void fetch(`/api/pipeline-runs/${state.pass2_run_id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((run: { parsed_result?: { failed_routes?: Array<{ category: string }> } } | null) => {
+        const fr = run?.parsed_result?.failed_routes ?? []
+        setFailedRoutes(fr.map((f) => f.category))
+      })
+      .catch(() => {})
+  }, [status, state.pass2_run_id])
+
   const runPass1 = async (): Promise<void> => {
     setRunning(true)
     setErrorMessage(null)
@@ -658,13 +676,24 @@ function PipelinePanel({
     }
   }
 
-  const runPass2 = async (): Promise<void> => {
+  const runPass2 = async (categories?: string[]): Promise<void> => {
     setRunning(true)
     try {
-      const res = await fetch(`/api/states/${state.id}/pass2`, { method: 'POST' })
+      const res = await fetch(`/api/states/${state.id}/pass2`, {
+        method: 'POST',
+        ...(categories && categories.length > 0
+          ? {
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ categories }),
+            }
+          : {}),
+      })
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
-      toast.info('Pass 2 启动…轮询状态中(可能要 1-3 分钟)')
+      const label = categories && categories.length > 0
+        ? `Pass 2 重跑 ${categories.length} 路`
+        : 'Pass 2'
+      toast.info(`${label} 启动…轮询状态中(可能要 1-3 分钟)`)
       pollPipelineRun(run_id, 'Pass 2', () => {
         onChanged()
         setRunning(false)
@@ -821,20 +850,53 @@ function PipelinePanel({
             >
               Asset Review
             </Button>
+            {failedRoutes.length > 0 && (
+              <Button
+                variant="outlined"
+                color="warning"
+                fullWidth
+                startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
+                disabled={running}
+                onClick={() => void runPass2(failedRoutes)}
+              >
+                {running ? '重跑中…' : `只重跑失败 ${failedRoutes.length} 路 (${failedRoutes.join(' / ')})`}
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
+              disabled={running}
+              onClick={() => void runPass2()}
+            >
+              {running ? 'Pass 2 重跑中…' : '重跑全部 Pass 2'}
+            </Button>
             <CdnExportActions stateId={state.id} pageId={pageId} />
           </Stack>
         )}
 
         {status === 'pass2_failed' && (
           <Stack spacing={1} sx={{ mt: 3 }}>
+            {failedRoutes.length > 0 && (
+              <Button
+                variant="contained"
+                color="warning"
+                fullWidth
+                startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
+                disabled={running}
+                onClick={() => void runPass2(failedRoutes)}
+              >
+                {running ? '重跑中…' : `只重跑失败 ${failedRoutes.length} 路 (${failedRoutes.join(' / ')})`}
+              </Button>
+            )}
             <Button
-              variant="contained"
+              variant={failedRoutes.length > 0 ? 'outlined' : 'contained'}
               fullWidth
               startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
               disabled={running}
               onClick={() => void runPass2()}
             >
-              重跑 Pass 2
+              重跑全部 Pass 2
             </Button>
           </Stack>
         )}

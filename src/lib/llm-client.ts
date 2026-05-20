@@ -266,7 +266,9 @@ async function callApimartAsync(
       Authorization: `Bearer ${provider.api_key}`,
     },
     body: JSON.stringify(submitBody),
-    timeoutMs: 30_000, // submit 应当快
+    // Pass 2 subject 路 19+ 个参考图时 body 可能 ~4MB,30s 上传不够。
+    // 实测 19 张 ref 在普通带宽下 30s × 3 retry 全部超时(89s 左右挂)。
+    timeoutMs: 180_000,
     ...(opts.signal ? { externalSignal: opts.signal } : {}),
   })
   const submitJson = (await submitRes.json()) as {

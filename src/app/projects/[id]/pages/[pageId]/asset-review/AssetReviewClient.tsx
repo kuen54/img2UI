@@ -464,7 +464,23 @@ function KeyedCategoryRow({
   count: number
 }): React.ReactElement {
   const [open, setOpen] = useState(false)
-  const [imgError, setImgError] = useState(false)
+  const [batches, setBatches] = useState<number[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  // 展开时拉 batch 列表(支持多 batch 渲染:每 batch 一张 keyed PNG)
+  useEffect(() => {
+    if (!open || loaded) return
+    void fetch(`/api/states/${stateId}/keyed/${category}/batches`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { batches?: number[] } | null) => {
+        setBatches(data?.batches ?? [])
+        setLoaded(true)
+      })
+      .catch(() => {
+        setBatches([])
+        setLoaded(true)
+      })
+  }, [open, loaded, stateId, category])
 
   return (
     <Box>
@@ -478,45 +494,75 @@ function KeyedCategoryRow({
         {VISUAL_CATEGORY_CN[category]} ({count} 元素)
       </Button>
       <Collapse in={open} unmountOnExit>
-        <Box
-          sx={{
-            mt: 0.5,
-            mb: 0.5,
-            p: 1,
-            border: '1px dashed',
-            borderColor: 'divider',
-            borderRadius: 1.5,
-            bgcolor: 'background.default',
-            // 棋盘格背景表示透明区域
-            backgroundImage:
-              'linear-gradient(45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.04) 75%)',
-            backgroundSize: '12px 12px',
-            backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 80,
-          }}
-        >
-          {imgError ? (
-            <Typography variant="caption" color="text.disabled">
+        <Stack spacing={0.5} sx={{ mt: 0.5, mb: 0.5 }}>
+          {loaded && batches.length === 0 && (
+            <Typography variant="caption" color="text.disabled" sx={{ px: 1 }}>
               该 category 暂无 Pass 2 输出
             </Typography>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/states/${stateId}/keyed/${category}`}
-              alt={`Pass 2 输出 - ${category}`}
-              style={{
-                maxWidth: '100%',
-                maxHeight: 360,
-                objectFit: 'contain',
-                display: 'block',
-              }}
-              onError={() => setImgError(true)}
-            />
           )}
-        </Box>
+          {batches.map((batchIdx) => (
+            <Box
+              key={batchIdx}
+              sx={{
+                p: 1,
+                border: '1px dashed',
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                bgcolor: 'background.default',
+                // 棋盘格背景表示透明区域
+                backgroundImage:
+                  'linear-gradient(45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.04) 75%)',
+                backgroundSize: '12px 12px',
+                backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
+                position: 'relative',
+                minHeight: 80,
+              }}
+            >
+              {batches.length > 1 && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    top: 4,
+                    left: 6,
+                    px: 0.75,
+                    py: 0.25,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 0.5,
+                    fontFamily: 'monospace',
+                    fontSize: 10,
+                    color: 'text.secondary',
+                    zIndex: 1,
+                  }}
+                >
+                  batch {batchIdx + 1}/{batches.length}
+                </Typography>
+              )}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 80,
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/states/${stateId}/keyed/${category}${batchIdx > 0 ? `?batch=${batchIdx}` : ''}`}
+                  alt={`Pass 2 输出 - ${category} batch ${batchIdx}`}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 360,
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              </Box>
+            </Box>
+          ))}
+        </Stack>
       </Collapse>
     </Box>
   )
