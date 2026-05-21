@@ -25,6 +25,9 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import ContentCutIcon from '@mui/icons-material/ContentCut'
 import HealingIcon from '@mui/icons-material/Healing'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
+import AddIcon from '@mui/icons-material/Add'
+import { alpha } from '@mui/material/styles'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
@@ -68,6 +71,9 @@ export function AssetReviewClient({
   const [slices, setSlices] = useState<SliceWithAssign[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null)
+  // 「点选指派」交互:点 slice → pickedSlice 进入选中态;再点 element row 触发指派
+  // 跟拖拽并行(两套都能用)。Esc 取消。
+  const [pickedSlice, setPickedSlice] = useState<DragPayload | null>(null)
   const [subCropDialog, setSubCropDialog] = useState<{
     state_id: string
     category: VisualCategory
@@ -136,6 +142,8 @@ export function AssetReviewClient({
         })
         if (!res.ok) throw new Error(await res.text())
         toast.success('已指派')
+        // 指派完成后清掉「已选切片」状态(无论指派来源是 drag 还是 click)
+        setPickedSlice(null)
         void reload()
       } catch (err) {
         toast.error(`指派失败:${err instanceof Error ? err.message : String(err)}`)
@@ -143,6 +151,27 @@ export function AssetReviewClient({
     },
     [pageId, reload],
   )
+
+  // togglePick:再次点同一个 slice 取消选中,点不同的就替换
+  const togglePick = useCallback((payload: DragPayload): void => {
+    setPickedSlice((prev) =>
+      prev &&
+      prev.state_id === payload.state_id &&
+      prev.category === payload.category &&
+      prev.idx === payload.idx
+        ? null
+        : payload,
+    )
+  }, [])
+
+  // Esc 取消已选切片
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setPickedSlice(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const handleUnassign = useCallback(
     async (elementId: string): Promise<void> => {
@@ -267,6 +296,8 @@ export function AssetReviewClient({
                   ? assets.get(selectedElementId)?.slice_source ?? null
                   : null
               }
+              pickedSlice={pickedSlice}
+              onTogglePick={togglePick}
               onSubCrop={(state_id, category, idx) =>
                 setSubCropDialog({ state_id, category, idx })
               }
@@ -275,6 +306,7 @@ export function AssetReviewClient({
               elements={elements}
               assets={assets}
               selectedElementId={selectedElementId}
+              pickedSlice={pickedSlice}
               onSelect={setSelectedElementId}
               onAssign={handleAssign}
               onUnassign={handleUnassign}
@@ -329,6 +361,8 @@ function SliceGrid({
   slices,
   selectedElementId,
   currentAssignment,
+  pickedSlice,
+  onTogglePick,
   onSubCrop,
 }: {
   stateId: string
@@ -336,6 +370,8 @@ function SliceGrid({
   slices: SliceWithAssign[]
   selectedElementId: string | null
   currentAssignment: { state_id: string; category: VisualCategory; idx: number } | null
+  pickedSlice: DragPayload | null
+  onTogglePick: (payload: DragPayload) => void
   onSubCrop: (stateId: string, category: VisualCategory, idx: number) => void
 }): React.ReactElement {
   const grouped = useMemo(() => {
@@ -391,6 +427,8 @@ function SliceGrid({
             slices={arr}
             selectedElementId={selectedElementId}
             currentAssignment={currentAssignment}
+            pickedSlice={pickedSlice}
+            onTogglePick={onTogglePick}
             onSubCrop={onSubCrop}
           />
         )
@@ -573,12 +611,16 @@ function CategorySection({
   slices,
   selectedElementId,
   currentAssignment,
+  pickedSlice,
+  onTogglePick,
   onSubCrop,
 }: {
   category: VisualCategory
   slices: SliceWithAssign[]
   selectedElementId: string | null
   currentAssignment: { state_id: string; category: VisualCategory; idx: number } | null
+  pickedSlice: DragPayload | null
+  onTogglePick: (payload: DragPayload) => void
   onSubCrop: (stateId: string, category: VisualCategory, idx: number) => void
 }): React.ReactElement {
   const [open, setOpen] = useState(true)
@@ -602,11 +644,18 @@ function CategorySection({
               currentAssignment.category === s.category &&
               currentAssignment.idx === s.idx
             const usedByOthers = s.assigned_to.length > 0 && !usedByCurrent
-            const borderColor = usedByCurrent
-              ? CATEGORY_COLOR.subject
-              : usedByOthers
-                ? '#f59e0b'
-                : 'rgba(0,0,0,0.15)'
+            const isPicked =
+              pickedSlice &&
+              pickedSlice.state_id === s.state_id &&
+              pickedSlice.category === s.category &&
+              pickedSlice.idx === s.idx
+            const borderColor = isPicked
+              ? '#0d99ff'
+              : usedByCurrent
+                ? CATEGORY_COLOR.subject
+                : usedByOthers
+                  ? '#f59e0b'
+                  : 'rgba(0,0,0,0.15)'
             return (
               <Box
                 key={`${s.category}-${s.idx}`}
@@ -620,11 +669,18 @@ function CategorySection({
                   e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload))
                   e.dataTransfer.effectAllowed = 'copy'
                 }}
+                onClick={() =>
+                  onTogglePick({
+                    state_id: s.state_id,
+                    category: s.category,
+                    idx: s.idx,
+                  })
+                }
                 sx={{
                   position: 'relative',
                   width: 96,
                   height: 96,
-                  border: `2px solid ${borderColor}`,
+                  border: `${isPicked ? 3 : 2}px solid ${borderColor}`,
                   borderRadius: 1.5,
                   overflow: 'hidden',
                   cursor: 'grab',
@@ -633,9 +689,42 @@ function CategorySection({
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  '&:hover .crop-btn': { opacity: 1 },
+                  // 选中态:浅蓝色光晕(跟 picked 边框呼应)
+                  boxShadow: isPicked
+                    ? `0 0 0 3px ${alpha('#0d99ff', 0.25)}`
+                    : 'none',
+                  transition:
+                    'box-shadow 150ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms cubic-bezier(0.2, 0, 0, 1)',
+                  // hover:抬一档 + 显出 drag handle / crop btn
+                  '&:hover': {
+                    borderColor: isPicked ? '#0d99ff' : alpha('#0d99ff', 0.5),
+                  },
+                  '&:hover .crop-btn, &:hover .drag-handle': { opacity: 1 },
+                  '&:active': { cursor: 'grabbing' },
                 }}
               >
+                {/* drag handle 角标:静态半透明,hover 时变实 — 强 affordance */}
+                <Box
+                  className="drag-handle"
+                  sx={{
+                    position: 'absolute',
+                    top: 2,
+                    left: 2,
+                    width: 18,
+                    height: 18,
+                    borderRadius: '4px',
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                    color: 'rgba(0,0,0,0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.55,
+                    transition: 'opacity 150ms',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <DragIndicatorIcon sx={{ fontSize: 14 }} />
+                </Box>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/api/states/${s.state_id}/slices/${s.category}/${s.idx}`}
@@ -699,6 +788,7 @@ function ElementList({
   elements,
   assets,
   selectedElementId,
+  pickedSlice,
   onSelect,
   onAssign,
   onUnassign,
@@ -710,6 +800,7 @@ function ElementList({
   elements: LayoutElement[]
   assets: Map<string, Asset>
   selectedElementId: string | null
+  pickedSlice: DragPayload | null
   onSelect: (id: string) => void
   onAssign: (elementId: string, payload: DragPayload) => Promise<void>
   onUnassign: (elementId: string) => Promise<void>
@@ -760,6 +851,34 @@ function ElementList({
         </Stack>
       </Stack>
 
+      {pickedSlice && (
+        <Box
+          sx={{
+            mb: 1.5,
+            px: 1.5,
+            py: 1,
+            borderRadius: 1.5,
+            bgcolor: alpha('#0d99ff', 0.08),
+            border: '1px solid',
+            borderColor: alpha('#0d99ff', 0.4),
+            fontSize: 13,
+            color: 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <DragIndicatorIcon sx={{ fontSize: 16 }} />
+          <Box sx={{ flexGrow: 1 }}>
+            已选切片 <code>#{pickedSlice.idx}</code>(
+            {VISUAL_CATEGORY_CN[pickedSlice.category]}) · 点任意元素行指派
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            Esc 取消
+          </Typography>
+        </Box>
+      )}
+
       {elements.length === 0 ? (
         <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>
           没有 type=static 的元素
@@ -772,6 +891,7 @@ function ElementList({
               element={el}
               asset={assets.get(el.id) ?? null}
               isSelected={selectedElementId === el.id}
+              pickedSlice={pickedSlice}
               onSelect={() => onSelect(el.id)}
               onAssign={onAssign}
               onUnassign={onUnassign}
@@ -812,6 +932,7 @@ function ElementRow({
   element,
   asset,
   isSelected,
+  pickedSlice,
   onSelect,
   onAssign,
   onUnassign,
@@ -820,6 +941,7 @@ function ElementRow({
   element: LayoutElement
   asset: Asset | null
   isSelected: boolean
+  pickedSlice: DragPayload | null
   onSelect: () => void
   onAssign: (elementId: string, payload: DragPayload) => Promise<void>
   onUnassign: (elementId: string) => Promise<void>
@@ -838,6 +960,15 @@ function ElementRow({
     void onAssign(element.id, payload)
   }
 
+  // 「已选切片态」下整张 row 是 click-to-assign 目标;无 picked 时点击 = onSelect
+  const handleRowClick = (): void => {
+    if (pickedSlice) {
+      void onAssign(element.id, pickedSlice)
+    } else {
+      onSelect()
+    }
+  }
+
   const reExtract = async (): Promise<void> => {
     setReExtracting(true)
     try {
@@ -850,7 +981,7 @@ function ElementRow({
   return (
     <Card
       variant="outlined"
-      onClick={onSelect}
+      onClick={handleRowClick}
       onDragOver={(e) => {
         e.preventDefault()
         setHover(true)
@@ -859,31 +990,60 @@ function ElementRow({
       onDrop={onDrop}
       sx={{
         p: 1.25,
-        cursor: 'pointer',
+        cursor: pickedSlice ? 'copy' : 'pointer',
         borderLeft: 3,
         borderLeftColor: color,
-        borderColor: isSelected ? 'primary.main' : 'divider',
-        borderWidth: isSelected ? 2 : 1,
-        bgcolor: hover ? 'action.hover' : undefined,
+        borderColor: pickedSlice
+          ? alpha('#0d99ff', 0.55)
+          : isSelected
+            ? 'primary.main'
+            : 'divider',
+        borderWidth: isSelected || pickedSlice ? 2 : 1,
+        bgcolor: hover
+          ? 'action.hover'
+          : pickedSlice
+            ? alpha('#0d99ff', 0.04)
+            : undefined,
+        transition:
+          'border-color 150ms cubic-bezier(0.2, 0, 0, 1), background-color 150ms cubic-bezier(0.2, 0, 0, 1)',
+        '&:hover': pickedSlice
+          ? {
+              bgcolor: alpha('#0d99ff', 0.12),
+              borderColor: '#0d99ff',
+            }
+          : {},
       }}
     >
       <Stack direction="row" spacing={1.25} alignItems="center">
-        {/* asset preview / placeholder */}
+        {/* asset preview / drop placeholder
+            没 asset 时显示更明显的「拖放或点选切片到此」提示,带 + 图标和虚线主色框 */}
         <Box
           sx={{
             width: 56,
             height: 56,
             flexShrink: 0,
-            border: '1px dashed',
-            borderColor: asset ? 'transparent' : 'divider',
+            border: asset ? '1px dashed transparent' : '1.5px dashed',
+            borderColor: asset
+              ? 'transparent'
+              : pickedSlice || hover
+                ? '#0d99ff'
+                : alpha('#0d99ff', 0.4),
             borderRadius: 1,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: 'background.default',
+            gap: 0.25,
+            bgcolor: asset
+              ? 'background.default'
+              : pickedSlice || hover
+                ? alpha('#0d99ff', 0.08)
+                : alpha('#0d99ff', 0.03),
             backgroundImage: asset
-              ? undefined
-              : 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/10px 10px',
+              ? 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/10px 10px'
+              : undefined,
+            transition: 'all 150ms cubic-bezier(0.2, 0, 0, 1)',
+            color: pickedSlice || hover ? '#0d99ff' : alpha('#0d99ff', 0.55),
           }}
         >
           {asset ? (
@@ -897,9 +1057,19 @@ function ElementRow({
               }}
             />
           ) : (
-            <Typography variant="body2" color="text.secondary">
-              ?
-            </Typography>
+            <>
+              <AddIcon sx={{ fontSize: 18, color: 'inherit' }} />
+              <Typography
+                sx={{
+                  fontSize: 9,
+                  lineHeight: 1,
+                  color: 'inherit',
+                  fontWeight: 500,
+                }}
+              >
+                {pickedSlice ? '点击指派' : '拖放'}
+              </Typography>
+            </>
           )}
         </Box>
 
