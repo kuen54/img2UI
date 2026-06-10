@@ -14,7 +14,13 @@ import type {
   Project,
 } from './types'
 import { newId, nowIso } from './id'
-import { paths, writeAtomic } from './fs-utils'
+import {
+  paths,
+  writeAtomic,
+  unlinkIfExists,
+  rmIfExists,
+  listPass2Batches,
+} from './fs-utils'
 import { callImageGen } from './llm-client'
 import { getActiveProvider, getConfig } from './config'
 import { ALL_VISUAL_CATEGORIES } from './visual-category'
@@ -113,6 +119,19 @@ export async function runPass2MultiRoute(input: {
         tasks.push({ category: cat, els: slice, batchIdx: b, totalBatches })
       }
     }
+  }
+
+  // 重跑前清理本次要跑的 category 的旧产物:pass2/keyed 全部 batch 文件 + 切片目录。
+  // 否则重跑(改 bbox 后的核心场景)会让新旧切片混在同一目录无法区分,且上次
+  // batch 数更多时残留的 -batchN 文件会成为幽灵,继续进 export / validate。
+  // 已指派的 Asset 不受影响 —— assignSliceToElement 已把 PNG copy 到 assets-bin。
+  const catsToRun = new Set(tasks.map((t) => t.category))
+  for (const cat of catsToRun) {
+    for (const b of await listPass2Batches(state.id, cat)) {
+      await unlinkIfExists(b.pass2Path)
+      await unlinkIfExists(b.keyedPath)
+    }
+    await rmIfExists(paths.sliceDir(state.id, cat))
   }
 
   const settled = await Promise.allSettled(

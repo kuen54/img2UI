@@ -15,6 +15,7 @@ import { newId, nowIso } from './id'
 import { callMllm, type MllmMessage } from './llm-client'
 import { paths } from './fs-utils'
 import { saveElementsForPage, createPipelineRun, updatePipelineRun } from './elements'
+import { deleteAssetsNotIn } from './assets'
 import { getActiveProvider, getConfig } from './config'
 import { clampBbox01, bboxArea } from './bbox-iou'
 import { mergeRoutes, type RouteResult } from './pass1-route-merger'
@@ -143,6 +144,9 @@ export async function runPass1MultiRoute(input: {
 
   // 写到 page elements(整批替换)
   await saveElementsForPage(state.page_id, merged)
+  // 整批替换后旧 element id 全部失效 → 清理失去引用的 Asset + assets-bin,
+  // 避免孤儿 asset 留在 listAssetsForPage 里污染 export manifest
+  await deleteAssetsNotIn(state.page_id, new Set(merged.map((e) => e.id)))
 
   return {
     successes,

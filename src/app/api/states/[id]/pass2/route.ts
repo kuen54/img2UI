@@ -1,22 +1,14 @@
 import { NextRequest } from 'next/server'
-import {
-  getState,
-  getPage,
-  getProject,
-  updateState,
-} from '@/lib/projects'
+import { getState, getPage, getProject, updateState } from '@/lib/projects'
 import { runPass2MultiRoute } from '@/lib/pass2-runner'
-import {
-  createPipelineRun,
-  updatePipelineRun,
-  getElementsForPage,
-} from '@/lib/elements'
-import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
+import { getElementsForPage } from '@/lib/elements'
+import { StateBusyError } from '@/lib/run-lock'
+import { beginAuditJob } from '@/lib/audit-job'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { newId, nowIso, isValidId } from '@/lib/id'
 import { paths } from '@/lib/fs-utils'
 import { ALL_VISUAL_CATEGORIES } from '@/lib/visual-category'
-import type { VisualCategory } from '@/lib/types'
+import type { PipelineRun, VisualCategory } from '@/lib/types'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -29,6 +21,9 @@ interface RouteParams {
  * 可选 body: { categories?: VisualCategory[] }
  *   - 不传 → 跑全部有 element 的 category(常规首跑)
  *   - 传白名单 → 只跑这些 category(常用于「只重跑失败 route」)
+ *
+ * 部分失败容忍(HANDOFF §6.1):跑完后把仍失败的 categories 落到
+ * state.pass2_failed_categories,Asset Review 据此提示「该路无产物,请重跑」。
  */
 export async function POST(req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
@@ -56,8 +51,6 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
 
     const state = await getState(stateId)
     if (!state) return jsonResponse({ error: 'state not found' }, { status: 404 })
-    if (isStateLocked(stateId))
-      return jsonResponse({ error: 'state busy' }, { status: 409 })
 
     const page = await getPage(state.page_id)
     if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
@@ -87,11 +80,11 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
     }
 
     // 总 audit run
-    const auditRun = {
+    const auditRun: PipelineRun = {
       id: newId(),
       state_id: stateId,
-      pass: 'pass2' as const,
-      status: 'running' as const,
+      pass: 'pass2',
+      status: 'running',
       started_at: nowIso(),
       llm_request: {
         provider_id: '(image_gen)',
@@ -102,45 +95,51 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
       },
       llm_response: null,
     }
-    await createPipelineRun(auditRun)
-    await updateState(stateId, {
-      pipeline_status: 'pass2_running',
-      pass2_run_id: auditRun.id,
-    })
 
-    void (async () => {
-      try {
-        await withStateLock(stateId, async () => {
+    try {
+      await beginAuditJob({
+        stateId,
+        auditRun,
+        runningPatch: { pipeline_status: 'pass2_running', pass2_run_id: auditRun.id },
+        doneStatus: 'pass2_done',
+        failStatus: 'pass2_failed',
+        errorCode: 'PASS2_ERROR',
+        job: async () => {
+          // 锁内重读 elements:202 返回后用户仍可能编辑 elements(PUT 不走锁),
+          // 用请求时的快照会让 Pass 2 跑在 stale bbox 上
+          const freshElements = await getElementsForPage(state.page_id)
           const result = await runPass2MultiRoute({
             state,
             page,
             project,
-            elements,
+            elements: freshElements,
             ...(categoryFilter ? { categoryFilter } : {}),
           })
-          await updatePipelineRun(auditRun.id, {
-            status: 'completed',
-            completed_at: nowIso(),
-            parsed_result: {
-              successful_routes: result.successes,
-              failed_routes: result.failures,
-              total_static_count: result.totalStaticCount,
-            },
-          })
-        })
-        await updateState(stateId, { pipeline_status: 'pass2_done' })
-      } catch (err) {
-        if (err instanceof StateBusyError) return
-        const message = err instanceof Error ? err.message : String(err)
-        console.error(`[pass2 audit ${auditRun.id}]`, message)
-        await updatePipelineRun(auditRun.id, {
-          status: 'failed',
-          completed_at: nowIso(),
-          error: { code: 'PASS2_ERROR', message, retryable: true },
-        }).catch(() => {})
-        await updateState(stateId, { pipeline_status: 'pass2_failed' }).catch(() => {})
-      }
-    })()
+
+          // 失败信号落 state:部分重跑时,本次重跑的 category 先从旧失败名单
+          // 移除,再并入本次新失败;全量跑直接以本次结果为准
+          const fresh = await getState(stateId)
+          const prevFailed = fresh?.pass2_failed_categories ?? []
+          const base = categoryFilter
+            ? prevFailed.filter((c) => !categoryFilter.includes(c))
+            : []
+          const failedCats = [
+            ...new Set([...base, ...result.failures.map((f) => f.category)]),
+          ]
+          await updateState(stateId, { pass2_failed_categories: failedCats })
+
+          return {
+            successful_routes: result.successes,
+            failed_routes: result.failures,
+            total_static_count: result.totalStaticCount,
+          }
+        },
+      })
+    } catch (err) {
+      if (err instanceof StateBusyError)
+        return jsonResponse({ error: 'state busy' }, { status: 409 })
+      throw err
+    }
 
     return jsonResponse({ run_id: auditRun.id }, { status: 202 })
   } catch (err) {

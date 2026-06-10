@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
     const cdn = await getActiveProvider('cdn')
     const cdnBase = cdn?.public_url_prefix ?? undefined
 
-    await exportPageToFolder({
+    const summary = await exportPageToFolder({
       outputDir,
       projectId: page.project_id,
       pageId,
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
     return jsonResponse({
       ok: true,
       path: outputDir,
+      missing_assets: summary.missing_assets,
+      orphan_assets_skipped: summary.orphan_assets_skipped,
     })
   } catch (err) {
     return errorToResponse(err)

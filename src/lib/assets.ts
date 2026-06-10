@@ -35,3 +35,23 @@ export async function listAssetsForPage(pageId: string): Promise<Asset[]> {
   )
   return all.filter((a): a is Asset => a !== null && a.page_id === pageId)
 }
+
+/**
+ * 删除 page 下所有 element_id 不在 keep 集合里的 Asset(连带 assets-bin PNG)。
+ * Pass 1 整批替换 elements 后调用,防止旧 element 的 asset 变成孤儿污染 export。
+ * 返回删除数。
+ */
+export async function deleteAssetsNotIn(
+  pageId: string,
+  keepElementIds: ReadonlySet<string>,
+): Promise<number> {
+  const all = await listAssetsForPage(pageId)
+  let removed = 0
+  for (const a of all) {
+    if (keepElementIds.has(a.element_id)) continue
+    await unlinkIfExists(paths.assetBin(a.id))
+    await deleteAsset(a.id)
+    removed++
+  }
+  return removed
+}
