@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { promises as fs } from 'node:fs'
 import { getPage } from '@/lib/projects'
+import { getElementsForPage } from '@/lib/elements'
 import { listAssetsForPage, saveAsset } from '@/lib/assets'
 import { uploadAssetToCdn } from '@/lib/cdn-client'
 import { getActiveProvider } from '@/lib/config'
@@ -27,8 +28,11 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
     }
 
     const assets = await listAssetsForPage(pageId)
+    const elements = await getElementsForPage(pageId)
+    const elementName = new Map(elements.map((e) => [e.id, e.name]))
     let uploaded = 0
-    const failed: string[] = []
+    // 失败明细带 element 名 + 错误原因(只 toast 数量没法定位是哪个素材挂了)
+    const failed: Array<{ asset_id: string; element_name: string; error: string }> = []
     for (const a of assets) {
       try {
         const buf = await fs.readFile(paths.assetBin(a.id))
@@ -44,7 +48,11 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
         uploaded++
       } catch (err) {
         console.warn(`[upload-all-assets] ${a.id} failed:`, err)
-        failed.push(a.id)
+        failed.push({
+          asset_id: a.id,
+          element_name: elementName.get(a.element_id) ?? a.element_id.slice(0, 6),
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
     return jsonResponse({ uploaded, failed })

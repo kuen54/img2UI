@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Container from '@mui/material/Container'
 import Box from '@mui/material/Box'
@@ -81,6 +81,9 @@ export function ElementReviewClient({
   const [visibleCategories, setVisibleCategories] = useState<Set<VisualCategory>>(
     () => new Set(ALL_VISUAL_CATEGORIES),
   )
+  // 「仅未确认」筛选:收尾阶段只看还没过的元素
+  const [onlyUnreviewed, setOnlyUnreviewed] = useState(false)
+  const router = useRouter()
 
   // 深链:?selected=<element_id> → 加载完元素后自动选中
   const searchParams = useSearchParams()
@@ -159,7 +162,8 @@ export function ElementReviewClient({
     setDirty(true)
   }, [])
 
-  const save = useCallback(async (): Promise<void> => {
+  // 返回是否保存成功(onProceed 据此决定要不要继续)
+  const save = useCallback(async (): Promise<boolean> => {
     setSaving(true)
     try {
       const res = await fetch(`/api/pages/${pageId}/elements`, {
@@ -170,12 +174,24 @@ export function ElementReviewClient({
       if (!res.ok) throw new Error(await res.text())
       toast.success('已保存')
       setDirty(false)
+      return true
     } catch (err) {
       toast.error(`保存失败:${err instanceof Error ? err.message : String(err)}`)
+      return false
     } finally {
       setSaving(false)
     }
   }, [pageId, elements])
+
+  // dirty 离开防护:刷新 / 关 tab / window.location 离开时弹原生确认
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent): void => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
 
   const allReviewed = elements.length > 0 && elements.every((e) => e.reviewed)
 
@@ -204,7 +220,10 @@ export function ElementReviewClient({
   const visibleElements = useMemo(
     () => {
       const filtered = elements.filter(
-        (e) => visibleTypes.has(e.type) && visibleCategories.has(e.visual_category),
+        (e) =>
+          visibleTypes.has(e.type) &&
+          visibleCategories.has(e.visual_category) &&
+          (!onlyUnreviewed || !e.reviewed),
       )
       // 排序:category 顺序 → bbox y(上→下) → bbox x(左→右)
       const catIdx = (c: VisualCategory): number => ALL_VISUAL_CATEGORIES.indexOf(c)
@@ -216,7 +235,7 @@ export function ElementReviewClient({
         return a.bbox[0] - b.bbox[0]
       })
     },
-    [elements, visibleTypes, visibleCategories],
+    [elements, visibleTypes, visibleCategories, onlyUnreviewed],
   )
   const toggleType = useCallback((t: 'static' | 'code'): void => {
     setVisibleTypes((prev) => {
@@ -234,6 +253,94 @@ export function ElementReviewClient({
       return next
     })
   }, [])
+
+  const scrollRowIntoView = useCallback((id: string): void => {
+    // 等 React 渲染完(筛选可能让行刚出现)再滚
+    setTimeout(() => {
+      const row = document.querySelector(`[data-element-id="${id}"]`) as HTMLElement | null
+      row?.scrollIntoView({ block: 'nearest' })
+    }, 0)
+  }, [])
+
+  // 键盘快捷键:↑/↓ 切元素、Enter 确认并跳下一个未确认、⌘/Ctrl+S 保存、Delete 删除。
+  // review 是高频流水操作(几十个元素逐个过),不该每个都要鼠标点 3 次。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const t = e.target as HTMLElement | null
+      // 输入控件 / 下拉里不抢键(改名、描述、category select)
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.isContentEditable ||
+          t.closest('[role="combobox"], [role="listbox"], [role="option"]'))
+      )
+        return
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        if (dirty && !saving) void save()
+        return
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (visibleElements.length === 0) return
+        e.preventDefault()
+        const idx = visibleElements.findIndex((el) => el.id === selectedId)
+        const next =
+          e.key === 'ArrowDown'
+            ? visibleElements[Math.min(idx + 1, visibleElements.length - 1)]!
+            : visibleElements[Math.max(idx - 1, 0)]!
+        setSelectedId(next.id)
+        scrollRowIntoView(next.id)
+        return
+      }
+      if (e.key === 'Enter') {
+        // 普通按钮 / chip(保存、筛选等)让它自然响应 Enter,不抢
+        if (
+          t &&
+          (t.tagName === 'BUTTON' || t.getAttribute('role') === 'button') &&
+          !t.closest('[data-element-id]')
+        )
+          return
+        if (!selectedId) return
+        const cur = elements.find((el) => el.id === selectedId)
+        if (!cur) return
+        e.preventDefault()
+        const confirming = !cur.reviewed
+        updateElement(cur.id, { reviewed: confirming })
+        if (confirming) {
+          // 自动跳下一个未确认(从当前往后找,wrap 回开头)
+          const idx = visibleElements.findIndex((el) => el.id === cur.id)
+          const ordered = [
+            ...visibleElements.slice(idx + 1),
+            ...visibleElements.slice(0, Math.max(idx, 0)),
+          ]
+          const next = ordered.find((el) => !el.reviewed && el.id !== cur.id)
+          if (next) {
+            setSelectedId(next.id)
+            scrollRowIntoView(next.id)
+          }
+        }
+        return
+      }
+      if (e.key === 'Delete' && selectedId) {
+        removeElement(selectedId)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [
+    visibleElements,
+    selectedId,
+    elements,
+    dirty,
+    saving,
+    save,
+    updateElement,
+    removeElement,
+    scrollRowIntoView,
+  ])
+
   const state = page?.states[0]
   const breadcrumbs = useMemo(
     () =>
@@ -251,6 +358,7 @@ export function ElementReviewClient({
   return (
     <AppShell
       breadcrumbs={breadcrumbs}
+      onNavigate={() => !dirty || window.confirm('有未保存的修改,确定离开?')}
       rightAction={
         <Button
           variant="contained"
@@ -289,20 +397,35 @@ export function ElementReviewClient({
               filteredTiny={filteredTiny}
               onRestore={restoreFromTiny}
               allReviewed={allReviewed}
+              onlyUnreviewed={onlyUnreviewed}
+              onToggleOnlyUnreviewed={() => setOnlyUnreviewed((v) => !v)}
               onProceed={async () => {
-                if (dirty) await save()
+                // P3-#14:保存失败 / 后端拒绝时不跳转,留在页面处理
+                if (dirty) {
+                  const ok = await save()
+                  if (!ok) return
+                }
                 if (!state) return
-                // P1-2 修复:点击 = 真触发 Pass 2,然后跳页面看进度
                 try {
                   const res = await fetch(`/api/states/${state.id}/pass2`, {
                     method: 'POST',
                   })
-                  if (!res.ok) throw new Error(await res.text())
+                  if (!res.ok) {
+                    const data = (await res.json().catch(() => null)) as {
+                      error?: string
+                      unreviewed_count?: number
+                    } | null
+                    const msg = data?.unreviewed_count
+                      ? `还有 ${data.unreviewed_count} 个元素未确认`
+                      : (data?.error ?? `HTTP ${res.status}`)
+                    toast.error(`Pass 2 启动失败:${msg}`)
+                    return
+                  }
                   toast.info('Pass 2 启动…回到页面看进度')
+                  router.push(`/projects/${projectId}/pages/${pageId}`)
                 } catch (err) {
                   toast.error(`Pass 2 启动失败:${err instanceof Error ? err.message : String(err)}`)
                 }
-                window.location.href = `/projects/${projectId}/pages/${pageId}`
               }}
             />
             {/* 中:Canvas + bbox 叠加 */}
@@ -343,6 +466,8 @@ function ElementSidebar({
   filteredTiny,
   onRestore,
   allReviewed,
+  onlyUnreviewed,
+  onToggleOnlyUnreviewed,
   onProceed,
 }: {
   elements: LayoutElement[]
@@ -359,12 +484,17 @@ function ElementSidebar({
   filteredTiny: LayoutElement[]
   onRestore: (el: LayoutElement) => void
   allReviewed: boolean
+  onlyUnreviewed: boolean
+  onToggleOnlyUnreviewed: () => void
   onProceed: () => void
 }): React.ReactElement {
   const [tinyOpen, setTinyOpen] = useState(false)
   const reviewedCount = elements.filter((e) => e.reviewed).length
+  const unreviewedCount = elements.length - reviewedCount
   const filteringActive =
-    visibleTypes.size < 2 || visibleCategories.size < ALL_VISUAL_CATEGORIES.length
+    visibleTypes.size < 2 ||
+    visibleCategories.size < ALL_VISUAL_CATEGORIES.length ||
+    onlyUnreviewed
 
   return (
     <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -407,6 +537,13 @@ function ElementSidebar({
               />
             )
           })}
+          <Chip
+            size="small"
+            label={`仅未确认 ${unreviewedCount}`}
+            onClick={onToggleOnlyUnreviewed}
+            variant={onlyUnreviewed ? 'filled' : 'outlined'}
+            color={onlyUnreviewed ? 'warning' : 'default'}
+          />
         </Stack>
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           {ALL_VISUAL_CATEGORIES.map((c) => {
@@ -553,6 +690,9 @@ function ElementSidebar({
           >
             返回页面 · 运行 Pass 2
           </Button>
+          <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center' }}>
+            ↑↓ 切换 · Enter 确认+下一个 · ⌘S 保存 · Del 删除
+          </Typography>
         </Stack>
       </Box>
     </Box>

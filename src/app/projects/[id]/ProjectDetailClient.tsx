@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import Container from '@mui/material/Container'
@@ -42,6 +43,7 @@ interface PageListItem extends Page {
 }
 
 export function ProjectDetailClient({ projectId }: { projectId: string }): React.ReactElement {
+  const router = useRouter()
   const [project, setProject] = useState<Project | null>(null)
   const [pages, setPages] = useState<PageListItem[] | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -68,7 +70,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
       const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(await res.text())
       toast.success('项目已删除')
-      window.location.href = '/'
+      router.push('/')
     } catch (err) {
       toast.error(`删除失败:${err instanceof Error ? err.message : String(err)}`)
     }
@@ -250,7 +252,10 @@ function PageCard({
 
   const metaParts: string[] = []
   if (p.stats.total_elements > 0) {
-    metaParts.push(`${p.stats.total_elements} 元素`)
+    metaParts.push(`${p.stats.reviewed_elements}/${p.stats.total_elements} 元素已确认`)
+  }
+  if (p.stats.static_elements > 0) {
+    metaParts.push(`${p.stats.total_assets}/${p.stats.static_elements} 已指派`)
   }
   if (p.stats.total_assets > 0) {
     metaParts.push(`${p.stats.uploaded_assets}/${p.stats.total_assets} 资产已上传`)

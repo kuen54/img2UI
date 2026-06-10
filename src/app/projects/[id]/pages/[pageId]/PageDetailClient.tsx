@@ -155,7 +155,12 @@ function PageStatsStrip({
   hasState: boolean
 }): React.ReactElement {
   const parts: string[] = [`${stats.state_count} 状态`]
-  if (stats.total_elements > 0) parts.push(`${stats.total_elements} 元素`)
+  if (stats.total_elements > 0) {
+    parts.push(`${stats.reviewed_elements}/${stats.total_elements} 元素已确认`)
+  }
+  if (stats.static_elements > 0) {
+    parts.push(`${stats.total_assets}/${stats.static_elements} 已指派`)
+  }
   if (stats.total_assets > 0) {
     parts.push(`${stats.uploaded_assets}/${stats.total_assets} 资产已上传`)
   }
@@ -1064,10 +1069,22 @@ function CdnExportActions({
     try {
       const res = await fetch(`/api/pages/${pageId}/upload-all-assets`, { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
-      const data = (await res.json()) as { uploaded: number; failed: string[] }
-      toast.success(
-        `已上传 ${data.uploaded} 个 asset${data.failed.length > 0 ? `,${data.failed.length} 个失败` : ''}`,
-      )
+      const data = (await res.json()) as {
+        uploaded: number
+        failed: Array<{ asset_id: string; element_name: string; error: string }>
+      }
+      if (data.failed.length > 0) {
+        // 失败明细常驻展示(只报数量没法定位哪个素材挂了)
+        toast.error(
+          `${data.failed.length} 个 asset 上传失败:${data.failed
+            .map((f) => `${f.element_name}(${f.error})`)
+            .join('; ')}`,
+          { duration: 10000 },
+        )
+      }
+      if (data.uploaded > 0) {
+        toast.success(`已上传 ${data.uploaded} 个 asset`)
+      }
     } catch (err) {
       toast.error(`上传失败:${err instanceof Error ? err.message : String(err)}`)
     } finally {

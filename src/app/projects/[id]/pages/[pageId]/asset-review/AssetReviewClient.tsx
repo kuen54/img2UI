@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Container from '@mui/material/Container'
 import Box from '@mui/material/Box'
@@ -65,6 +66,7 @@ export function AssetReviewClient({
   projectId: string
   pageId: string
 }): React.ReactElement {
+  const router = useRouter()
   const [project, setProject] = useState<Project | null>(null)
   const [page, setPage] = useState<PageWithStates | null>(null)
   const [elements, setElements] = useState<LayoutElement[]>([])
@@ -98,25 +100,19 @@ export function AssetReviewClient({
 
       const state = (pg as PageWithStates | null)?.states[0]
       if (state) {
-        const [slicesRes] = await Promise.all([
+        // slices + 整页 assets 一次拉(此前每个 element 单独 fetch asset,N+1)
+        const [slicesRes, assetsRes] = await Promise.all([
           fetch(`/api/states/${state.id}/slices?page_id=${pageId}`).then(
             (r): Promise<{ slices: SliceWithAssign[] }> => r.json(),
           ),
+          fetch(`/api/pages/${pageId}/assets`).then(
+            (r): Promise<{ assets: Asset[] }> => r.json(),
+          ),
         ])
         setSlices(slicesRes.slices ?? [])
-        // Load assets for each static element
-        const assetEntries = await Promise.all(
-          elArr
-            .filter((e) => e.type === 'static')
-            .map(async (e) => {
-              const r = await fetch(`/api/elements/${e.id}/asset`)
-              const data = (await r.json()) as { asset: Asset | null }
-              return [e.id, data.asset] as const
-            }),
-        )
         const map = new Map<string, Asset>()
-        for (const [id, a] of assetEntries) {
-          if (a) map.set(id, a)
+        for (const a of assetsRes.assets ?? []) {
+          map.set(a.element_id, a)
         }
         setAssets(map)
       }
@@ -134,6 +130,13 @@ export function AssetReviewClient({
   const state = page?.states[0]
   const failedCats = state?.pass2_failed_categories ?? []
 
+  const scrollElementRowIntoView = useCallback((id: string): void => {
+    setTimeout(() => {
+      const row = document.querySelector(`[data-element-id="${id}"]`) as HTMLElement | null
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }, 0)
+  }, [])
+
   const handleAssign = useCallback(
     async (elementId: string, payload: DragPayload): Promise<void> => {
       try {
@@ -143,15 +146,48 @@ export function AssetReviewClient({
           body: JSON.stringify({ ...payload, page_id: pageId }),
         })
         if (!res.ok) throw new Error(await res.text())
+        const { asset } = (await res.json()) as { asset: Asset }
         toast.success('已指派')
         // 指派完成后清掉「已选切片」状态(无论指派来源是 drag 还是 click)
         setPickedSlice(null)
-        void reload()
+        // 局部更新代替全量 reload(此前每次指派要重拉整页 + N 个 asset 请求)
+        setAssets((prev) => {
+          const next = new Map(prev)
+          next.set(elementId, asset)
+          return next
+        })
+        setSlices((prev) =>
+          prev.map((s) => {
+            const isTarget =
+              s.state_id === payload.state_id &&
+              s.category === payload.category &&
+              s.idx === payload.idx
+            const had = s.assigned_to.includes(elementId)
+            if (isTarget && !had) return { ...s, assigned_to: [...s.assigned_to, elementId] }
+            // 该 element 之前指派的旧切片释放标记
+            if (!isTarget && had)
+              return { ...s, assigned_to: s.assigned_to.filter((id) => id !== elementId) }
+            return s
+          }),
+        )
+        // 自动推进:选中下一个未指派元素并滚过去(批量指派时省一次次找)
+        const assignedIds = new Set(assets.keys())
+        assignedIds.add(elementId)
+        const start = elements.findIndex((e) => e.id === elementId)
+        const ordered = [
+          ...elements.slice(start + 1),
+          ...elements.slice(0, Math.max(start, 0)),
+        ]
+        const nextEl = ordered.find((e) => !assignedIds.has(e.id))
+        if (nextEl) {
+          setSelectedElementId(nextEl.id)
+          scrollElementRowIntoView(nextEl.id)
+        }
       } catch (err) {
         toast.error(`指派失败:${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [pageId, reload],
+    [pageId, elements, assets, scrollElementRowIntoView],
   )
 
   // togglePick:再次点同一个 slice 取消选中,点不同的就替换
@@ -166,14 +202,42 @@ export function AssetReviewClient({
     )
   }, [])
 
-  // Esc 取消已选切片
+  // 键盘:Esc 取消已选切片;↑/↓ 在元素行间移动;pickedSlice 态下 Enter 指派给选中元素
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setPickedSlice(null)
+      if (e.key === 'Escape') {
+        setPickedSlice(null)
+        return
+      }
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (elements.length === 0) return
+        e.preventDefault()
+        const idx = elements.findIndex((el) => el.id === selectedElementId)
+        const next =
+          e.key === 'ArrowDown'
+            ? elements[Math.min(idx + 1, elements.length - 1)]!
+            : elements[Math.max(idx - 1, 0)]!
+        setSelectedElementId(next.id)
+        scrollElementRowIntoView(next.id)
+        return
+      }
+      if (e.key === 'Enter' && pickedSlice && selectedElementId) {
+        // 普通按钮 / chip(重抠等)让它自然响应 Enter,不抢
+        if (
+          t &&
+          (t.tagName === 'BUTTON' || t.getAttribute('role') === 'button') &&
+          !t.closest('[data-element-id]')
+        )
+          return
+        e.preventDefault()
+        void handleAssign(selectedElementId, pickedSlice)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [elements, selectedElementId, pickedSlice, handleAssign, scrollElementRowIntoView])
 
   const handleUnassign = useCallback(
     async (elementId: string): Promise<void> => {
@@ -181,13 +245,73 @@ export function AssetReviewClient({
         const res = await fetch(`/api/elements/${elementId}/asset`, { method: 'DELETE' })
         if (!res.ok && res.status !== 204) throw new Error(await res.text())
         toast.success('已撤销')
-        void reload()
+        // 局部更新:删 asset + 释放切片标记
+        setAssets((prev) => {
+          const next = new Map(prev)
+          next.delete(elementId)
+          return next
+        })
+        setSlices((prev) =>
+          prev.map((s) =>
+            s.assigned_to.includes(elementId)
+              ? { ...s, assigned_to: s.assigned_to.filter((id) => id !== elementId) }
+              : s,
+          ),
+        )
       } catch (err) {
         toast.error(`撤销失败:${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [reload],
+    [],
   )
+
+  // 「顺序自动指派」:某 category 未指派元素数 == 该 category 空闲切片数时,
+  // 两边都按视觉顺序排,大概率一一对应 → 给一键按位指派;指派完仍可逐个调整
+  const autoAssignPairs = useMemo(() => {
+    const pairs: Array<{ elementId: string; payload: DragPayload }> = []
+    for (const cat of ALL_VISUAL_CATEGORIES) {
+      const els = elements
+        .filter((e) => e.visual_category === cat && !assets.has(e.id))
+        .sort((a, b) => a.bbox[1] - b.bbox[1] || a.bbox[0] - b.bbox[0])
+      if (els.length === 0) continue
+      const free = slices
+        .filter((s) => s.category === cat && s.assigned_to.length === 0)
+        .sort((a, b) => a.idx - b.idx)
+      if (free.length !== els.length) continue
+      for (let i = 0; i < els.length; i++) {
+        pairs.push({
+          elementId: els[i]!.id,
+          payload: { state_id: free[i]!.state_id, category: cat, idx: free[i]!.idx },
+        })
+      }
+    }
+    return pairs
+  }, [elements, assets, slices])
+
+  const [autoAssigning, setAutoAssigning] = useState(false)
+  const autoAssignAll = useCallback(async (): Promise<void> => {
+    setAutoAssigning(true)
+    try {
+      let okCount = 0
+      const failed: string[] = []
+      for (const p of autoAssignPairs) {
+        const res = await fetch(`/api/elements/${p.elementId}/assign-slice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...p.payload, page_id: pageId }),
+        })
+        if (res.ok) okCount++
+        else failed.push(p.elementId)
+      }
+      if (failed.length > 0) {
+        toast.error(`顺序指派:${failed.length} 个失败`)
+      }
+      if (okCount > 0) toast.success(`顺序指派完成 ${okCount} 个,请逐个检查`)
+      void reload()
+    } finally {
+      setAutoAssigning(false)
+    }
+  }, [autoAssignPairs, pageId, reload])
 
   const handleReExtract = useCallback(
     async (elementId: string): Promise<void> => {
@@ -275,13 +399,19 @@ export function AssetReviewClient({
       if (!res.ok) throw new Error(await res.text())
       const data = (await res.json()) as {
         refreshed: VisualCategory[]
-        failed: VisualCategory[]
+        failed: Array<{ category: VisualCategory; error: string }>
       }
       if (data.refreshed.length > 0) {
-        toast.success(`已重抠 ${data.refreshed.join(', ')}`)
+        toast.success(`已重抠 ${data.refreshed.map((c) => VISUAL_CATEGORY_CN[c]).join(', ')}`)
       }
       if (data.failed.length > 0) {
-        toast.warning(`部分失败:${data.failed.join(', ')}`)
+        // 带 batch 级错误明细,不只报 category 名
+        toast.warning(
+          `部分失败:${data.failed
+            .map((f) => `${VISUAL_CATEGORY_CN[f.category]}(${f.error})`)
+            .join('; ')}`,
+          { duration: 10000 },
+        )
       }
       void reload()
     } catch (err) {
@@ -379,8 +509,10 @@ export function AssetReviewClient({
               onUnassign={handleUnassign}
               onReExtract={handleReExtract}
               allAssigned={allAssigned}
-              projectId={projectId}
-              pageId={pageId}
+              autoAssignCount={autoAssignPairs.length}
+              autoAssigning={autoAssigning}
+              onAutoAssign={() => void autoAssignAll()}
+              onGoBack={() => router.push(`/projects/${projectId}/pages/${pageId}`)}
             />
           </Stack>
           </>
@@ -862,8 +994,10 @@ function ElementList({
   onUnassign,
   onReExtract,
   allAssigned,
-  projectId,
-  pageId,
+  autoAssignCount,
+  autoAssigning,
+  onAutoAssign,
+  onGoBack,
 }: {
   elements: LayoutElement[]
   assets: Map<string, Asset>
@@ -874,8 +1008,10 @@ function ElementList({
   onUnassign: (elementId: string) => Promise<void>
   onReExtract: (elementId: string) => Promise<void>
   allAssigned: boolean
-  projectId: string
-  pageId: string
+  autoAssignCount: number
+  autoAssigning: boolean
+  onAutoAssign: () => void
+  onGoBack: () => void
 }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -912,7 +1048,18 @@ function ElementList({
         <Typography variant="h5">
           元素列表 ({elements.length} 静态)
         </Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {autoAssignCount > 0 && (
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={autoAssigning}
+              onClick={onAutoAssign}
+              title="未指派元素数与空闲切片数一一对应,按视觉顺序自动配对"
+            >
+              {autoAssigning ? '指派中…' : `顺序自动指派 ${autoAssignCount}`}
+            </Button>
+          )}
           <Typography variant="caption" color="text.secondary">
             {Array.from(assets.values()).length} / {elements.length} 已指派
           </Typography>
@@ -939,7 +1086,7 @@ function ElementList({
           <DragIndicatorIcon sx={{ fontSize: 16 }} />
           <Box sx={{ flexGrow: 1 }}>
             已选切片 <code>#{pickedSlice.idx}</code>(
-            {VISUAL_CATEGORY_CN[pickedSlice.category]}) · 点任意元素行指派
+            {VISUAL_CATEGORY_CN[pickedSlice.category]}) · 点元素行或 ↑↓+Enter 指派
           </Box>
           <Typography variant="caption" color="text.secondary">
             Esc 取消
@@ -974,14 +1121,7 @@ function ElementList({
           <Typography variant="body2" sx={{ mb: 1 }}>
             全部已指派,可以进入下一步
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            size="small"
-            onClick={() => {
-              window.location.href = `/projects/${projectId}/pages/${pageId}`
-            }}
-          >
+          <Button variant="contained" color="primary" size="small" onClick={onGoBack}>
             返回页面 · 上传 CDN / 导出
           </Button>
         </Box>
@@ -1049,6 +1189,7 @@ function ElementRow({
   return (
     <Card
       variant="outlined"
+      data-element-id={element.id}
       onClick={handleRowClick}
       onDragOver={(e) => {
         e.preventDefault()

@@ -85,7 +85,8 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
         )
       }
 
-      return jsonResponse({ refreshed, failed: failed.map((f) => f.category) })
+      // failed 带 batch 级错误明细(前端展示具体原因,不只是 category 名)
+      return jsonResponse({ refreshed, failed })
     })
   } catch (err) {
     if (err instanceof StateBusyError) {

@@ -20,6 +20,10 @@ export interface PageStats {
   /** canonical state 的 pipeline_status;null = 还没上传任何 state */
   pipeline_status: StatePipelineStatus | null
   total_elements: number
+  /** 已人工确认(reviewed)的元素数 */
+  reviewed_elements: number
+  /** type=static 元素数(指派进度的分母;Asset 只在指派时产生,total_assets 即已指派数) */
+  static_elements: number
   total_assets: number
   uploaded_assets: number
   /** 该页面所有 state 下最近一次 PipelineRun(按 completed_at, fallback started_at) */
@@ -80,6 +84,8 @@ async function computePageStats(
     state_count: states.length,
     pipeline_status: canonicalState?.pipeline_status ?? null,
     total_elements: elements.length,
+    reviewed_elements: elements.filter((e) => e.reviewed).length,
+    static_elements: elements.filter((e) => e.type === 'static').length,
     total_assets: assets.length,
     uploaded_assets: assets.filter((a) => a.status === 'uploaded').length,
     ...(last_run ? { last_run } : {}),

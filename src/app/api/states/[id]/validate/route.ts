@@ -92,6 +92,19 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
           let totalParsed = 0
           const validationErrors: string[] = []
           for (const { category, elements: catEls, batches } of perCategory) {
+            // entity_name 唯一化:HANDOFF §6.4 模板只回传 entity_name(逐字契约,
+            // 不能加 element_id 字段),重名元素用字符串反查会全部错配到第一个。
+            // 发给 LLM 前给重名加 " (n)" 后缀,回填按唯一名精确映射回 element。
+            const nameCount = new Map<string, number>()
+            const byUniqueName = new Map<string, (typeof catEls)[number]>()
+            const promptEls = catEls.map((el) => {
+              const n = (nameCount.get(el.name) ?? 0) + 1
+              nameCount.set(el.name, n)
+              const unique = n === 1 ? el.name : `${el.name} (${n})`
+              byUniqueName.set(unique, el)
+              return n === 1 ? el : { ...el, name: unique }
+            })
+
             // 每个 batch 单独 validate(共享同一组 element 列表 — LLM 看每张
             // 绿幕图的元素并校验)
             for (const b of batches) {
@@ -102,7 +115,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
                 {
                   role: 'user',
                   content: [
-                    { type: 'text', text: renderValidateUserText({ elements: catEls }) },
+                    { type: 'text', text: renderValidateUserText({ elements: promptEls }) },
                     { type: 'image_url', image_url: { url: dataUrl } },
                   ],
                 },
@@ -117,9 +130,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
                 const parsed = parseValidateResponse(result.content)
                 totalParsed += parsed.length
 
-                // match by entity_name back to element → asset
+                // 按唯一化后的 entity_name 精确映射回 element → asset
                 for (const ve of parsed) {
-                  const el = catEls.find((e) => e.name === ve.entity_name)
+                  const el = byUniqueName.get(ve.entity_name)
                   if (!el) continue
                   const asset = assetByElement.get(el.id)
                   if (!asset) continue

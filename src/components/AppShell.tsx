@@ -19,16 +19,33 @@ export function AppShell({
   breadcrumbs,
   children,
   rightAction,
+  onNavigate,
 }: {
   breadcrumbs?: BreadcrumbItem[]
   children: React.ReactNode
   rightAction?: React.ReactNode
+  /**
+   * 导航守卫:返回 false 阻止本次面包屑 / 首页 / 设置链接跳转。
+   * 用于 dirty 页面(Element Review 等)弹「未保存」确认。
+   * 注:Link 是客户端导航,beforeunload 拦不住,必须在 click 层拦。
+   */
+  onNavigate?: () => boolean
 }): React.ReactElement {
+  const guardClick = (e: React.MouseEvent): void => {
+    if (onNavigate && !onNavigate()) e.preventDefault()
+  }
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar position="sticky">
         <Toolbar>
-          <IconButton component={Link} href="/" edge="start" sx={{ mr: 2 }} aria-label="回首页">
+          <IconButton
+            component={Link}
+            href="/"
+            edge="start"
+            sx={{ mr: 2 }}
+            aria-label="回首页"
+            onClick={guardClick}
+          >
             <HomeIcon />
           </IconButton>
           {breadcrumbs && breadcrumbs.length > 0 ? (
@@ -51,6 +68,7 @@ export function AppShell({
                     key={i}
                     component={Link}
                     href={b.href}
+                    onClick={guardClick}
                     sx={{
                       color: 'text.secondary',
                       textDecoration: 'none',
@@ -68,7 +86,13 @@ export function AppShell({
             </Typography>
           )}
           {rightAction}
-          <IconButton component={Link} href="/settings/providers" edge="end" aria-label="设置">
+          <IconButton
+            component={Link}
+            href="/settings/providers"
+            edge="end"
+            aria-label="设置"
+            onClick={guardClick}
+          >
             <SettingsIcon />
           </IconButton>
         </Toolbar>
