@@ -26,13 +26,14 @@ export function AppShell({
   rightAction?: React.ReactNode
   /**
    * 导航守卫:返回 false 阻止本次面包屑 / 首页 / 设置链接跳转。
-   * 用于 dirty 页面(Element Review 等)弹「未保存」确认。
+   * 用于 dirty 页面(Element Review 等)弹「未保存」确认;href 是本次目标,
+   * 调用方可记下它,在自己的确认 Dialog 里确认后手动 router.push。
    * 注:Link 是客户端导航,beforeunload 拦不住,必须在 click 层拦。
    */
-  onNavigate?: () => boolean
+  onNavigate?: (href: string) => boolean
 }): React.ReactElement {
-  const guardClick = (e: React.MouseEvent): void => {
-    if (onNavigate && !onNavigate()) e.preventDefault()
+  const guardClick = (href: string) => (e: React.MouseEvent): void => {
+    if (onNavigate && !onNavigate(href)) e.preventDefault()
   }
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -44,7 +45,7 @@ export function AppShell({
             edge="start"
             sx={{ mr: 2 }}
             aria-label="回首页"
-            onClick={guardClick}
+            onClick={guardClick('/')}
           >
             <HomeIcon />
           </IconButton>
@@ -68,7 +69,7 @@ export function AppShell({
                     key={i}
                     component={Link}
                     href={b.href}
-                    onClick={guardClick}
+                    onClick={guardClick(b.href)}
                     sx={{
                       color: 'text.secondary',
                       textDecoration: 'none',
@@ -91,7 +92,7 @@ export function AppShell({
             href="/settings/providers"
             edge="end"
             aria-label="设置"
-            onClick={guardClick}
+            onClick={guardClick('/settings/providers')}
           >
             <SettingsIcon />
           </IconButton>

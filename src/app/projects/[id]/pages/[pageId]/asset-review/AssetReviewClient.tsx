@@ -29,9 +29,15 @@ import HealingIcon from '@mui/icons-material/Healing'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import AddIcon from '@mui/icons-material/Add'
+import Tooltip from '@mui/material/Tooltip'
+import PhotoLibraryOutlinedIcon from '@mui/icons-material/PhotoLibraryOutlined'
+import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
 import { alpha } from '@mui/material/styles'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { EmptyState } from '@/components/EmptyState'
+import { KbdHintRow } from '@/components/KbdHint'
+import { successFlash, MD3_STANDARD_EASING } from '@/components/flash'
 import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
 import type {
   Asset,
@@ -83,6 +89,11 @@ export function AssetReviewClient({
     idx: number
   } | null>(null)
   const [matting, setMatting] = useState(false)
+  // 指派成功的绿闪微反馈(支持批量:顺序自动指派后整批闪)
+  const [flash, setFlash] = useState<{ ids: string[]; key: number }>({ ids: [], key: 0 })
+  const flashRows = useCallback((ids: string[]): void => {
+    setFlash((f) => ({ ids, key: f.key + 1 }))
+  }, [])
 
   const reload = useCallback(async (): Promise<void> => {
     try {
@@ -148,6 +159,7 @@ export function AssetReviewClient({
         if (!res.ok) throw new Error(await res.text())
         const { asset } = (await res.json()) as { asset: Asset }
         toast.success('已指派')
+        flashRows([elementId])
         // 指派完成后清掉「已选切片」状态(无论指派来源是 drag 还是 click)
         setPickedSlice(null)
         // 局部更新代替全量 reload(此前每次指派要重拉整页 + N 个 asset 请求)
@@ -187,7 +199,7 @@ export function AssetReviewClient({
         toast.error(`指派失败:${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [pageId, elements, assets, scrollElementRowIntoView],
+    [pageId, elements, assets, scrollElementRowIntoView, flashRows],
   )
 
   // togglePick:再次点同一个 slice 取消选中,点不同的就替换
@@ -288,11 +300,21 @@ export function AssetReviewClient({
     return pairs
   }, [elements, assets, slices])
 
+  // 自动指派的配对预览(按钮 tooltip 用,执行前就能看到谁配谁)
+  const autoAssignPreview = useMemo(
+    () =>
+      autoAssignPairs.map((p) => {
+        const el = elements.find((e) => e.id === p.elementId)
+        return `${el?.name ?? p.elementId} ← ${VISUAL_CATEGORY_CN[p.payload.category]} #${p.payload.idx}`
+      }),
+    [autoAssignPairs, elements],
+  )
+
   const [autoAssigning, setAutoAssigning] = useState(false)
   const autoAssignAll = useCallback(async (): Promise<void> => {
     setAutoAssigning(true)
     try {
-      let okCount = 0
+      const okIds: string[] = []
       const failed: string[] = []
       for (const p of autoAssignPairs) {
         const res = await fetch(`/api/elements/${p.elementId}/assign-slice`, {
@@ -300,18 +322,21 @@ export function AssetReviewClient({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...p.payload, page_id: pageId }),
         })
-        if (res.ok) okCount++
+        if (res.ok) okIds.push(p.elementId)
         else failed.push(p.elementId)
       }
       if (failed.length > 0) {
         toast.error(`顺序指派:${failed.length} 个失败`)
       }
-      if (okCount > 0) toast.success(`顺序指派完成 ${okCount} 个,请逐个检查`)
+      if (okIds.length > 0) {
+        toast.success(`顺序指派完成 ${okIds.length} 个,请逐个检查`)
+        flashRows(okIds)
+      }
       void reload()
     } finally {
       setAutoAssigning(false)
     }
-  }, [autoAssignPairs, pageId, reload])
+  }, [autoAssignPairs, pageId, reload, flashRows])
 
   const handleReExtract = useCallback(
     async (elementId: string): Promise<void> => {
@@ -455,7 +480,15 @@ export function AssetReviewClient({
     >
       <Container maxWidth={false} sx={{ py: 3 }}>
         {loading || !state ? (
-          <Skeleton variant="rounded" height={600} />
+          // 跟真实两栏布局同构的 Skeleton
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            sx={{ height: 'calc(100vh - 120px)' }}
+          >
+            <Skeleton variant="rounded" sx={{ width: { md: '50%' }, height: '100%' }} />
+            <Skeleton variant="rounded" sx={{ flexGrow: 1, height: '100%' }} />
+          </Stack>
         ) : (
           <>
           {failedCats.length > 0 && (
@@ -500,16 +533,19 @@ export function AssetReviewClient({
               }
             />
             <ElementList
+              state={state}
               elements={elements}
               assets={assets}
               selectedElementId={selectedElementId}
               pickedSlice={pickedSlice}
+              flash={flash}
               onSelect={setSelectedElementId}
               onAssign={handleAssign}
               onUnassign={handleUnassign}
               onReExtract={handleReExtract}
               allAssigned={allAssigned}
               autoAssignCount={autoAssignPairs.length}
+              autoAssignPreview={autoAssignPreview}
               autoAssigning={autoAssigning}
               onAutoAssign={() => void autoAssignAll()}
               onGoBack={() => router.push(`/projects/${projectId}/pages/${pageId}`)}
@@ -634,16 +670,41 @@ function SliceGrid({
         )
       })}
       {slices.length === 0 && (
-        <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>
-          还没有切片。运行 Pass 2 后会出现。
-        </Typography>
+        <Box sx={{ py: 6 }}>
+          <EmptyState
+            variant="compact"
+            icon={<PhotoLibraryOutlinedIcon />}
+            title="还没有切片,运行 Pass 2 后会出现"
+          />
+        </Box>
       )}
-      <Box sx={{ mt: 2, fontSize: 12, color: 'text.secondary', lineHeight: 1.6 }}>
-        <Box>边框颜色:</Box>
-        <Box>· 灰 = 未指派</Box>
-        <Box>· 蓝 = 当前选中 element 已用</Box>
-        <Box>· 橙 = 别的 element 已用(允许重复)</Box>
-      </Box>
+      <Stack spacing={0.5} sx={{ mt: 2 }}>
+        <Typography variant="caption" color="text.secondary">
+          边框颜色
+        </Typography>
+        {(
+          [
+            ['rgba(0,0,0,0.25)', '未指派'],
+            [CATEGORY_COLOR.subject, '当前选中 element 已用'],
+            ['#f59e0b', '别的 element 已用(允许重复)'],
+          ] as const
+        ).map(([c, label]) => (
+          <Stack key={label} direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: 0.5,
+                border: `2px solid ${c}`,
+                flexShrink: 0,
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {label}
+            </Typography>
+          </Stack>
+        ))}
+      </Stack>
     </Box>
   )
 }
@@ -889,12 +950,14 @@ function CategorySection({
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  // 选中态:浅蓝色光晕(跟 picked 边框呼应)
+                  // 选中态:浅蓝色光晕 + 微 scale(跟 picked 边框呼应)
                   boxShadow: isPicked
                     ? `0 0 0 3px ${alpha('#0d99ff', 0.25)}`
                     : 'none',
+                  transform: isPicked ? 'scale(1.04)' : 'scale(1)',
+                  zIndex: isPicked ? 1 : 0,
                   transition:
-                    'box-shadow 150ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms cubic-bezier(0.2, 0, 0, 1)',
+                    'box-shadow 150ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms cubic-bezier(0.2, 0, 0, 1), transform 150ms cubic-bezier(0.2, 0, 0, 1)',
                   // hover:抬一档 + 显出 drag handle / crop btn
                   '&:hover': {
                     borderColor: isPicked ? '#0d99ff' : alpha('#0d99ff', 0.5),
@@ -985,30 +1048,36 @@ function CategorySection({
 // ─── ElementList (right) ───────────────────────────────────────────────────
 
 function ElementList({
+  state,
   elements,
   assets,
   selectedElementId,
   pickedSlice,
+  flash,
   onSelect,
   onAssign,
   onUnassign,
   onReExtract,
   allAssigned,
   autoAssignCount,
+  autoAssignPreview,
   autoAssigning,
   onAutoAssign,
   onGoBack,
 }: {
+  state: StateRecord
   elements: LayoutElement[]
   assets: Map<string, Asset>
   selectedElementId: string | null
   pickedSlice: DragPayload | null
+  flash: { ids: string[]; key: number }
   onSelect: (id: string) => void
   onAssign: (elementId: string, payload: DragPayload) => Promise<void>
   onUnassign: (elementId: string) => Promise<void>
   onReExtract: (elementId: string) => Promise<void>
   allAssigned: boolean
   autoAssignCount: number
+  autoAssignPreview: string[]
   autoAssigning: boolean
   onAutoAssign: () => void
   onGoBack: () => void
@@ -1050,21 +1119,52 @@ function ElementList({
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           {autoAssignCount > 0 && (
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={autoAssigning}
-              onClick={onAutoAssign}
-              title="未指派元素数与空闲切片数一一对应,按视觉顺序自动配对"
+            <Tooltip
+              placement="bottom-end"
+              title={
+                <Box sx={{ py: 0.5 }}>
+                  <Box sx={{ fontWeight: 600, mb: 0.5 }}>将按视觉顺序配对:</Box>
+                  {autoAssignPreview.slice(0, 8).map((line, i) => (
+                    <Box key={i} sx={{ fontFamily: 'monospace', fontSize: 11 }}>
+                      {line}
+                    </Box>
+                  ))}
+                  {autoAssignPreview.length > 8 && (
+                    <Box sx={{ mt: 0.25 }}>… 共 {autoAssignPreview.length} 对</Box>
+                  )}
+                </Box>
+              }
             >
-              {autoAssigning ? '指派中…' : `顺序自动指派 ${autoAssignCount}`}
-            </Button>
+              <span>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={autoAssigning}
+                  onClick={onAutoAssign}
+                >
+                  {autoAssigning ? '指派中…' : `顺序自动指派 ${autoAssignCount}`}
+                </Button>
+              </span>
+            </Tooltip>
           )}
           <Typography variant="caption" color="text.secondary">
             {Array.from(assets.values()).length} / {elements.length} 已指派
           </Typography>
         </Stack>
       </Stack>
+
+      {!pickedSlice && (
+        <Box sx={{ mb: 1.5 }}>
+          <KbdHintRow
+            wrap
+            items={[
+              { keys: ['↑', '↓'], label: '选元素' },
+              { keys: ['⏎'], label: '指派已选切片' },
+              { keys: ['Esc'], label: '取消选择' },
+            ]}
+          />
+        </Box>
+      )}
 
       {pickedSlice && (
         <Box
@@ -1095,24 +1195,34 @@ function ElementList({
       )}
 
       {elements.length === 0 ? (
-        <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>
-          没有 type=static 的元素
-        </Typography>
+        <Box sx={{ py: 6 }}>
+          <EmptyState
+            variant="compact"
+            icon={<ExtensionOutlinedIcon />}
+            title="没有 type=static 的元素"
+          />
+        </Box>
       ) : (
         <Stack spacing={1.5}>
-          {elements.map((el) => (
-            <ElementRow
-              key={el.id}
-              element={el}
-              asset={assets.get(el.id) ?? null}
-              isSelected={selectedElementId === el.id}
-              pickedSlice={pickedSlice}
-              onSelect={() => onSelect(el.id)}
-              onAssign={onAssign}
-              onUnassign={onUnassign}
-              onReExtract={onReExtract}
-            />
-          ))}
+          {elements.map((el) => {
+            const isFlash = flash.ids.includes(el.id)
+            return (
+              <ElementRow
+                // flash 行换 key 重挂载 → 动画可重放
+                key={isFlash ? `${el.id}-f${flash.key}` : el.id}
+                state={state}
+                element={el}
+                asset={assets.get(el.id) ?? null}
+                isSelected={selectedElementId === el.id}
+                isFlash={isFlash}
+                pickedSlice={pickedSlice}
+                onSelect={() => onSelect(el.id)}
+                onAssign={onAssign}
+                onUnassign={onUnassign}
+                onReExtract={onReExtract}
+              />
+            )
+          })}
         </Stack>
       )}
 
@@ -1130,6 +1240,59 @@ function ElementList({
   )
 }
 
+// ─── OriginRefThumb ────────────────────────────────────────────────────────
+// 用 CSS background 把原图的 bbox 区域裁出来当 56px 缩略图(保持 bbox 纵横比,
+// 不用后端裁切 API)。background-size 把 bbox 放大到容器 100%,position 对准区域。
+
+function OriginRefThumb({
+  stateId,
+  bbox,
+  stateW,
+  stateH,
+}: {
+  stateId: string
+  bbox: readonly [number, number, number, number] | number[]
+  stateW: number
+  stateH: number
+}): React.ReactElement {
+  const [x = 0, y = 0, w = 1, h = 1] = bbox
+  const aspect = (w * stateW) / Math.max(1e-6, h * stateH)
+  const bw = aspect >= 1 ? 52 : Math.max(8, Math.round(52 * aspect))
+  const bh = aspect >= 1 ? Math.max(8, Math.round(52 / aspect)) : 52
+  const posX = w >= 1 ? 0 : (x / (1 - w)) * 100
+  const posY = h >= 1 ? 0 : (y / (1 - h)) * 100
+  return (
+    <Tooltip title="原图参考:该元素在设计稿里的样子" placement="top">
+      <Box
+        sx={{
+          width: 56,
+          height: 56,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'surface.container',
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          sx={{
+            width: bw,
+            height: bh,
+            backgroundImage: `url(/api/raw/${stateId})`,
+            backgroundSize: `${100 / Math.max(w, 1e-6)}% ${100 / Math.max(h, 1e-6)}%`,
+            backgroundPosition: `${posX}% ${posY}%`,
+            borderRadius: 0.5,
+          }}
+        />
+      </Box>
+    </Tooltip>
+  )
+}
+
 function alphaQualityColor(quality: number): string {
   if (quality >= 0.7) return '#16a34a' // success
   if (quality >= 0.3) return '#d97706' // warning
@@ -1137,18 +1300,22 @@ function alphaQualityColor(quality: number): string {
 }
 
 function ElementRow({
+  state,
   element,
   asset,
   isSelected,
+  isFlash,
   pickedSlice,
   onSelect,
   onAssign,
   onUnassign,
   onReExtract,
 }: {
+  state: StateRecord
   element: LayoutElement
   asset: Asset | null
   isSelected: boolean
+  isFlash: boolean
   pickedSlice: DragPayload | null
   onSelect: () => void
   onAssign: (elementId: string, payload: DragPayload) => Promise<void>
@@ -1215,6 +1382,9 @@ function ElementRow({
             : undefined,
         transition:
           'border-color 150ms cubic-bezier(0.2, 0, 0, 1), background-color 150ms cubic-bezier(0.2, 0, 0, 1)',
+        ...(isFlash
+          ? { animation: `${successFlash} 700ms ${MD3_STANDARD_EASING}` }
+          : {}),
         '&:hover': pickedSlice
           ? {
               bgcolor: alpha('#0d99ff', 0.12),
@@ -1224,6 +1394,14 @@ function ElementRow({
       }}
     >
       <Stack direction="row" spacing={1.25} alignItems="center">
+        {/* 原图参考:该元素在设计稿里的样子(切片↔元素关联可视化,
+            指派时直接对照,不用回设计稿找) */}
+        <OriginRefThumb
+          stateId={state.id}
+          bbox={element.bbox}
+          stateW={state.width}
+          stateH={state.height}
+        />
         {/* asset preview / drop placeholder
             没 asset 时显示更明显的「拖放或点选切片到此」提示,带 + 图标和虚线主色框 */}
         <Box
