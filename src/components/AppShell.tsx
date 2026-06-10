@@ -7,7 +7,8 @@ import Box from '@mui/material/Box'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
-import { Home as HomeIcon, Settings as SettingsIcon } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
+import { LogoMark } from './LogoMark'
 
 export interface BreadcrumbItem {
   label: string
@@ -47,7 +48,7 @@ export function AppShell({
             aria-label="回首页"
             onClick={guardClick('/')}
           >
-            <HomeIcon size={18} />
+            <LogoMark size={18} />
           </IconButton>
           {breadcrumbs && breadcrumbs.length > 0 ? (
             <Breadcrumbs sx={{ flexGrow: 1 }} separator="›">

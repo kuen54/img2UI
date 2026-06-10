@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- img2UI mark:草稿本点阵里被"抠出"的那个元素(蓝点) -->
+  <rect width="32" height="32" rx="8" fill="#0a0a0a"/>
+  <circle cx="11" cy="11" r="3" fill="#fafafa"/>
+  <circle cx="21" cy="11" r="3" fill="#fafafa"/>
+  <circle cx="11" cy="21" r="3" fill="#fafafa"/>
+  <circle cx="21" cy="21" r="3" fill="#0070f3"/>
+</svg>

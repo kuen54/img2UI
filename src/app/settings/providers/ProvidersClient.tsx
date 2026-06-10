@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { errText } from '@/lib/error-text'
 import AppBar from '@mui/material/AppBar'
 import Toolbar from '@mui/material/Toolbar'
 import Container from '@mui/material/Container'
@@ -63,7 +64,7 @@ export function ProvidersClient(): React.ReactElement {
         setLoading(false)
       })
       .catch((err) => {
-        toast.error(`加载配置失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`加载配置失败:${errText(err)}`)
         setLoading(false)
       })
   }, [])
@@ -124,7 +125,7 @@ export function ProvidersClient(): React.ReactElement {
       toast.success('已保存')
       return true
     } catch (err) {
-      toast.error(`保存失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`保存失败:${errText(err)}`)
       return false
     } finally {
       setSaving(false)
@@ -287,7 +288,7 @@ function ProviderAccordion({
         toast.error(`✗ ${data.message ?? '失败'}`)
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = errText(err)
       setTestResult({ ok: false, message })
       toast.error(`✗ ${message}`)
     } finally {
@@ -342,6 +343,8 @@ function ProviderAccordion({
               />
             }
             label="active(同 kind 内只能一个 active)"
+            // 默认 ml:-11 是给自带 padding 的 Checkbox 设计的,0-padding Switch 会左凸
+            sx={{ ml: 0 }}
           />
 
           <TextField

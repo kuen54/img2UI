@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { errText } from '@/lib/error-text'
 import Container from '@mui/material/Container'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
@@ -134,7 +135,7 @@ export function ElementReviewClient({
       }
       setLoading(false)
     } catch (err) {
-      toast.error(`加载失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`加载失败:${errText(err)}`)
       setLoading(false)
     }
   }, [projectId, pageId])
@@ -198,7 +199,7 @@ export function ElementReviewClient({
       setDirty(false)
       return true
     } catch (err) {
-      toast.error(`保存失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`保存失败:${errText(err)}`)
       return false
     } finally {
       setSaving(false)
@@ -450,7 +451,7 @@ export function ElementReviewClient({
                   toast.info('Pass 2 启动…回到页面看进度')
                   router.push(`/projects/${projectId}/pages/${pageId}`)
                 } catch (err) {
-                  toast.error(`Pass 2 启动失败:${err instanceof Error ? err.message : String(err)}`)
+                  toast.error(`Pass 2 启动失败:${errText(err)}`)
                 }
               }}
             />

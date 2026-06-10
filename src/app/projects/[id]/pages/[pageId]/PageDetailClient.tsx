@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
+import { errText } from '@/lib/error-text'
 import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
@@ -101,7 +102,7 @@ export function PageDetailClient({
         setLoading(false)
       })
       .catch((err) => {
-        toast.error(`加载失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`加载失败:${errText(err)}`)
         setLoading(false)
       })
   }, [projectId, pageId])
@@ -309,7 +310,7 @@ function UploadDropzone({
       toast.success('上传成功')
       onUploaded()
     } catch (err) {
-      toast.error(`上传失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`上传失败:${errText(err)}`)
     } finally {
       setUploading(false)
     }
@@ -438,7 +439,7 @@ function DesignWithPipeline({
       toast.success('已替换')
       onChanged()
     } catch (err) {
-      toast.error(`替换失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`替换失败:${errText(err)}`)
     } finally {
       setReUploading(false)
       setPendingFile(null)
@@ -452,7 +453,7 @@ function DesignWithPipeline({
       toast.success('已删除')
       onChanged()
     } catch (err) {
-      toast.error(`删除失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`删除失败:${errText(err)}`)
     }
   }
 
@@ -481,10 +482,19 @@ function DesignWithPipeline({
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          gap={1}
-          sx={{ px: 2, py: 1.25 }}
+          useFlexGap
+          columnGap={1}
+          rowGap={0.75}
+          sx={{ px: 2, py: 1.25, flexWrap: 'wrap' }}
         >
-          <Stack direction="row" alignItems="center" spacing={2}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            useFlexGap
+            columnGap={2}
+            rowGap={0.5}
+            sx={{ flexWrap: 'wrap', minWidth: 0 }}
+          >
             <Typography variant="body2" color="text.secondary">
               {state.width} × {state.height} px · {state.name}
             </Typography>
@@ -498,17 +508,16 @@ function DesignWithPipeline({
                       onChange={(e) => setShowBboxes(e.target.checked)}
                     />
                   }
-                  label={
-                    <Typography variant="body2" color="text.secondary">
-                      显示 static 元素 ({staticCount})
-                    </Typography>
-                  }
+                  label={`显示 static 元素 (${staticCount})`}
+                  slotProps={{
+                    typography: { variant: 'body2', color: 'text.secondary' },
+                  }}
                   sx={{ ml: 0, mr: 0 }}
                 />
               )
             })()}
           </Stack>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
             <Button
               size="small"
               variant="outlined"
@@ -798,7 +807,7 @@ function PipelinePanel({
         setRunning(false)
       })
     } catch (err) {
-      toast.error(`Pass 1 失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Pass 1 失败:${errText(err)}`)
       setRunning(false)
     }
   }
@@ -826,7 +835,7 @@ function PipelinePanel({
         setRunning(false)
       })
     } catch (err) {
-      toast.error(`Pass 2 失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Pass 2 失败:${errText(err)}`)
       setRunning(false)
     }
   }
@@ -1217,6 +1226,7 @@ function RunningProgress({
         direction="row"
         justifyContent="space-between"
         alignItems="baseline"
+        gap={1}
         sx={{ mt: 1 }}
       >
         <Typography variant="body2" color="text.secondary">
@@ -1227,7 +1237,12 @@ function RunningProgress({
         {elapsed !== null && (
           <Typography
             variant="caption"
-            sx={{ color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}
+            sx={{
+              color: 'text.disabled',
+              fontVariantNumeric: 'tabular-nums',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
           >
             {formatElapsed(elapsed)}
           </Typography>
@@ -1295,7 +1310,7 @@ function pollPipelineRun(
           onDone()
         } else if (run.status === 'failed') {
           clearInterval(interval)
-          toast.error(`${passLabel} 失败:${run.error?.message ?? '未知错误'}`)
+          toast.error(`${passLabel} 失败:${errText(run.error?.message ?? '未知错误')}`)
           onDone()
         }
       })
@@ -1334,7 +1349,7 @@ function CdnExportActions({
         setValidating(false)
       })
     } catch (err) {
-      toast.error(`校验失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`校验失败:${errText(err)}`)
       setValidating(false)
     }
   }
@@ -1361,7 +1376,7 @@ function CdnExportActions({
         toast.success(`已上传 ${data.uploaded} 个 asset`)
       }
     } catch (err) {
-      toast.error(`上传失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`上传失败:${errText(err)}`)
     } finally {
       setUploading(false)
     }
@@ -1442,7 +1457,7 @@ function ExportDialog({
       setOutputDir('')
       onClose()
     } catch (err) {
-      toast.error(`导出失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`导出失败:${errText(err)}`)
     } finally {
       setExporting(false)
     }

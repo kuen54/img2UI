@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { errText } from '@/lib/error-text'
 import Box from '@mui/material/Box'
 import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
@@ -67,7 +68,7 @@ export default function HomePage(): React.ReactElement {
       .then((r) => r.json())
       .then(setProjects)
       .catch((err) => {
-        toast.error(`加载失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`加载失败:${errText(err)}`)
         setProjects([])
       })
   }
@@ -80,6 +81,7 @@ export default function HomePage(): React.ReactElement {
           direction="row"
           justifyContent="space-between"
           alignItems="center"
+          gap={1}
           sx={{ mb: 1.5 }}
         >
           <Typography variant="h2">我的项目</Typography>
@@ -402,7 +404,7 @@ function NewProjectDialog({
       setDescription('')
       onCreated(project)
     } catch (err) {
-      toast.error(`创建失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`创建失败:${errText(err)}`)
     } finally {
       setSubmitting(false)
     }

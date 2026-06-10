@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { errText } from '@/lib/error-text'
 import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 import Card from '@mui/material/Card'
@@ -86,7 +87,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
         setPages(pgs)
       })
       .catch((err) => {
-        toast.error(`加载失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`加载失败:${errText(err)}`)
         setPages([])
       })
   }
@@ -100,7 +101,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
       toast.success('项目已删除')
       router.push('/')
     } catch (err) {
-      toast.error(`删除失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`删除失败:${errText(err)}`)
     }
   }
 
@@ -538,7 +539,7 @@ function NewPageDialog({
       setRouteHint('')
       onCreated(page)
     } catch (err) {
-      toast.error(`创建失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`创建失败:${errText(err)}`)
     } finally {
       setSubmitting(false)
     }

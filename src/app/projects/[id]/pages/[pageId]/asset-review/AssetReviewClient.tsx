@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { errText } from '@/lib/error-text'
 import Container from '@mui/material/Container'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
@@ -132,7 +133,7 @@ export function AssetReviewClient({
       }
       setLoading(false)
     } catch (err) {
-      toast.error(`加载失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`加载失败:${errText(err)}`)
       setLoading(false)
     }
   }, [projectId, pageId])
@@ -199,7 +200,7 @@ export function AssetReviewClient({
           scrollElementRowIntoView(nextEl.id)
         }
       } catch (err) {
-        toast.error(`指派失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`指派失败:${errText(err)}`)
       }
     },
     [pageId, elements, assets, scrollElementRowIntoView, flashRows],
@@ -274,7 +275,7 @@ export function AssetReviewClient({
           ),
         )
       } catch (err) {
-        toast.error(`撤销失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`撤销失败:${errText(err)}`)
       }
     },
     [],
@@ -361,12 +362,12 @@ export function AssetReviewClient({
                 void reload()
               } else if (run.status === 'failed') {
                 clearInterval(interval)
-                toast.error(`重抠失败:${run.error?.message ?? ''}`)
+                toast.error(`重抠失败:${errText(run.error?.message ?? '未知错误')}`)
               }
             })
         }, 2000)
       } catch (err) {
-        toast.error(`重抠失败:${err instanceof Error ? err.message : String(err)}`)
+        toast.error(`重抠失败:${errText(err)}`)
       }
     },
     [pageId, reload],
@@ -401,7 +402,7 @@ export function AssetReviewClient({
             } else if (run.status === 'failed') {
               clearInterval(interval)
               setRerunningFailed(false)
-              toast.error(`重跑失败:${run.error?.message ?? '未知错误'}`)
+              toast.error(`重跑失败:${errText(run.error?.message ?? '未知错误')}`)
               void reload()
             }
           })
@@ -412,7 +413,7 @@ export function AssetReviewClient({
       }, 2000)
     } catch (err) {
       setRerunningFailed(false)
-      toast.error(`重跑失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`重跑失败:${errText(err)}`)
     }
   }, [page, reload])
 
@@ -443,7 +444,7 @@ export function AssetReviewClient({
       }
       void reload()
     } catch (err) {
-      toast.error(`抠图失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`抠图失败:${errText(err)}`)
     } finally {
       setMatting(false)
     }
@@ -1116,11 +1117,19 @@ function ElementList({
         bgcolor: 'background.paper',
       }}
     >
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-        <Typography variant="h5">
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        useFlexGap
+        columnGap={1}
+        rowGap={0.75}
+        sx={{ mb: 1.5, flexWrap: 'wrap' }}
+      >
+        <Typography variant="h5" sx={{ whiteSpace: 'nowrap' }}>
           元素列表 ({elements.length} 静态)
         </Typography>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
           {autoAssignCount > 0 && (
             <Tooltip
               placement="bottom-end"
@@ -1150,7 +1159,11 @@ function ElementList({
               </span>
             </Tooltip>
           )}
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ whiteSpace: 'nowrap' }}
+          >
             {Array.from(assets.values()).length} / {elements.length} 已指派
           </Typography>
         </Stack>
@@ -1639,7 +1652,7 @@ function SubCropDialog({
       toast.success(`切出 ${data.created.length} 个新切片`)
       onCreated()
     } catch (err) {
-      toast.error(`切片失败:${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`切片失败:${errText(err)}`)
     } finally {
       setSubmitting(false)
     }

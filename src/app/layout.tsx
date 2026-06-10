@@ -5,7 +5,7 @@ import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter'
 import { ClientProviders } from '@/components/ClientProviders'
 
 export const metadata: Metadata = {
-  title: 'img2UI',
+  title: { default: 'img2UI', template: '%s · img2UI' },
   description:
     'AI 生图设计稿 → 静态素材 + layout 描述,喂给 coding agent',
 }
