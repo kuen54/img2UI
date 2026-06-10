@@ -26,19 +26,22 @@ import Switch from '@mui/material/Switch'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Alert from '@mui/material/Alert'
 import { alpha } from '@mui/material/styles'
-import UploadFileIcon from '@mui/icons-material/UploadFile'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import DeleteIcon from '@mui/icons-material/Delete'
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import HomeIcon from '@mui/icons-material/Home'
-import CheckIcon from '@mui/icons-material/Check'
-import CloseIcon from '@mui/icons-material/Close'
-import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined'
-import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined'
-import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
-import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined'
-import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined'
-import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined'
+import { dotGridBg } from '@/theme'
+import {
+  FileUp as UploadFileIcon,
+  RotateCw as RefreshIcon,
+  Trash2 as DeleteIcon,
+  Play as PlayArrowIcon,
+  Home as HomeIcon,
+  Check as CheckIcon,
+  X as CloseIcon,
+  Layers as LayersOutlinedIcon,
+  CircleCheckBig as TaskAltOutlinedIcon,
+  Puzzle as ExtensionOutlinedIcon,
+  CloudUpload as CloudUploadOutlinedIcon,
+  Clock as ScheduleOutlinedIcon,
+  SearchX as SearchOffOutlinedIcon,
+} from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { StatChip } from '@/components/StatChip'
@@ -254,7 +257,7 @@ function PageStatsStrip({
           alignItems="center"
           sx={{ color: 'text.secondary' }}
         >
-          <ScheduleOutlinedIcon sx={{ fontSize: 14 }} />
+          <ScheduleOutlinedIcon size={14} />
           <Typography variant="caption">
             最近活动 {formatRelative(stats.last_run.at)}
           </Typography>
@@ -333,12 +336,16 @@ function UploadDropzone({
         borderWidth: 2,
         borderColor: drag ? 'primary.main' : 'divider',
         bgcolor: drag ? 'action.hover' : 'background.paper',
+        // 草稿本叙事:dropzone 是"待绘制区域",点阵比页面背景加强一档
+        ...dotGridBg(0.16),
         transition: 'all 0.2s',
       }}
     >
       {uploading ? (
         <Stack alignItems="center" spacing={2} sx={{ px: 6 }}>
-          <UploadFileIcon sx={{ fontSize: 48, color: 'primary.main' }} />
+          <Box sx={{ color: 'primary.main', display: 'flex' }}>
+            <UploadFileIcon size={44} strokeWidth={1.5} />
+          </Box>
           <Box sx={{ width: '100%', maxWidth: 360 }}>
             <LinearProgress />
           </Box>
@@ -348,7 +355,9 @@ function UploadDropzone({
         </Stack>
       ) : (
         <Stack alignItems="center" spacing={2}>
-          <UploadFileIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+          <Box sx={{ color: 'text.secondary', display: 'flex' }}>
+            <UploadFileIcon size={44} strokeWidth={1.5} />
+          </Box>
           <Typography variant="h5">拖拽 PNG 到此处 或</Typography>
           <Button
             variant="contained"
@@ -516,7 +525,7 @@ function DesignWithPipeline({
               aria-label="删除当前 state"
               title="删除当前 state"
             >
-              <DeleteIcon />
+              <DeleteIcon size={18} />
             </IconButton>
             <input
               ref={fileInput}
@@ -1073,7 +1082,7 @@ function StageDot({
           color: '#fff',
         }}
       >
-        <Icon sx={{ fontSize: 12 }} />
+        <Icon size={12} strokeWidth={2.5} />
       </Box>
     )
   }

@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import { FONT_MONO } from '@/theme'
 
 export interface StatChipProps {
   /** MUI icon 节点(16/14px 由 size 控制) */
@@ -41,7 +42,12 @@ export function StatChip({
           justifyContent="center"
           sx={{
             color: 'text.disabled',
-            '& svg': { fontSize: small ? 14 : 16, display: 'block' },
+            '& svg': {
+              fontSize: small ? 14 : 16,
+              width: small ? 14 : 16,
+              height: small ? 14 : 16,
+              display: 'block',
+            },
           }}
         >
           {icon}
@@ -54,6 +60,7 @@ export function StatChip({
           fontWeight: 600,
           lineHeight: 1.4,
           color: valueColor,
+          fontFamily: FONT_MONO,
           fontVariantNumeric: 'tabular-nums',
         }}
       >

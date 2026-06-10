@@ -7,9 +7,7 @@ import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import HomeIcon from '@mui/icons-material/Home'
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
+import { RotateCw as RefreshIcon, Home as HomeIcon, CircleAlert as ErrorOutlineIcon } from 'lucide-react'
 
 export default function GlobalError({
   error,
@@ -27,7 +25,6 @@ export default function GlobalError({
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: 'background.default',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -37,7 +34,9 @@ export default function GlobalError({
       <Card sx={{ maxWidth: 520, width: '100%' }}>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <ErrorOutlineIcon color="error" sx={{ fontSize: 32 }} />
+            <Box sx={{ color: 'error.main', display: 'flex' }}>
+              <ErrorOutlineIcon size={32} strokeWidth={1.75} />
+            </Box>
             <Typography variant="h2" sx={{ m: 0 }}>
               出了点错
             </Typography>
@@ -49,8 +48,8 @@ export default function GlobalError({
             sx={{
               p: 1.5,
               my: 2,
-              bgcolor: 'background.default',
-              borderRadius: 1.5,
+              bgcolor: 'surface.container',
+              borderRadius: 1,
               fontFamily: 'monospace',
               fontSize: 12,
               color: 'error.main',

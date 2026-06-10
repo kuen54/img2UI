@@ -7,7 +7,6 @@ export default function Loading(): React.ReactElement {
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: 'background.default',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

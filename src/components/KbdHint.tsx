@@ -24,7 +24,7 @@ export function Kbd({ children }: { children: string }): React.ReactElement {
         border: '1px solid',
         borderColor: 'surface.outlineVariant',
         borderBottomWidth: 2,
-        borderRadius: 1,
+        borderRadius: '4px',
       }}
     >
       {children}

@@ -22,12 +22,14 @@ import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import Skeleton from '@mui/material/Skeleton'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import HomeIcon from '@mui/icons-material/Home'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import BoltIcon from '@mui/icons-material/Bolt'
-import SaveIcon from '@mui/icons-material/Save'
+import {
+  ChevronDown as ExpandMoreIcon,
+  Home as HomeIcon,
+  Eye as VisibilityIcon,
+  EyeOff as VisibilityOffIcon,
+  Zap as BoltIcon,
+  Save as SaveIcon,
+} from 'lucide-react'
 import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
 import type {
   AppConfig,
@@ -171,7 +173,7 @@ export function ProvidersClient(): React.ReactElement {
               }
             }}
           >
-            <HomeIcon />
+            <HomeIcon size={18} />
           </IconButton>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             img2UI · Settings · Providers
@@ -301,11 +303,11 @@ function ProviderAccordion({
         '&:before': { display: 'none' },
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: 1,
         boxShadow: 'none',
       }}
     >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon size={18} />}>
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexGrow: 1 }}>
           <Box
             sx={{
@@ -367,7 +369,7 @@ function ProviderAccordion({
               input: {
                 endAdornment: (
                   <IconButton size="small" onClick={() => setShowKey((v) => !v)}>
-                    {showKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    {showKey ? <VisibilityOffIcon size={16} /> : <VisibilityIcon size={16} />}
                   </IconButton>
                 ),
               },

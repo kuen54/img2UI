@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import { alpha } from '@mui/material/styles'
 
 export interface EmptyStateProps {
   /** MUI icon 节点,例如 <ImageOutlinedIcon /> */
@@ -38,7 +37,7 @@ export function EmptyState({
         spacing={0.75}
         sx={{ height: '100%', color: 'text.disabled' }}
       >
-        <Box sx={{ '& svg': { fontSize: 28, display: 'block' } }}>{icon}</Box>
+        <Box sx={{ '& svg': { fontSize: 28, width: 28, height: 28, display: 'block' } }}>{icon}</Box>
         <Typography variant="caption" sx={{ color: 'text.disabled' }}>
           {title}
         </Typography>
@@ -55,9 +54,10 @@ export function EmptyState({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          bgcolor: alpha('#0d99ff', 0.08),
-          color: 'primary.main',
-          '& svg': { fontSize: 28 },
+          // 单色系:空状态是装饰位,icon 圆底用中性灰而非品牌蓝
+          bgcolor: 'surface.containerHigh',
+          color: 'text.secondary',
+          '& svg': { fontSize: 28, width: 28, height: 28 },
         }}
       >
         {icon}

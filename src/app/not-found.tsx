@@ -2,14 +2,13 @@ import Link from 'next/link'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
-import HomeIcon from '@mui/icons-material/Home'
+import { Home as HomeIcon } from 'lucide-react'
 
 export default function NotFound(): React.ReactElement {
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: 'background.default',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

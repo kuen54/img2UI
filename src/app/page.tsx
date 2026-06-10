@@ -20,14 +20,15 @@ import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grow from '@mui/material/Grow'
-import { alpha } from '@mui/material/styles'
-import AddIcon from '@mui/icons-material/Add'
-import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
-import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
-import DashboardCustomizeOutlinedIcon from '@mui/icons-material/DashboardCustomizeOutlined'
-import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined'
-import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined'
-import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
+import {
+  Plus as AddIcon,
+  Folder as FolderOutlinedIcon,
+  FileText as ArticleOutlinedIcon,
+  LayoutGrid as DashboardCustomizeOutlinedIcon,
+  CloudUpload as CloudUploadOutlinedIcon,
+  Clock as ScheduleOutlinedIcon,
+  Image as ImageOutlinedIcon,
+} from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { StatusDot } from '@/components/StatusDot'
 import { StatChip } from '@/components/StatChip'
@@ -172,7 +173,7 @@ function StatsStrip({
           alignItems="center"
           sx={{ ml: 'auto', color: 'text.secondary' }}
         >
-          <ScheduleOutlinedIcon sx={{ fontSize: 14 }} />
+          <ScheduleOutlinedIcon size={14} />
           <Typography variant="caption">
             最近活动 {formatRelative(lastRunAt)}
           </Typography>
@@ -222,14 +223,12 @@ function ProjectCard({
     <Card
       sx={{
         width: 280,
-        outline: '1px solid transparent',
-        outlineOffset: -1,
         transition:
-          'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, outline-color 0.18s ease',
+          'transform 0.18s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.18s ease, border-color 0.18s ease',
         '&:hover': {
           boxShadow: 3,
           transform: 'translateY(-2px)',
-          outline: `1px solid ${alpha('#0d99ff', 0.4)}`,
+          borderColor: 'surface.outline',
         },
       }}
     >
