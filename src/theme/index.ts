@@ -20,6 +20,12 @@ import {
 // 3. 圆角两档 —— 控件 6 / 容器 8(Dialog 10),告别 pill 与 28px 大圆角
 // 4. 排印即品牌 —— Geist 负 tracking 标题、零 tracking 正文、mono 数字
 // 5. 克制的微状态 —— hover 4% / selected 6% / focus 8%,过渡 150-250ms
+//
+// Dark mode(MUI colorSchemes + CSS vars,SSR 两套变量都输出,无闪白):
+// 灰阶按「语义反转」定义 —— grey[900] 永远是 ink、grey[100] 永远是底纹,
+// 所以 theme 和应用层所有 grey[n] / surface.* 引用在两个 scheme 下语义自动成立。
+// styleOverrides 里凡是要翻转的颜色一律走 (theme.vars || theme).palette;
+// 选择器级差异(毛玻璃 AppBar、Skeleton)用 theme.applyStyles('dark', …)。
 
 // ─── 纯中性灰阶(无色温) ──────────────────────────────────────────────────
 const N = {
@@ -35,6 +41,20 @@ const N = {
   900: '#0a0a0a',
 } as const
 
+// dark:同一语义轴(数字越大越接近前景 ink),不是亮度直译
+const N_DARK = {
+  50: '#111111',
+  100: '#1a1a1a',
+  200: '#262626',
+  300: '#333333',
+  400: '#5c5c5c',
+  500: '#8f8f8f',
+  600: '#a1a1a1',
+  700: '#c2c2c2',
+  800: '#e0e0e0',
+  900: '#ededed',
+} as const
+
 // 主色:Vercel 蓝。只出现在 contained 主按钮、链接、focus ring、Tab 指示条、选择控件
 export const PRIMARY = '#0070f3'
 const PRIMARY_LIGHT = '#3291ff'
@@ -44,11 +64,16 @@ const PRIMARY_DARK = '#0761d1'
 export const FONT_MONO =
   'var(--font-geist-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace'
 
-// ─── 草稿本点阵 ──────────────────────────────────────────────────────────
+// ─── 草稿本点阵 / 棋盘格 ─────────────────────────────────────────────────
 // 设计工具画布的"草稿纸"质感:页面背景铺阈下点阵(1px 点 / 20px 间距 / ≤6% 透明度),
-// 卡片与弹层是纯白实底,内容浮在点阵之上。调参只动这两个常量。
-const DOT_SPACING = 20
-const DOT_ALPHA = 0.11
+// 卡片与弹层是实底,内容浮在点阵之上。调参只动这两个常量。
+// 点/格的墨色走 --img2ui-dot-rgb(CssBaseline 里按 scheme 定义:浅色黑墨、深色白墨),
+// 这样 dotGridBg / checkerboardBg 的产物天然跟随配色方案。
+// --img2ui-dot-boost:同一 alpha 下白墨叠近黑底的对比在暗部被压缩,肉眼上
+// "波点消失",深色 scheme 统一乘一档增益补回来(0.11 → ~0.19)。
+const DOT_SPACING = 28
+// 0.165 = 旧 0.11 × 1.5:28px 间距下点更疏,单点加重半档找回存在感(深浅共用)
+const DOT_ALPHA = 0.165
 
 /** dot grid 背景(dropzone 等"待绘制区域"可传更高 alpha 加强一档) */
 export function dotGridBg(alpha: number = DOT_ALPHA, spacing: number = DOT_SPACING): {
@@ -56,9 +81,14 @@ export function dotGridBg(alpha: number = DOT_ALPHA, spacing: number = DOT_SPACI
   backgroundSize: string
 } {
   return {
-    backgroundImage: `radial-gradient(circle, rgba(0, 0, 0, ${alpha}) 1px, transparent 1px)`,
+    backgroundImage: `radial-gradient(circle, rgba(var(--img2ui-dot-rgb), calc(${alpha} * var(--img2ui-dot-boost))) 1px, transparent 1px)`,
     backgroundSize: `${spacing}px ${spacing}px`,
   }
+}
+
+/** 透明 PNG 底纹棋盘格(slice 缩略图 / keyed 预览),跟随配色方案 */
+export function checkerboardBg(size = 12): string {
+  return `repeating-conic-gradient(rgba(var(--img2ui-dot-rgb), calc(0.10 * var(--img2ui-dot-boost))) 0% 25%, transparent 0% 50%) 50%/${size}px ${size}px`
 }
 
 // ─── 进场动效 ─────────────────────────────────────────────────────────────
@@ -84,9 +114,20 @@ export const riseInSx = {
 
 // ─── surface token ───────────────────────────────────────────────────────
 // key 沿用 MD3 命名(应用层有 6 处引用,保持兼容),值重映射到单色系:
-// 表面一律纯白,层级靠 outlineVariant hairline 划分;container 系只给
-// 极少数需要"凹下去"的占位区(空状态底、kbd 胶囊)
-const SURFACE = {
+// 表面一律实底,层级靠 outlineVariant hairline 划分;container 系只给
+// 极少数需要"凹下去"的占位区(空状态底、kbd 胶囊);containerLow 是浮层
+// (Menu/Dialog/Popover)的实底 —— 浅色下与 paper 同白,深色下抬升一档
+interface SurfaceTokens {
+  containerLowest: string
+  containerLow: string
+  container: string
+  containerHigh: string
+  containerHighest: string
+  outline: string
+  outlineVariant: string
+}
+
+const SURFACE: SurfaceTokens = {
   containerLowest: '#ffffff',
   containerLow: '#ffffff',
   container: N[50],
@@ -94,14 +135,24 @@ const SURFACE = {
   containerHighest: N[200],
   outline: N[300],
   outlineVariant: N[200],
-} as const
+}
+
+const SURFACE_DARK: SurfaceTokens = {
+  containerLowest: '#0a0a0a',
+  containerLow: '#141414',
+  container: '#161616',
+  containerHigh: '#1f1f1f',
+  containerHighest: '#292929',
+  outline: '#3d3d3d',
+  outlineVariant: '#262626',
+}
 
 declare module '@mui/material/styles' {
   interface Palette {
-    surface: typeof SURFACE
+    surface: SurfaceTokens
   }
   interface PaletteOptions {
-    surface?: typeof SURFACE
+    surface?: SurfaceTokens
   }
 }
 
@@ -110,6 +161,7 @@ const FONT_STACK =
   'var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif'
 
 // ambient 阴影:只给浮层,低透明度 + 大偏移,绝不用 0.30 级黑影
+// (深色下阴影基本不可见,层级本来就靠 hairline + 浮层抬色,两个 scheme 共用)
 const SHADOW = {
   xs: '0 1px 2px rgba(0, 0, 0, 0.05)',
   sm: '0 4px 12px rgba(0, 0, 0, 0.08)',
@@ -119,51 +171,108 @@ const SHADOW = {
 } as const
 
 export const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: PRIMARY,
-      light: PRIMARY_LIGHT,
-      dark: PRIMARY_DARK,
-      contrastText: '#ffffff',
+  cssVariables: {
+    // html[data-mui-color-scheme="dark"] 作为切换选择器;
+    // InitColorSchemeScript 在首帧前写好属性,SSR 不闪白。
+    // 注意必须用显式属性名:'data' 简写会生成 [data-dark],和
+    // CssBaseline / sx 里手写的 [data-mui-color-scheme="dark"] 对不上
+    colorSchemeSelector: 'data-mui-color-scheme',
+  },
+  colorSchemes: {
+    light: {
+      palette: {
+        primary: {
+          main: PRIMARY,
+          light: PRIMARY_LIGHT,
+          dark: PRIMARY_DARK,
+          contrastText: '#ffffff',
+        },
+        secondary: {
+          main: N[600],
+          light: N[400],
+          dark: N[800],
+          contrastText: '#ffffff',
+        },
+        // 状态色维持降饱和版本(语义色,不参与"装饰")
+        error: { main: '#b91c1c', light: '#fee2e2', dark: '#991b1b', contrastText: '#fff' },
+        success: { main: '#16a34a', light: '#dcfce7', dark: '#15803d', contrastText: '#fff' },
+        warning: { main: '#d97706', light: '#fef3c7', dark: '#b45309', contrastText: '#fff' },
+        info: { main: '#0ea5e9', light: '#e0f2fe', dark: '#0369a1', contrastText: '#fff' },
+        background: {
+          // 表面归白:page 与 paper 都是纯白,层级靠 1px 边线,不靠灰阶染色
+          default: '#ffffff',
+          paper: '#ffffff',
+        },
+        divider: SURFACE.outlineVariant,
+        surface: SURFACE,
+        text: {
+          primary: N[900],
+          // 14px 中文在浅灰下显薄(历史教训),secondary 用 N600(#525252,
+          // 对白底约 7.4:1)而非 Vercel 默认的 #666
+          secondary: N[600],
+          disabled: N[400],
+        },
+        grey: N,
+        action: {
+          // 中性 state layer:hover 4% / selected 6% / focus 8% —— 全部去蓝
+          hover: 'rgba(0, 0, 0, 0.04)',
+          hoverOpacity: 0.04,
+          selected: 'rgba(0, 0, 0, 0.06)',
+          selectedOpacity: 0.06,
+          focus: 'rgba(0, 0, 0, 0.08)',
+          focusOpacity: 0.08,
+          disabled: N[300],
+          disabledBackground: N[100],
+          disabledOpacity: 0.38,
+        },
+      },
     },
-    secondary: {
-      main: N[600],
-      light: N[400],
-      dark: N[800],
-      contrastText: '#ffffff',
-    },
-    // 状态色维持降饱和版本(语义色,不参与"装饰")
-    error: { main: '#b91c1c', light: '#fee2e2', dark: '#991b1b', contrastText: '#fff' },
-    success: { main: '#16a34a', light: '#dcfce7', dark: '#15803d', contrastText: '#fff' },
-    warning: { main: '#d97706', light: '#fef3c7', dark: '#b45309', contrastText: '#fff' },
-    info: { main: '#0ea5e9', light: '#e0f2fe', dark: '#0369a1', contrastText: '#fff' },
-    background: {
-      // 表面归白:page 与 paper 都是纯白,层级靠 1px 边线,不靠灰阶染色
-      default: '#ffffff',
-      paper: '#ffffff',
-    },
-    divider: SURFACE.outlineVariant,
-    surface: SURFACE,
-    text: {
-      primary: N[900],
-      // 14px 中文在浅灰下显薄(历史教训),secondary 用 N600(#525252,
-      // 对白底约 7.4:1)而非 Vercel 默认的 #666
-      secondary: N[600],
-      disabled: N[400],
-    },
-    grey: N,
-    action: {
-      // 中性 state layer:hover 4% / selected 6% / focus 8% —— 全部去蓝
-      hover: 'rgba(0, 0, 0, 0.04)',
-      hoverOpacity: 0.04,
-      selected: 'rgba(0, 0, 0, 0.06)',
-      selectedOpacity: 0.06,
-      focus: 'rgba(0, 0, 0, 0.08)',
-      focusOpacity: 0.08,
-      disabled: N[300],
-      disabledBackground: N[100],
-      disabledOpacity: 0.38,
+    dark: {
+      palette: {
+        // 蓝色保留位与浅色同值(Vercel 深色也不换主蓝);状态色换更亮的档,
+        // *.light 仍是「同色系 tinted 底」语义(深色 = 深色调底)
+        primary: {
+          main: PRIMARY,
+          light: PRIMARY_LIGHT,
+          dark: PRIMARY_DARK,
+          contrastText: '#ffffff',
+        },
+        secondary: {
+          main: N_DARK[600],
+          light: N_DARK[400],
+          dark: N_DARK[800],
+          contrastText: '#0a0a0a',
+        },
+        error: { main: '#ef4444', light: '#3b1212', dark: '#fca5a5', contrastText: '#fff' },
+        success: { main: '#22c55e', light: '#11291a', dark: '#86efac', contrastText: '#fff' },
+        warning: { main: '#f59e0b', light: '#33230a', dark: '#fbbf24', contrastText: '#fff' },
+        info: { main: '#38bdf8', light: '#0a2533', dark: '#7dd3fc', contrastText: '#fff' },
+        background: {
+          // 同一哲学的镜像:整面近黑实底,层级靠 hairline;浮层用 surface.containerLow 抬一档
+          default: '#0a0a0a',
+          paper: '#0a0a0a',
+        },
+        divider: SURFACE_DARK.outlineVariant,
+        surface: SURFACE_DARK,
+        text: {
+          primary: N_DARK[900],
+          secondary: N_DARK[600],
+          disabled: N_DARK[400],
+        },
+        grey: N_DARK,
+        action: {
+          // 深色 state layer 要比浅色重一档才看得见
+          hover: 'rgba(255, 255, 255, 0.06)',
+          hoverOpacity: 0.06,
+          selected: 'rgba(255, 255, 255, 0.09)',
+          selectedOpacity: 0.09,
+          focus: 'rgba(255, 255, 255, 0.12)',
+          focusOpacity: 0.12,
+          disabled: N_DARK[400],
+          disabledBackground: N_DARK[100],
+          disabledOpacity: 0.38,
+        },
+      },
     },
   },
   shape: {
@@ -198,12 +307,13 @@ export const theme = createTheme({
     h4: { fontSize: '1.375rem', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: '1.75rem' },
     h5: { fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: '1.5rem' },
     // h6:section label(uppercase 12px),不映射标题层级
+    // (颜色引用 CSS var,跟随 scheme;typography 块拿不到 theme 回调)
     h6: {
       fontSize: '0.75rem',
       fontWeight: 600,
       textTransform: 'uppercase',
       letterSpacing: '0.05em',
-      color: N[600],
+      color: 'var(--mui-palette-grey-600)',
     },
     body1: { fontSize: '1rem', lineHeight: '1.5rem', letterSpacing: 0 },
     body2: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: 0 },
@@ -211,7 +321,7 @@ export const theme = createTheme({
       fontSize: '0.75rem',
       lineHeight: '1rem',
       letterSpacing: 0,
-      color: N[600],
+      color: 'var(--mui-palette-grey-600)',
     },
     button: {
       fontSize: '0.875rem',
@@ -226,7 +336,7 @@ export const theme = createTheme({
       letterSpacing: '0.04em',
       textTransform: 'uppercase',
       lineHeight: '1rem',
-      color: N[600],
+      color: 'var(--mui-palette-grey-600)',
     },
   },
   // 25 槽 shadows 重映射到 ambient 阴影:resting 几乎无影(层级靠边线),
@@ -248,6 +358,17 @@ export const theme = createTheme({
     },
     MuiCssBaseline: {
       styleOverrides: {
+        // 点阵/棋盘格墨色:浅色黑墨、深色白墨 + 暗部对比增益
+        // (dotGridBg / checkerboardBg 消费)
+        ':root': {
+          '--img2ui-dot-rgb': '0, 0, 0',
+          '--img2ui-dot-boost': '1',
+        },
+        '[data-mui-color-scheme="dark"]': {
+          '--img2ui-dot-rgb': '255, 255, 255',
+          // 1:深浅同 alpha(0.11),波点 ≈ rgb(37,37,37) 叠 #0a0a0a
+          '--img2ui-dot-boost': '1',
+        },
         body: {
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
@@ -275,7 +396,7 @@ export const theme = createTheme({
         disableElevation: true,
       },
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           borderRadius: 6,
           textTransform: 'none',
           fontWeight: 500,
@@ -297,19 +418,19 @@ export const theme = createTheme({
             {
               props: { variant: 'outlined', color: 'primary' },
               style: {
-                color: N[800],
-                borderColor: SURFACE.outlineVariant,
+                color: (theme.vars || theme).palette.grey[800],
+                borderColor: (theme.vars || theme).palette.surface.outlineVariant,
                 '&:hover': {
-                  borderColor: SURFACE.outline,
-                  backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                  borderColor: (theme.vars || theme).palette.surface.outline,
+                  backgroundColor: (theme.vars || theme).palette.action.hover,
                 },
                 '&:focus-visible, &:active': {
-                  backgroundColor: 'rgba(0, 0, 0, 0.06)',
+                  backgroundColor: (theme.vars || theme).palette.action.selected,
                 },
               },
             },
           ],
-        },
+        }),
         sizeSmall: {
           fontSize: '0.8125rem',
           paddingLeft: 12,
@@ -327,7 +448,7 @@ export const theme = createTheme({
         },
         contained: {
           boxShadow: 'none',
-          // hover 压暗 10%(对任意语义色都成立)
+          // hover 压暗 10%(对任意语义色都成立,深色同理)
           '&:hover': {
             boxShadow: 'none',
             backgroundImage:
@@ -339,34 +460,34 @@ export const theme = createTheme({
               'linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16))',
           },
         },
-        text: {
+        text: ({ theme }) => ({
           paddingLeft: 10,
           paddingRight: 10,
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
           '&:focus-visible, &:active': {
-            backgroundColor: 'rgba(0, 0, 0, 0.06)',
+            backgroundColor: (theme.vars || theme).palette.action.selected,
           },
-        },
+        }),
       },
     },
     // icon button:圆改方(6px 圆角),工具感;hover 中性灰
     MuiIconButton: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           width: 36,
           height: 36,
           borderRadius: 6,
-          color: N[700],
+          color: (theme.vars || theme).palette.grey[700],
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.05)',
-            color: N[900],
+            backgroundColor: (theme.vars || theme).palette.action.hover,
+            color: (theme.vars || theme).palette.grey[900],
           },
           '&:focus-visible, &:active': {
-            backgroundColor: 'rgba(0, 0, 0, 0.08)',
+            backgroundColor: (theme.vars || theme).palette.action.focus,
           },
-        },
+        }),
         sizeSmall: {
           width: 30,
           height: 30,
@@ -380,28 +501,28 @@ export const theme = createTheme({
     // chip:6px 圆角 / 28h 收紧(small 22),hairline 边
     MuiChip: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           borderRadius: 6,
           height: 28,
           fontSize: '0.8125rem',
           fontWeight: 500,
           letterSpacing: 0,
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.05)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
-        },
+        }),
         sizeSmall: {
           height: 22,
           fontSize: '0.75rem',
         },
-        outlined: {
-          borderColor: SURFACE.outlineVariant,
-        },
-        filled: {
+        outlined: ({ theme }) => ({
+          borderColor: (theme.vars || theme).palette.surface.outlineVariant,
+        }),
+        filled: ({ theme }) => ({
           '&.MuiChip-colorDefault': {
-            backgroundColor: N[100],
+            backgroundColor: (theme.vars || theme).palette.grey[100],
           },
-        },
+        }),
       },
     },
     MuiTextField: {
@@ -411,30 +532,30 @@ export const theme = createTheme({
     MuiSelect: {
       defaultProps: { IconComponent: ChevronDown },
       styleOverrides: {
-        icon: {
+        icon: ({ theme }) => ({
           width: 16,
           height: 16,
           top: 'calc(50% - 8px)',
           right: 10,
-          color: N[500],
-        },
+          color: (theme.vars || theme).palette.grey[500],
+        }),
       },
     },
     // 输入框:6px 圆角 / 1px 边 / focus = 1px primary 边 + 3px 浅蓝 ring(shadcn 式)
     MuiOutlinedInput: {
       styleOverrides: {
-        root: {
-          backgroundColor: '#ffffff',
+        root: ({ theme }) => ({
+          backgroundColor: (theme.vars || theme).palette.background.paper,
           borderRadius: 6,
           fontSize: '0.875rem',
           transition: 'box-shadow 150ms cubic-bezier(0.2, 0, 0, 1)',
           '& fieldset': {
-            borderColor: SURFACE.outline,
+            borderColor: (theme.vars || theme).palette.surface.outline,
             borderWidth: '1px',
             transition: 'border-color 150ms cubic-bezier(0.2, 0, 0, 1)',
           },
           '&:hover fieldset': {
-            borderColor: `${N[400]} !important`,
+            borderColor: `${(theme.vars || theme).palette.grey[400]} !important`,
           },
           '&.Mui-focused': {
             boxShadow: `0 0 0 3px ${alpha(PRIMARY, 0.15)}`,
@@ -443,7 +564,7 @@ export const theme = createTheme({
             borderColor: `${PRIMARY} !important`,
             borderWidth: '1px !important',
           },
-        },
+        }),
         input: {
           padding: '8px 12px',
         },
@@ -451,64 +572,64 @@ export const theme = createTheme({
     },
     MuiInputLabel: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           fontSize: '0.875rem',
-          color: N[600],
-        },
+          color: (theme.vars || theme).palette.grey[600],
+        }),
       },
     },
     // 选择控件:checked 态保留 primary(语义,不是装饰),hover 中性
     MuiRadio: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           width: 36,
           height: 36,
           padding: 0,
-          color: N[400],
+          color: (theme.vars || theme).palette.grey[400],
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
           '&.Mui-checked': {
             color: PRIMARY,
             '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              backgroundColor: (theme.vars || theme).palette.action.hover,
             },
           },
           '& .MuiSvgIcon-root': { fontSize: 20 },
-        },
+        }),
       },
     },
     MuiCheckbox: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           width: 36,
           height: 36,
           padding: 0,
-          color: N[400],
+          color: (theme.vars || theme).palette.grey[400],
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
           '&.Mui-checked': {
             color: PRIMARY,
             '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              backgroundColor: (theme.vars || theme).palette.action.hover,
             },
           },
           '& .MuiSvgIcon-root': { fontSize: 20 },
-        },
+        }),
       },
     },
-    // 浮层:白底 + hairline 边 + ambient 阴影
+    // 浮层:实底(浅白/深抬升)+ hairline 边 + ambient 阴影
     MuiMenu: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
-        paper: {
+        paper: ({ theme }) => ({
           borderRadius: 8,
           marginTop: 4,
-          backgroundColor: '#ffffff',
-          border: `1px solid ${SURFACE.outlineVariant}`,
+          backgroundColor: (theme.vars || theme).palette.surface.containerLow,
+          border: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           boxShadow: SHADOW.md,
-        },
+        }),
         list: {
           paddingTop: 4,
           paddingBottom: 4,
@@ -518,7 +639,7 @@ export const theme = createTheme({
     // menu item:36h 紧凑 + 4px 内嵌圆角(Linear 式),hover/selected 中性灰
     MuiMenuItem: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           minHeight: 36,
           margin: '0 4px',
           borderRadius: 4,
@@ -528,15 +649,15 @@ export const theme = createTheme({
           lineHeight: '1.25rem',
           letterSpacing: 0,
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
           '&.Mui-selected': {
-            backgroundColor: 'rgba(0, 0, 0, 0.06)',
+            backgroundColor: (theme.vars || theme).palette.action.selected,
             '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.08)',
+              backgroundColor: (theme.vars || theme).palette.action.focus,
             },
           },
-        },
+        }),
         dense: {
           minHeight: 32,
           paddingTop: 2,
@@ -555,45 +676,48 @@ export const theme = createTheme({
     },
     MuiBreadcrumbs: {
       styleOverrides: {
-        separator: {
+        separator: ({ theme }) => ({
           marginLeft: 8,
           marginRight: 8,
-          color: N[400],
-        },
+          color: (theme.vars || theme).palette.grey[400],
+        }),
       },
     },
-    // 卡片:白底 + hairline 边,resting 无阴影(层级靠边线)
+    // 卡片:实底 + hairline 边,resting 无阴影(层级靠边线)
     MuiCard: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           borderRadius: 8,
-          backgroundColor: '#ffffff',
-          border: `1px solid ${SURFACE.outlineVariant}`,
+          backgroundColor: (theme.vars || theme).palette.background.paper,
+          border: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           transition:
             'border-color 200ms cubic-bezier(0.2, 0, 0, 1), box-shadow 200ms cubic-bezier(0.2, 0, 0, 1)',
-        },
+        }),
       },
     },
     MuiPaper: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
-        outlined: {
-          borderColor: SURFACE.outlineVariant,
-        },
+        outlined: ({ theme }) => ({
+          borderColor: (theme.vars || theme).palette.surface.outlineVariant,
+        }),
       },
     },
     MuiAppBar: {
       defaultProps: { elevation: 0, color: 'inherit' },
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           backgroundColor: 'rgba(255, 255, 255, 0.8)',
           backdropFilter: 'blur(12px) saturate(180%)',
           WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-          borderBottom: `1px solid ${SURFACE.outlineVariant}`,
-          color: N[900],
+          borderBottom: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
+          color: (theme.vars || theme).palette.text.primary,
           boxShadow: 'none',
-        },
+          ...theme.applyStyles('dark', {
+            backgroundColor: 'rgba(10, 10, 10, 0.75)',
+          }),
+        }),
       },
     },
     MuiToolbar: {
@@ -608,22 +732,22 @@ export const theme = createTheme({
     MuiAccordion: {
       defaultProps: { disableGutters: true, elevation: 0 },
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           '&:before': { display: 'none' },
-          backgroundColor: '#ffffff',
-          border: `1px solid ${SURFACE.outlineVariant}`,
+          backgroundColor: (theme.vars || theme).palette.background.paper,
+          border: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           borderRadius: '8px !important',
           boxShadow: 'none',
           overflow: 'hidden',
           transition: 'border-color 150ms cubic-bezier(0.2, 0, 0, 1)',
           // hover / expanded 都只是边线加深 —— 不再用蓝边表达展开态
           '&:hover': {
-            borderColor: SURFACE.outline,
+            borderColor: (theme.vars || theme).palette.surface.outline,
           },
           '&.Mui-expanded': {
-            borderColor: SURFACE.outline,
+            borderColor: (theme.vars || theme).palette.surface.outline,
           },
-        },
+        }),
       },
     },
     MuiAccordionSummary: {
@@ -639,25 +763,29 @@ export const theme = createTheme({
         },
       },
     },
+    // tooltip:反色胶囊(浅色近黑底白字 / 深色近白底黑字,Vercel 式)
     MuiTooltip: {
       defaultProps: {
         arrow: false,
       },
       styleOverrides: {
-        tooltip: {
+        tooltip: ({ theme }) => ({
           fontSize: '0.75rem',
           fontWeight: 400,
           lineHeight: '1rem',
           letterSpacing: 0,
-          backgroundColor: N[900],
+          backgroundColor: (theme.vars || theme).palette.grey[900],
+          color: (theme.vars || theme).palette.background.default,
           padding: '4px 8px',
           borderRadius: 6,
-        },
+        }),
       },
     },
     MuiDivider: {
       styleOverrides: {
-        root: { borderColor: SURFACE.outlineVariant },
+        root: ({ theme }) => ({
+          borderColor: (theme.vars || theme).palette.surface.outlineVariant,
+        }),
       },
     },
     // 对话框:10px 圆角 + hairline 边 + xl ambient(告别 28px 大圆角)
@@ -667,12 +795,12 @@ export const theme = createTheme({
         transitionDuration: { enter: 120, exit: 150 },
       },
       styleOverrides: {
-        paper: {
+        paper: ({ theme }) => ({
           borderRadius: 10,
-          backgroundColor: '#ffffff',
-          border: `1px solid ${SURFACE.outlineVariant}`,
+          backgroundColor: (theme.vars || theme).palette.surface.containerLow,
+          border: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           animation: `${riseIn} 120ms ${ENTER_EASING} both`,
-        },
+        }),
       },
     },
     MuiDialogTitle: {
@@ -710,14 +838,14 @@ export const theme = createTheme({
           padding: 0,
           overflow: 'visible',
         },
-        switchBase: {
+        switchBase: ({ theme }) => ({
           padding: 5,
           transitionDuration: '180ms',
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
           '&:focus-visible, &:active': {
-            backgroundColor: 'rgba(0, 0, 0, 0.08)',
+            backgroundColor: (theme.vars || theme).palette.action.focus,
           },
           '&.Mui-checked': {
             transform: 'translateX(16px)',
@@ -743,24 +871,24 @@ export const theme = createTheme({
           '&.Mui-disabled + .MuiSwitch-track': {
             opacity: 0.38,
           },
-        },
-        thumb: {
+        }),
+        thumb: ({ theme }) => ({
           width: 10,
           height: 10,
           boxShadow: 'none',
-          backgroundColor: N[500],
+          backgroundColor: (theme.vars || theme).palette.grey[500],
           transition:
             'width 200ms cubic-bezier(0.2, 0, 0, 1), height 200ms cubic-bezier(0.2, 0, 0, 1), background-color 200ms cubic-bezier(0.2, 0, 0, 1)',
-        },
-        track: {
+        }),
+        track: ({ theme }) => ({
           borderRadius: 10,
-          border: `1.5px solid ${N[400]}`,
-          backgroundColor: N[100],
+          border: `1.5px solid ${(theme.vars || theme).palette.grey[400]}`,
+          backgroundColor: (theme.vars || theme).palette.grey[100],
           opacity: 1,
           boxSizing: 'border-box',
           transition:
             'background-color 200ms cubic-bezier(0.2, 0, 0, 1), border-color 200ms cubic-bezier(0.2, 0, 0, 1)',
-        },
+        }),
       },
     },
     MuiFormControlLabel: {
@@ -805,7 +933,7 @@ export const theme = createTheme({
     // segmented control:选中 = 中性灰底深字(不再蓝底蓝字)
     MuiToggleButton: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           minHeight: 32,
           paddingLeft: 12,
           paddingRight: 12,
@@ -814,20 +942,20 @@ export const theme = createTheme({
           lineHeight: '1.25rem',
           letterSpacing: 0,
           textTransform: 'none',
-          borderColor: SURFACE.outlineVariant,
-          color: N[600],
+          borderColor: (theme.vars || theme).palette.surface.outlineVariant,
+          color: (theme.vars || theme).palette.grey[600],
           '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            backgroundColor: (theme.vars || theme).palette.action.hover,
           },
           '&.Mui-selected': {
-            backgroundColor: N[100],
-            color: N[900],
+            backgroundColor: (theme.vars || theme).palette.grey[100],
+            color: (theme.vars || theme).palette.grey[900],
             '&:hover': {
-              backgroundColor: N[200],
+              backgroundColor: (theme.vars || theme).palette.grey[200],
             },
           },
           '& svg': { fontSize: 16, width: 16, height: 16 },
-        },
+        }),
       },
     },
     MuiToggleButtonGroup: {
@@ -843,40 +971,41 @@ export const theme = createTheme({
           height: 4,
           padding: '13px 0',
         },
-        rail: {
+        rail: ({ theme }) => ({
           height: 4,
           opacity: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.08)',
-        },
+          backgroundColor: (theme.vars || theme).palette.action.focus,
+        }),
         track: {
           height: 4,
           border: 'none',
         },
-        thumb: {
+        thumb: ({ theme }) => ({
           width: 16,
           height: 16,
-          backgroundColor: '#ffffff',
-          border: `1.5px solid ${N[400]}`,
+          backgroundColor: (theme.vars || theme).palette.background.paper,
+          border: `1.5px solid ${(theme.vars || theme).palette.grey[400]}`,
           boxShadow: SHADOW.xs,
           '&:hover, &.Mui-focusVisible': {
-            boxShadow: `0 0 0 6px rgba(0, 0, 0, 0.06)`,
+            boxShadow: `0 0 0 6px ${(theme.vars || theme).palette.action.selected}`,
           },
           '&.Mui-active': {
-            boxShadow: `0 0 0 8px rgba(0, 0, 0, 0.08)`,
+            boxShadow: `0 0 0 8px ${(theme.vars || theme).palette.action.focus}`,
           },
-        },
-        valueLabel: {
-          backgroundColor: N[900],
+        }),
+        valueLabel: ({ theme }) => ({
+          backgroundColor: (theme.vars || theme).palette.grey[900],
+          color: (theme.vars || theme).palette.background.default,
           fontSize: '0.75rem',
           padding: '4px 8px',
           borderRadius: 6,
-        },
+        }),
       },
     },
-    // tab:选中 = 近黑文字 + 2px primary 指示条(蓝色保留位之一)
+    // tab:选中 = ink 文字 + 2px primary 指示条(蓝色保留位之一)
     MuiTab: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           minHeight: 44,
           paddingLeft: 12,
           paddingRight: 12,
@@ -885,24 +1014,24 @@ export const theme = createTheme({
           lineHeight: '1.25rem',
           letterSpacing: 0,
           textTransform: 'none',
-          color: N[600],
+          color: (theme.vars || theme).palette.grey[600],
           '&:hover': {
-            color: N[900],
+            color: (theme.vars || theme).palette.grey[900],
           },
           '&.Mui-selected': {
-            color: N[900],
+            color: (theme.vars || theme).palette.grey[900],
             fontWeight: 500,
           },
           '& svg': { fontSize: 20, width: 20, height: 20 },
-        },
+        }),
       },
     },
     MuiTabs: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           minHeight: 44,
-          borderBottom: `1px solid ${SURFACE.outlineVariant}`,
-        },
+          borderBottom: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
+        }),
         indicator: {
           height: 2,
           backgroundColor: PRIMARY,
@@ -911,25 +1040,29 @@ export const theme = createTheme({
     },
     MuiDrawer: {
       styleOverrides: {
-        paper: {
-          borderRight: `1px solid ${SURFACE.outlineVariant}`,
+        paper: ({ theme }) => ({
+          borderRight: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           boxShadow: 'none',
-        },
+        }),
       },
     },
     MuiSkeleton: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        },
+          ...theme.applyStyles('dark', {
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+          }),
+        }),
       },
     },
+    // snackbar:反色胶囊(同 tooltip)
     MuiSnackbarContent: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           borderRadius: 8,
-          backgroundColor: N[900],
-          color: '#ffffff',
+          backgroundColor: (theme.vars || theme).palette.grey[900],
+          color: (theme.vars || theme).palette.background.default,
           fontSize: '0.875rem',
           lineHeight: '1.25rem',
           letterSpacing: 0,
@@ -937,11 +1070,12 @@ export const theme = createTheme({
           paddingLeft: 16,
           paddingRight: 16,
           boxShadow: SHADOW.md,
-        },
+        }),
         action: { paddingLeft: 16 },
       },
     },
     // alert:8px 圆角 + 同色系 hairline 边(tinted bg 上加边线更"印刷感")
+    // standard 变体的 tinted 底色由 MUI 按 scheme 自动计算
     MuiAlert: {
       defaultProps: {
         variant: 'standard',
@@ -972,44 +1106,48 @@ export const theme = createTheme({
     },
     MuiAvatar: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           fontSize: '0.875rem',
           fontWeight: 500,
-          backgroundColor: N[100],
-          color: N[600],
-        },
+          backgroundColor: (theme.vars || theme).palette.grey[100],
+          color: (theme.vars || theme).palette.grey[600],
+        }),
       },
     },
     MuiBackdrop: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           backgroundColor: 'rgba(0, 0, 0, 0.32)',
+          ...theme.applyStyles('dark', {
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          }),
           '&.MuiBackdrop-invisible': {
             backgroundColor: 'transparent',
           },
-        },
+        }),
       },
     },
     MuiPopover: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
-        paper: {
+        paper: ({ theme }) => ({
           borderRadius: 8,
           marginTop: 4,
-          backgroundColor: '#ffffff',
-          border: `1px solid ${SURFACE.outlineVariant}`,
+          backgroundColor: (theme.vars || theme).palette.surface.containerLow,
+          border: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           boxShadow: SHADOW.md,
-        },
+        }),
       },
     },
     MuiAutocomplete: {
       styleOverrides: {
-        paper: {
+        paper: ({ theme }) => ({
           borderRadius: 8,
-          border: `1px solid ${SURFACE.outlineVariant}`,
+          backgroundColor: (theme.vars || theme).palette.surface.containerLow,
+          border: `1px solid ${(theme.vars || theme).palette.surface.outlineVariant}`,
           boxShadow: SHADOW.md,
-        },
-        listbox: {
+        }),
+        listbox: ({ theme }) => ({
           padding: '4px 0',
           '& .MuiAutocomplete-option': {
             minHeight: 36,
@@ -1021,25 +1159,25 @@ export const theme = createTheme({
             lineHeight: '1.25rem',
             letterSpacing: 0,
             '&:hover, &.Mui-focused': {
-              backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              backgroundColor: (theme.vars || theme).palette.action.hover,
             },
             '&[aria-selected="true"]': {
-              backgroundColor: 'rgba(0, 0, 0, 0.06)',
+              backgroundColor: (theme.vars || theme).palette.action.selected,
               '&:hover, &.Mui-focused': {
-                backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                backgroundColor: (theme.vars || theme).palette.action.focus,
               },
             },
           },
-        },
+        }),
       },
     },
     MuiLinearProgress: {
       styleOverrides: {
-        root: {
+        root: ({ theme }) => ({
           borderRadius: 9999,
           height: 4,
-          backgroundColor: 'rgba(0, 0, 0, 0.06)',
-        },
+          backgroundColor: (theme.vars || theme).palette.action.selected,
+        }),
         bar: {
           borderRadius: 9999,
         },

@@ -9,6 +9,7 @@ import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { LogoMark } from './LogoMark'
+import { ColorModeToggle } from './ColorModeToggle'
 
 export interface BreadcrumbItem {
   label: string
@@ -88,6 +89,7 @@ export function AppShell({
             </Typography>
           )}
           {rightAction}
+          <ColorModeToggle />
           <IconButton
             component={Link}
             href="/settings/providers"
