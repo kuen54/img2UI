@@ -34,6 +34,7 @@ import { AppShell } from '@/components/AppShell'
 import { StatusDot } from '@/components/StatusDot'
 import { StatChip } from '@/components/StatChip'
 import { EmptyState } from '@/components/EmptyState'
+import { riseInSx } from '@/theme'
 import {
   describeRunStatus,
   formatRelative,
@@ -153,7 +154,7 @@ function StatsStrip({
       columnGap={3}
       rowGap={1}
       alignItems="center"
-      sx={{ mb: 3, flexWrap: 'wrap' }}
+      sx={{ mb: 3, flexWrap: 'wrap', ...riseInSx }}
     >
       <StatChip icon={<FolderOutlinedIcon />} value={projects.length} label="项目" />
       <StatChip icon={<ArticleOutlinedIcon />} value={totals.pages} label="页" />
@@ -198,7 +199,7 @@ function ProjectCardGrid({
     <Stack
       direction="row"
       useFlexGap
-      sx={{ flexWrap: 'wrap', gap: 2.5 }}
+      sx={{ flexWrap: 'wrap', gap: 2.5, ...riseInSx }}
     >
       {projects.map((p) => (
         // appear 只对「本地新插入」的卡片为 true:存量卡片首屏不播动画

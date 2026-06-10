@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import { riseInSx } from '@/theme'
 
 export interface EmptyStateProps {
   /** MUI icon 节点,例如 <ImageOutlinedIcon /> */
@@ -45,7 +46,7 @@ export function EmptyState({
     )
   }
   return (
-    <Stack alignItems="center" spacing={2} sx={{ py: 8, textAlign: 'center' }}>
+    <Stack alignItems="center" spacing={2} sx={{ py: 8, textAlign: 'center', ...riseInSx }}>
       <Box
         sx={{
           width: 56,

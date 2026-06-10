@@ -32,6 +32,7 @@ import {
   Save as SaveIcon,
 } from 'lucide-react'
 import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
+import { riseInSx } from '@/theme'
 import type {
   AppConfig,
   ProviderConfig,
@@ -213,7 +214,7 @@ export function ProvidersClient(): React.ReactElement {
         onNavigate={(href) => router.push(href)}
       />
 
-      <Container maxWidth="md" sx={{ py: 4 }}>
+      <Container maxWidth="md" sx={{ py: 4, ...riseInSx }}>
         <Stack spacing={3}>
           {grouped.map(({ kind, providers }) => (
             <Box key={kind}>

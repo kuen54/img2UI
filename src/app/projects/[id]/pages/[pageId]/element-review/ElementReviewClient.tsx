@@ -46,6 +46,7 @@ import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
 import { EmptyState } from '@/components/EmptyState'
 import { KbdHintRow, type KbdHintItem } from '@/components/KbdHint'
 import { successFlash, MD3_STANDARD_EASING } from '@/components/flash'
+import { riseInSx } from '@/theme'
 import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
 import type {
   LayoutElement,
@@ -403,7 +404,7 @@ export function ElementReviewClient({
             <Skeleton variant="rounded" width={320} sx={{ height: '100%' }} />
           </Stack>
         ) : (
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ height: 'calc(100vh - 120px)' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ height: 'calc(100vh - 120px)', ...riseInSx }}>
             {/* 左:Element 列表 */}
             <ElementSidebar
               elements={elements}

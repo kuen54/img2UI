@@ -43,6 +43,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { StatusDot } from '@/components/StatusDot'
 import { StatChip } from '@/components/StatChip'
 import { EmptyState } from '@/components/EmptyState'
+import { riseInSx } from '@/theme'
 import {
   describeRunStatus,
   formatRelative,
@@ -154,7 +155,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
           sx={{ mb: 1.5, gap: 2 }}
         >
           {project ? (
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ flex: 1, minWidth: 0, ...riseInSx }}>
               <Typography variant="h2">{project.name}</Typography>
               {project.description && (
                 <Typography color="text.secondary" sx={{ mt: 0.25 }}>
@@ -254,7 +255,7 @@ function StatsStrip({ pages }: { pages: PageListItem[] }): React.ReactElement {
       columnGap={3}
       rowGap={1}
       alignItems="center"
-      sx={{ mb: 3, flexWrap: 'wrap' }}
+      sx={{ mb: 3, flexWrap: 'wrap', ...riseInSx }}
     >
       <StatChip icon={<ArticleOutlinedIcon />} value={pages.length} label="页" />
       <StatChip icon={<LayersOutlinedIcon />} value={totals.states} label="状态" />
@@ -301,7 +302,7 @@ function PageCardGrid({
     <Stack
       direction="row"
       useFlexGap
-      sx={{ flexWrap: 'wrap', gap: 2.5 }}
+      sx={{ flexWrap: 'wrap', gap: 2.5, ...riseInSx }}
     >
       {pages.map((p) => (
         // appear 只对「本地新插入」的卡片为 true:存量卡片首屏不播动画
