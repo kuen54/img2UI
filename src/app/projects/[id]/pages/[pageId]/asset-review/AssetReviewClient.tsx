@@ -11,6 +11,7 @@ import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
+import Alert from '@mui/material/Alert'
 import Collapse from '@mui/material/Collapse'
 import Divider from '@mui/material/Divider'
 import LinearProgress from '@mui/material/LinearProgress'
@@ -131,6 +132,7 @@ export function AssetReviewClient({
   }, [reload])
 
   const state = page?.states[0]
+  const failedCats = state?.pass2_failed_categories ?? []
 
   const handleAssign = useCallback(
     async (elementId: string, payload: DragPayload): Promise<void> => {
@@ -218,6 +220,50 @@ export function AssetReviewClient({
     [pageId, reload],
   )
 
+  // Pass 2 部分失败:state.pass2_failed_categories 里的路没有切片产物,
+  // 给出明确提示 + 只重跑失败路的入口(不用回 page detail 页)
+  const [rerunningFailed, setRerunningFailed] = useState(false)
+  const rerunFailedRoutes = useCallback(async (): Promise<void> => {
+    const st = page?.states[0]
+    const cats = st?.pass2_failed_categories ?? []
+    if (!st || cats.length === 0) return
+    setRerunningFailed(true)
+    try {
+      const res = await fetch(`/api/states/${st.id}/pass2`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categories: cats }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const { run_id } = (await res.json()) as { run_id: string }
+      toast.info(`重跑失败 ${cats.length} 路中…(可能要 1-3 分钟)`)
+      const interval = setInterval(() => {
+        void fetch(`/api/pipeline-runs/${run_id}`)
+          .then((r) => r.json())
+          .then((run: { status: string; error?: { message: string } }) => {
+            if (run.status === 'completed') {
+              clearInterval(interval)
+              setRerunningFailed(false)
+              toast.success('重跑完成')
+              void reload()
+            } else if (run.status === 'failed') {
+              clearInterval(interval)
+              setRerunningFailed(false)
+              toast.error(`重跑失败:${run.error?.message ?? '未知错误'}`)
+              void reload()
+            }
+          })
+          .catch(() => {
+            clearInterval(interval)
+            setRerunningFailed(false)
+          })
+      }, 2000)
+    } catch (err) {
+      setRerunningFailed(false)
+      toast.error(`重跑失败:${err instanceof Error ? err.message : String(err)}`)
+    }
+  }, [page, reload])
+
   const [confirmMattingOpen, setConfirmMattingOpen] = useState(false)
   const handleMattingFallback = useCallback(async (): Promise<void> => {
     if (!state) return
@@ -281,6 +327,27 @@ export function AssetReviewClient({
         {loading || !state ? (
           <Skeleton variant="rounded" height={600} />
         ) : (
+          <>
+          {failedCats.length > 0 && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  disabled={rerunningFailed}
+                  onClick={() => void rerunFailedRoutes()}
+                >
+                  {rerunningFailed ? '重跑中…' : `重跑失败 ${failedCats.length} 路`}
+                </Button>
+              }
+            >
+              Pass 2 有 {failedCats.length} 路生成失败:
+              {failedCats.map((c) => VISUAL_CATEGORY_CN[c]).join(' / ')}
+              —— 这些类别没有切片产物,对应元素暂时无法指派。
+            </Alert>
+          )}
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={2}
@@ -316,6 +383,7 @@ export function AssetReviewClient({
               pageId={pageId}
             />
           </Stack>
+          </>
         )}
       </Container>
 

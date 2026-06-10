@@ -1,12 +1,14 @@
 import { NextRequest } from 'next/server'
-import { getElementsForPage, createPipelineRun, updatePipelineRun } from '@/lib/elements'
+import { getElementsForPage } from '@/lib/elements'
 import { getState, getPage, getProject } from '@/lib/projects'
 import { runReExtract } from '@/lib/pass2-runner'
 import { assignSliceToElement } from '@/lib/slices'
-import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
+import { StateBusyError } from '@/lib/run-lock'
+import { beginAuditJob } from '@/lib/audit-job'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId, newId, nowIso } from '@/lib/id'
 import { paths } from '@/lib/fs-utils'
+import type { PipelineRun } from '@/lib/types'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -49,15 +51,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
     const state = await getState(stateId)
     if (!state) return jsonResponse({ error: 'state not found' }, { status: 404 })
 
-    if (isStateLocked(stateId))
-      return jsonResponse({ error: 'state busy' }, { status: 409 })
-
     // audit run
-    const auditRun = {
+    const auditRun: PipelineRun = {
       id: newId(),
       state_id: stateId,
-      pass: 're_extract' as const,
-      status: 'running' as const,
+      pass: 're_extract',
+      status: 'running',
       started_at: nowIso(),
       llm_request: {
         provider_id: '(image_gen)',
@@ -68,11 +67,14 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
       },
       llm_response: null,
     }
-    await createPipelineRun(auditRun)
 
-    void (async () => {
-      try {
-        await withStateLock(stateId, async () => {
+    try {
+      await beginAuditJob({
+        stateId,
+        auditRun,
+        // re-extract 不动 state 状态机(无 runningPatch / doneStatus / failStatus)
+        errorCode: 'RE_EXTRACT_ERROR',
+        job: async () => {
           const result = await runReExtract({ state, page, project, element })
           // 自动指派(单切片无歧义,Phase 7 例外条款)
           const asset = await assignSliceToElement({
@@ -84,28 +86,19 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
               idx: result.newSliceIdx,
             },
           })
-          await updatePipelineRun(auditRun.id, {
-            status: 'completed',
-            completed_at: nowIso(),
-            parsed_result: {
-              new_slice_idx: result.newSliceIdx,
-              category: result.newSliceCategory,
-              asset_id: asset.id,
-              sub_run_id: result.subRunId,
-            },
-          })
-        })
-      } catch (err) {
-        if (err instanceof StateBusyError) return
-        const message = err instanceof Error ? err.message : String(err)
-        console.error(`[re-extract ${auditRun.id}]`, message)
-        await updatePipelineRun(auditRun.id, {
-          status: 'failed',
-          completed_at: nowIso(),
-          error: { code: 'RE_EXTRACT_ERROR', message, retryable: true },
-        }).catch(() => {})
-      }
-    })()
+          return {
+            new_slice_idx: result.newSliceIdx,
+            category: result.newSliceCategory,
+            asset_id: asset.id,
+            sub_run_id: result.subRunId,
+          }
+        },
+      })
+    } catch (err) {
+      if (err instanceof StateBusyError)
+        return jsonResponse({ error: 'state busy' }, { status: 409 })
+      throw err
+    }
 
     return jsonResponse({ run_id: auditRun.id }, { status: 202 })
   } catch (err) {

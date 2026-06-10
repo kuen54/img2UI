@@ -623,6 +623,30 @@ function PipelinePanel({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   // 上次 pass2 audit 报告里失败的 categories(若有,可只重跑这些路省钱)
   const [failedRoutes, setFailedRoutes] = useState<string[]>([])
+  // Pass 1 重跑确认(后端 409 ELEMENTS_EXIST 时弹出)
+  const [confirmRerunPass1Open, setConfirmRerunPass1Open] = useState(false)
+
+  // 刷新 / 重进页面后恢复运行中 pipeline 的进度感知:状态在 *_running / validating
+  // 时周期性 reload 直到落到终态。否则只有「点击发起的那次轮询」能更新状态,
+  // 切走再回来就是一个永不前进的假进度条。
+  // 上限 ~10 分钟:防止进程重启留下的悬挂 running 状态导致无限轮询。
+  const resumePollCount = useRef(0)
+  useEffect(() => {
+    const inFlight = status.endsWith('_running') || status === 'validating'
+    if (!inFlight) {
+      resumePollCount.current = 0
+      return
+    }
+    const t = setInterval(() => {
+      resumePollCount.current += 1
+      if (resumePollCount.current > 300) {
+        clearInterval(t)
+        return
+      }
+      onChanged()
+    }, 2000)
+    return () => clearInterval(t)
+  }, [status, onChanged])
 
   // 失败时拉 PipelineRun.error.message 显示在 banner
   useEffect(() => {
@@ -642,12 +666,16 @@ function PipelinePanel({
       .catch(() => {})
   }, [status, state.pass1_run_id, state.pass2_run_id])
 
-  // 拉 pass2 audit 报告里的 failed_routes(无论 done / failed 都看,
-  // 因为部分失败容忍模式下 status=done 也可能有 failed_routes)
+  // 失败路次名单:新数据直接读 state.pass2_failed_categories;
+  // 老数据(无此字段)fallback 到 pass2 audit run 的 failed_routes
   useEffect(() => {
     setFailedRoutes([])
     if (status !== 'pass2_done' && status !== 'pass2_failed' && status !== 'validated')
       return
+    if (state.pass2_failed_categories !== undefined) {
+      setFailedRoutes(state.pass2_failed_categories)
+      return
+    }
     if (!state.pass2_run_id) return
     void fetch(`/api/pipeline-runs/${state.pass2_run_id}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -656,13 +684,31 @@ function PipelinePanel({
         setFailedRoutes(fr.map((f) => f.category))
       })
       .catch(() => {})
-  }, [status, state.pass2_run_id])
+  }, [status, state.pass2_run_id, state.pass2_failed_categories])
 
-  const runPass1 = async (): Promise<void> => {
+  const runPass1 = async (force = false): Promise<void> => {
     setRunning(true)
     setErrorMessage(null)
     try {
-      const res = await fetch(`/api/states/${state.id}/pass1`, { method: 'POST' })
+      const res = await fetch(`/api/states/${state.id}/pass1`, {
+        method: 'POST',
+        ...(force
+          ? {
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ force: true }),
+            }
+          : {}),
+      })
+      if (res.status === 409) {
+        const data = (await res.json().catch(() => null)) as { code?: string; error?: string } | null
+        if (data?.code === 'ELEMENTS_EXIST') {
+          // 已有标注 → 弹确认,确认后带 force 重试
+          setRunning(false)
+          setConfirmRerunPass1Open(true)
+          return
+        }
+        throw new Error(data?.error ?? 'state busy')
+      }
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
       toast.info('Pass 1 启动…轮询状态中')
@@ -871,7 +917,7 @@ function PipelinePanel({
             >
               {running ? 'Pass 2 重跑中…' : '重跑全部 Pass 2'}
             </Button>
-            <CdnExportActions stateId={state.id} pageId={pageId} />
+            <CdnExportActions stateId={state.id} pageId={pageId} onChanged={onChanged} />
           </Stack>
         )}
 
@@ -901,6 +947,16 @@ function PipelinePanel({
           </Stack>
         )}
       </Box>
+
+      <ConfirmDialog
+        open={confirmRerunPass1Open}
+        onClose={() => setConfirmRerunPass1Open(false)}
+        title="重跑 Pass 1?"
+        body="该页面已有元素标注(可能含你的人工修改和已指派的素材)。重跑会完全替换所有元素并清理已指派的 asset,此操作不可撤销。"
+        confirmLabel="重跑并替换"
+        confirmColor="warning"
+        onConfirm={() => runPass1(true)}
+      />
     </Card>
   )
 }
@@ -975,9 +1031,11 @@ function pollPipelineRun(
 function CdnExportActions({
   stateId,
   pageId,
+  onChanged,
 }: {
   stateId: string
   pageId: string
+  onChanged: () => void
 }): React.ReactElement {
   const [uploading, setUploading] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -988,10 +1046,15 @@ function CdnExportActions({
     try {
       const res = await fetch(`/api/states/${stateId}/validate`, { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
+      const { run_id } = (await res.json()) as { run_id: string }
       toast.info('反向校验运行中…')
+      onChanged() // 状态进 validating,面板自动轮询接管进度
+      pollPipelineRun(run_id, '反向校验', () => {
+        onChanged()
+        setValidating(false)
+      })
     } catch (err) {
       toast.error(`校验失败:${err instanceof Error ? err.message : String(err)}`)
-    } finally {
       setValidating(false)
     }
   }
@@ -1068,8 +1131,22 @@ function ExportDialog({
         body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error(await res.text())
-      const data = (await res.json()) as { path: string }
+      const data = (await res.json()) as {
+        path: string
+        missing_assets?: Array<{ element_id: string; name: string }>
+        orphan_assets_skipped?: number
+      }
       toast.success(`已导出到 ${data.path}`)
+      const missing = data.missing_assets ?? []
+      if (missing.length > 0) {
+        toast.warning(
+          `⚠ 导出不完整:${missing.length} 个元素缺素材(${missing
+            .slice(0, 3)
+            .map((m) => m.name)
+            .join(' / ')}${missing.length > 3 ? ' …' : ''}),详见 spec.md 顶部警告`,
+          { duration: 8000 },
+        )
+      }
       setOutputDir('')
       onClose()
     } catch (err) {

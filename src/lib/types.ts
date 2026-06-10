@@ -112,6 +112,12 @@ export interface StateRecord {
   pass1_run_id?: string
   pass2_run_id?: string
   validate_run_id?: string
+  /**
+   * Pass 2 部分失败容忍(HANDOFF §6.1):上次跑完后仍失败的 categories。
+   * 空数组 = 全成功;undefined = 老数据(无此字段,fallback 看 audit run)。
+   * Asset Review 据此给「该路无切片产物,请重跑」的明确提示。
+   */
+  pass2_failed_categories?: VisualCategory[]
   created_at: string
 }
 

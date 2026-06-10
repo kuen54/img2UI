@@ -6,6 +6,7 @@ import {
   paths,
   readdirIfExists,
   readJsonIfExists,
+  writeAtomic,
   listPass2Batches,
 } from './fs-utils'
 import { getProject, listPagesByProject, listStatesByPage, getPage } from './projects'
@@ -25,15 +26,33 @@ interface ExportPageInput {
   assetCdnBase?: string
 }
 
-export async function exportPageToFolder(input: ExportPageInput): Promise<void> {
+/** 完成度摘要:API 返回给前端,同时写进 spec.md 顶部警告 */
+export interface ExportSummary {
+  /** 尚未指派素材(或 asset PNG 缺失)的 static element */
+  missing_assets: Array<{ element_id: string; name: string }>
+  /** element_id 已不存在的孤儿 asset(被过滤,不进 manifest) */
+  orphan_assets_skipped: number
+}
+
+export async function exportPageToFolder(input: ExportPageInput): Promise<ExportSummary> {
   const project = await getProject(input.projectId)
   if (!project) throw new Error(`project ${input.projectId} not found`)
   const page = await getPage(input.pageId)
   if (!page) throw new Error(`page ${input.pageId} not found`)
   const states = await listStatesByPage(input.pageId)
   const elements = await getElementsForPage(input.pageId)
-  const assets = await listAssetsForPage(input.pageId)
+  const allAssets = await listAssetsForPage(input.pageId)
   const config = await getConfig()
+
+  // 完成度门禁:只导出当前 element 实际引用的 asset。
+  // 孤儿 asset(element_id 已不在 elements 里,如 Pass 1 重跑遗留)不进 manifest,
+  // 否则 coding agent 会拿到指向「幽灵 element」的图。
+  const elementIds = new Set(elements.map((e) => e.id))
+  const assets = allAssets.filter((a) => elementIds.has(a.element_id))
+  const orphanCount = allAssets.length - assets.length
+  if (orphanCount > 0) {
+    console.warn(`[export] ${orphanCount} 个孤儿 asset 被过滤(element 已不存在)`)
+  }
 
   const projectDir = path.join(input.outputDir, sanitize(project.name))
   const pageDir = path.join(projectDir, 'pages', sanitize(page.name))
@@ -45,7 +64,7 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
   const projectConfigPath = path.join(projectDir, 'config.json')
   const existingConfig = (await readJsonIfExists<unknown>(projectConfigPath)) ?? null
   void existingConfig // 保留以备多 page 累积写;MVP 直接覆盖
-  await fs.writeFile(
+  await writeAtomic(
     projectConfigPath,
     JSON.stringify(
       {
@@ -60,7 +79,7 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
   )
 
   // 2. pages/{page}/meta.json
-  await fs.writeFile(
+  await writeAtomic(
     path.join(pageDir, 'meta.json'),
     JSON.stringify(
       {
@@ -83,7 +102,7 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
   for (const s of states) {
     try {
       const orig = await fs.readFile(paths.raw(s.id))
-      await fs.writeFile(path.join(pageDir, 'raw', `original-${sanitize(s.name)}.png`), orig)
+      await writeAtomic(path.join(pageDir, 'raw', `original-${sanitize(s.name)}.png`), orig)
     } catch {
       // raw 缺失就跳过
     }
@@ -93,7 +112,7 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
         try {
           const buf = await fs.readFile(b.pass2Path)
           const suffix = b.batchIdx > 0 ? `-batch${b.batchIdx}` : ''
-          await fs.writeFile(
+          await writeAtomic(
             path.join(
               pageDir,
               'raw',
@@ -111,7 +130,7 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
   // 4. states/{state-name}.json
   for (const s of states) {
     const stateElements = elements.filter((e) => e.state_ids.includes(s.id))
-    await fs.writeFile(
+    await writeAtomic(
       path.join(pageDir, 'states', `${sanitize(s.name)}.json`),
       JSON.stringify(
         {
@@ -130,10 +149,11 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
 
   // 5. assets/{asset-id}.png + manifest.json
   const manifest: Record<string, unknown> = {}
+  const missingBin = new Set<string>() // asset 记录在但 PNG 缺失的 element_id
   for (const a of assets) {
     try {
       const buf = await fs.readFile(paths.assetBin(a.id))
-      await fs.writeFile(path.join(pageDir, 'assets', `${a.id}.png`), buf)
+      await writeAtomic(path.join(pageDir, 'assets', `${a.id}.png`), buf)
       manifest[a.id] = {
         filename: `${a.id}.png`,
         cdn_url: a.cdn_url ?? null,
@@ -143,9 +163,20 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
       }
     } catch (err) {
       console.warn(`[export] asset ${a.id} bin missing:`, err)
+      missingBin.add(a.element_id)
     }
   }
-  await fs.writeFile(path.join(pageDir, 'assets', 'manifest.json'), JSON.stringify(manifest, null, 2))
+  await writeAtomic(path.join(pageDir, 'assets', 'manifest.json'), JSON.stringify(manifest, null, 2))
+
+  // 完成度:static element 没有 asset、或 asset PNG 缺失,都算缺素材
+  const assetElementIds = new Set(assets.map((a) => a.element_id))
+  const missingAssets = elements
+    .filter(
+      (e) =>
+        e.type === 'static' &&
+        (!assetElementIds.has(e.id) || missingBin.has(e.id)),
+    )
+    .map((e) => ({ element_id: e.id, name: e.name }))
 
   // 6. spec.md
   const md = renderSpecMd({
@@ -154,9 +185,12 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<void> 
     states,
     elements,
     assets,
+    missingAssets,
     codingAgentIntro: config.prompts.coding_agent_intro,
   })
-  await fs.writeFile(path.join(pageDir, 'spec.md'), md)
+  await writeAtomic(path.join(pageDir, 'spec.md'), md)
+
+  return { missing_assets: missingAssets, orphan_assets_skipped: orphanCount }
 }
 
 function renderElementForExport(
@@ -193,14 +227,24 @@ function renderSpecMd(input: {
   states: StateRecord[]
   elements: LayoutElement[]
   assets: Asset[]
+  missingAssets: Array<{ element_id: string; name: string }>
   codingAgentIntro: string
 }): string {
-  const { project, page, states, elements, assets, codingAgentIntro } = input
+  const { project, page, states, elements, assets, missingAssets, codingAgentIntro } = input
   if (!project || !page) return ''
 
   const lines: string[] = []
   lines.push(`# ${page.name}`)
   lines.push('')
+  if (missingAssets.length > 0) {
+    lines.push(
+      `> ⚠ **导出不完整**:以下 ${missingAssets.length} 个 static 元素尚未指派素材(无对应 asset 文件),请勿当作成品处理:`,
+    )
+    for (const m of missingAssets) {
+      lines.push(`> - ${m.name}(${m.element_id.slice(0, 6)})`)
+    }
+    lines.push('')
+  }
   lines.push('## 项目信息')
   lines.push(`- 项目: ${project.name}`)
   lines.push(`- 路由: ${page.route_hint ?? '(未指定)'}`)

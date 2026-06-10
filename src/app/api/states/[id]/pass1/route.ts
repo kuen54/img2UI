@@ -1,17 +1,14 @@
 import { NextRequest } from 'next/server'
-import {
-  getState,
-  getPage,
-  getProject,
-  updateState,
-} from '@/lib/projects'
+import { getState, getPage, getProject } from '@/lib/projects'
 import { runPass1MultiRoute } from '@/lib/pass1-runner'
-import { createPipelineRun, updatePipelineRun } from '@/lib/elements'
+import { getElementsForPage } from '@/lib/elements'
 import { getActiveProvider } from '@/lib/config'
-import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
+import { StateBusyError } from '@/lib/run-lock'
+import { beginAuditJob } from '@/lib/audit-job'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { newId, nowIso, isValidId } from '@/lib/id'
 import { paths } from '@/lib/fs-utils'
+import type { PipelineRun } from '@/lib/types'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -21,8 +18,12 @@ interface RouteParams {
  * POST /api/states/[id]/pass1
  * Phase 4:5 路并行 + IoU 合并;< 3/5 抛 PASS1_ERROR。
  * 总 audit run(pass='pass1')+ 5 个 sub-runs。前端轮询总 run。
+ *
+ * 重跑保护:page 已有 elements(可能含人工标注 / 已指派 asset)时返回 409
+ * ELEMENTS_EXIST,需要 body `{"force": true}` 显式确认 —— 重跑会整批替换
+ * elements 并清理失去引用的 Asset(见 pass1-runner)。
  */
-export async function POST(_req: NextRequest, { params }: RouteParams): Promise<Response> {
+export async function POST(req: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id: stateId } = await params
     if (!isValidId(stateId))
@@ -30,8 +31,6 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
 
     const state = await getState(stateId)
     if (!state) return jsonResponse({ error: 'state not found' }, { status: 404 })
-    if (isStateLocked(stateId))
-      return jsonResponse({ error: 'state busy' }, { status: 409 })
 
     const page = await getPage(state.page_id)
     if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
@@ -45,12 +44,26 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
       )
     }
 
+    const body = (await req.json().catch(() => null)) as { force?: boolean } | null
+    const existing = await getElementsForPage(state.page_id)
+    if (existing.length > 0 && body?.force !== true) {
+      return jsonResponse(
+        {
+          error:
+            '该页面已有 elements(可能含人工标注)。重跑 Pass 1 会完全替换它们并清理已指派的 asset。',
+          code: 'ELEMENTS_EXIST',
+          element_count: existing.length,
+        },
+        { status: 409 },
+      )
+    }
+
     // 总 audit run(stub)
-    const auditRun = {
+    const auditRun: PipelineRun = {
       id: newId(),
       state_id: stateId,
-      pass: 'pass1' as const,
-      status: 'running' as const,
+      pass: 'pass1',
+      status: 'running',
       started_at: nowIso(),
       llm_request: {
         provider_id: provider.id,
@@ -61,51 +74,41 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
       },
       llm_response: null,
     }
-    await createPipelineRun(auditRun)
-    await updateState(stateId, {
-      pipeline_status: 'pass1_running',
-      pass1_run_id: auditRun.id,
-    })
 
-    void (async () => {
-      try {
-        await withStateLock(stateId, async () => {
+    try {
+      await beginAuditJob({
+        stateId,
+        auditRun,
+        runningPatch: { pipeline_status: 'pass1_running', pass1_run_id: auditRun.id },
+        doneStatus: 'pass1_done',
+        failStatus: 'pass1_failed',
+        errorCode: 'PASS1_ERROR',
+        job: async () => {
           const result = await runPass1MultiRoute({
             state,
             pageName: page.name,
             ...(project.description !== undefined ? { pageDescription: project.description } : {}),
           })
-          await updatePipelineRun(auditRun.id, {
-            status: 'completed',
-            completed_at: nowIso(),
-            parsed_result: {
-              successful_routes: result.successes.map((s) => ({
-                category: s.category,
-                count: s.elements.length,
-                sub_run_id: s.subRunId,
-              })),
-              failed_routes: result.failures.map((f) => ({
-                category: f.category,
-                error: f.error,
-              })),
-              merged_count: result.mergedElements.length,
-              filtered_tiny_count: result.filteredTiny.length,
-            },
-          })
-        })
-        await updateState(stateId, { pipeline_status: 'pass1_done' })
-      } catch (err) {
-        if (err instanceof StateBusyError) return
-        const message = err instanceof Error ? err.message : String(err)
-        console.error(`[pass1 audit ${auditRun.id}]`, message)
-        await updatePipelineRun(auditRun.id, {
-          status: 'failed',
-          completed_at: nowIso(),
-          error: { code: 'PASS1_ERROR', message, retryable: true },
-        }).catch(() => {})
-        await updateState(stateId, { pipeline_status: 'pass1_failed' }).catch(() => {})
-      }
-    })()
+          return {
+            successful_routes: result.successes.map((s) => ({
+              category: s.category,
+              count: s.elements.length,
+              sub_run_id: s.subRunId,
+            })),
+            failed_routes: result.failures.map((f) => ({
+              category: f.category,
+              error: f.error,
+            })),
+            merged_count: result.mergedElements.length,
+            filtered_tiny_count: result.filteredTiny.length,
+          }
+        },
+      })
+    } catch (err) {
+      if (err instanceof StateBusyError)
+        return jsonResponse({ error: 'state busy' }, { status: 409 })
+      throw err
+    }
 
     return jsonResponse({ run_id: auditRun.id }, { status: 202 })
   } catch (err) {
