@@ -365,8 +365,8 @@ export const theme = createTheme({
         },
         '[data-mui-color-scheme="dark"]': {
           '--img2ui-dot-rgb': '255, 255, 255',
-          // 2.5:让深色波点(~#4a4a4a on #0a0a0a)和浅色档感知强度对齐
-          '--img2ui-dot-boost': '2.5',
+          // ~0.17 白墨叠 #0a0a0a:和浅色 0.11 黑墨叠白底的感知强度对齐
+          '--img2ui-dot-boost': '1.5',
         },
         body: {
           WebkitFontSmoothing: 'antialiased',
