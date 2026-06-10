@@ -71,7 +71,7 @@ export const FONT_MONO =
 // 这样 dotGridBg / checkerboardBg 的产物天然跟随配色方案。
 // --img2ui-dot-boost:同一 alpha 下白墨叠近黑底的对比在暗部被压缩,肉眼上
 // "波点消失",深色 scheme 统一乘一档增益补回来(0.11 → ~0.19)。
-const DOT_SPACING = 20
+const DOT_SPACING = 28
 const DOT_ALPHA = 0.11
 
 /** dot grid 背景(dropzone 等"待绘制区域"可传更高 alpha 加强一档) */
