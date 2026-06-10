@@ -494,8 +494,9 @@ export function ElementReviewClient({
             display: 'flex',
             alignItems: 'center',
             gap: 1.5,
+            // 反色胶囊:浅色近黑底白字 / 深色近白底黑字(grey.900 = ink 轴)
             bgcolor: 'grey.900',
-            color: '#fff',
+            color: 'background.paper',
           }}
         >
           <Box

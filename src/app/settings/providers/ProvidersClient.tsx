@@ -32,6 +32,7 @@ import {
   Save as SaveIcon,
 } from 'lucide-react'
 import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
+import { ColorModeToggle } from '@/components/ColorModeToggle'
 import { riseInSx } from '@/theme'
 import type {
   AppConfig,
@@ -195,12 +196,14 @@ export function ProvidersClient(): React.ReactElement {
               </Typography>
             </Stack>
           )}
+          <ColorModeToggle />
           <Button
             variant="contained"
             color="primary"
             startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
             disabled={!dirty || saving}
             onClick={() => void save()}
+            sx={{ ml: 1 }}
           >
             {saving ? '保存中…' : '保存'}
           </Button>

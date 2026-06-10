@@ -36,7 +36,7 @@ import {
   Puzzle as ExtensionOutlinedIcon,
 } from 'lucide-react'
 import { alpha } from '@mui/material/styles'
-import { PRIMARY, riseInSx } from '@/theme'
+import { PRIMARY, riseInSx, checkerboardBg } from '@/theme'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -812,9 +812,9 @@ function KeyedCategoryRow({
                 borderColor: 'divider',
                 borderRadius: 1,
                 bgcolor: 'background.default',
-                // 棋盘格背景表示透明区域
+                // 棋盘格背景表示透明区域(墨色跟随配色方案)
                 backgroundImage:
-                  'linear-gradient(45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.04) 75%)',
+                  'linear-gradient(45deg, rgba(var(--img2ui-dot-rgb),0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(var(--img2ui-dot-rgb),0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(var(--img2ui-dot-rgb),0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(var(--img2ui-dot-rgb),0.04) 75%)',
                 backgroundSize: '12px 12px',
                 backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
                 position: 'relative',
@@ -988,6 +988,11 @@ function CategorySection({
                     opacity: 0.55,
                     transition: 'opacity 150ms',
                     pointerEvents: 'none',
+                    // 浮在缩略图上的把手:深色 scheme 下反转底/墨
+                    '[data-mui-color-scheme="dark"] &': {
+                      bgcolor: 'rgba(20,20,20,0.85)',
+                      color: 'rgba(237,237,237,0.7)',
+                    },
                   }}
                 >
                   <DragIndicatorIcon size={14} />
@@ -1001,8 +1006,7 @@ function CategorySection({
                     maxWidth: '100%',
                     maxHeight: '100%',
                     objectFit: 'contain',
-                    background:
-                      'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/12px 12px',
+                    background: checkerboardBg(12),
                   }}
                 />
                 <Box
@@ -1036,6 +1040,11 @@ function CategorySection({
                     opacity: 0,
                     transition: 'opacity 0.15s',
                     '&:hover': { bgcolor: 'white' },
+                    // 浮在缩略图上的按钮:深色 scheme 下反转底色
+                    '[data-mui-color-scheme="dark"] &': {
+                      bgcolor: 'rgba(32,32,32,0.9)',
+                      '&:hover': { bgcolor: 'grey.200' },
+                    },
                   }}
                 >
                   <ContentCutIcon size={14} />
@@ -1442,9 +1451,7 @@ function ElementRow({
               : pickedSlice || hover
                 ? alpha(PRIMARY, 0.08)
                 : alpha(PRIMARY, 0.03),
-            backgroundImage: asset
-              ? 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/10px 10px'
-              : undefined,
+            backgroundImage: asset ? checkerboardBg(10) : undefined,
             transition: 'all 150ms cubic-bezier(0.2, 0, 0, 1)',
             color: pickedSlice || hover ? PRIMARY : alpha(PRIMARY, 0.55),
           }}
@@ -1676,8 +1683,7 @@ function SubCropDialog({
             display: 'inline-block',
             border: '1px solid',
             borderColor: 'divider',
-            backgroundImage:
-              'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/16px 16px',
+            backgroundImage: checkerboardBg(16),
             cursor: 'crosshair',
             userSelect: 'none',
             width: '100%',
