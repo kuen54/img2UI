@@ -90,6 +90,8 @@ export async function runPass2MultiRoute(input: {
 
   const pageDescription = project.description ?? page.name
   const rawBuf = await fs.readFile(paths.raw(state.id))
+  // 整张原图的 base64 各路共用,hoist 到这里只编码一次(1k PNG 重复编码 6+ 路白烧 CPU/内存)
+  const mainDataUrl = await bufferToDataUrl(rawBuf)
 
   const filterSet = categoryFilter ? new Set(categoryFilter) : null
   // apimart `gpt-image-2-official` 服务端硬限 max 16 image_urls(1 raw + 15 crops)。
@@ -143,6 +145,7 @@ export async function runPass2MultiRoute(input: {
         elements: t.els,
         pageDescription,
         rawBuf,
+        mainDataUrl,
         batchIdx: t.batchIdx,
         totalBatches: t.totalBatches,
       }),
@@ -178,10 +181,12 @@ async function runRoute(input: {
   elements: LayoutElement[]
   pageDescription: string
   rawBuf: Buffer
+  /** 整张原图 base64(caller 编码一次,各路共用) */
+  mainDataUrl: string
   batchIdx: number
   totalBatches: number
 }): Promise<Pass2RouteResult> {
-  const { state, provider, category, elements, pageDescription, rawBuf, batchIdx, totalBatches } = input
+  const { state, provider, category, elements, pageDescription, rawBuf, mainDataUrl, batchIdx, totalBatches } = input
 
   const subRun: PipelineRun = {
     id: newId(),
@@ -239,7 +244,6 @@ async function runRoute(input: {
     })
 
     // 3. 调 image_gen
-    const mainDataUrl = await bufferToDataUrl(rawBuf)
     const result = await callImageGen(provider, {
       prompt,
       reference_image_base64: mainDataUrl,

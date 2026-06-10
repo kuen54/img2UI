@@ -60,6 +60,16 @@ export function ProvidersClient(): React.ReactElement {
       })
   }, [])
 
+  // dirty 离开防护:刷新 / 关 tab 时弹原生确认(api_key 等改一半丢了很难发现)
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent): void => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
+
   const updateProvider = (id: string, patch: Partial<ProviderConfig>): void => {
     setConfig((prev) => {
       if (!prev) return prev
@@ -128,7 +138,16 @@ export function ProvidersClient(): React.ReactElement {
     <>
       <AppBar position="sticky">
         <Toolbar>
-          <IconButton component={Link} href="/" edge="start" sx={{ mr: 2 }}>
+          <IconButton
+            component={Link}
+            href="/"
+            edge="start"
+            sx={{ mr: 2 }}
+            onClick={(e) => {
+              // Link 是客户端导航,beforeunload 拦不住,click 层拦
+              if (dirty && !window.confirm('有未保存的修改,确定离开?')) e.preventDefault()
+            }}
+          >
             <HomeIcon />
           </IconButton>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
