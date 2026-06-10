@@ -27,17 +27,19 @@ import Slide from '@mui/material/Slide'
 import Paper from '@mui/material/Paper'
 import Popover from '@mui/material/Popover'
 import CircularProgress from '@mui/material/CircularProgress'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import DeleteIcon from '@mui/icons-material/Delete'
-import CheckIcon from '@mui/icons-material/Check'
-import RestoreIcon from '@mui/icons-material/Restore'
-import SaveIcon from '@mui/icons-material/Save'
-import KeyboardOutlinedIcon from '@mui/icons-material/KeyboardOutlined'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
-import FilterAltOffOutlinedIcon from '@mui/icons-material/FilterAltOffOutlined'
-import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
+import {
+  ChevronDown as ExpandMoreIcon,
+  ChevronUp as ExpandLessIcon,
+  Trash2 as DeleteIcon,
+  Check as CheckIcon,
+  History as RestoreIcon,
+  Save as SaveIcon,
+  Keyboard as KeyboardOutlinedIcon,
+  CircleCheck as CheckCircleIcon,
+  Circle as RadioButtonUncheckedIcon,
+  FilterX as FilterAltOffOutlinedIcon,
+  MousePointerClick as TouchAppOutlinedIcon,
+} from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -484,7 +486,7 @@ export function ElementReviewClient({
             left: '50%',
             transform: 'translateX(-50%) !important',
             zIndex: (t) => t.zIndex.snackbar,
-            borderRadius: 9999,
+            borderRadius: '10px',
             px: 2,
             py: 0.75,
             display: 'flex',
@@ -513,7 +515,7 @@ export function ElementReviewClient({
               saving ? (
                 <CircularProgress size={14} color="inherit" />
               ) : (
-                <SaveIcon sx={{ fontSize: 16 }} />
+                <SaveIcon size={16} />
               )
             }
             disabled={saving}
@@ -555,7 +557,7 @@ function ShortcutsHelp(): React.ReactElement {
         onClick={(e) => setAnchor(e.currentTarget)}
         sx={{ mr: 1 }}
       >
-        <KeyboardOutlinedIcon />
+        <KeyboardOutlinedIcon size={18} />
       </IconButton>
       <Popover
         open={!!anchor}
@@ -649,7 +651,7 @@ function ElementSidebar({
                 variant={active ? 'filled' : 'outlined'}
                 {...(active
                   ? {
-                      icon: <CheckIcon sx={{ fontSize: 14 }} />,
+                      icon: <CheckIcon size={14} />,
                       sx: {
                         // 嵌 &.MuiChip-filled 提升 specificity,
                         // 否则会被 theme 的 colorDefault 浅灰底吃掉
@@ -686,7 +688,7 @@ function ElementSidebar({
                 label={
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     {active ? (
-                      <CheckIcon sx={{ fontSize: 14, color: '#fff' }} />
+                      <CheckIcon size={14} color="#fff" />
                     ) : (
                       <Box
                         sx={{
@@ -763,12 +765,16 @@ function ElementSidebar({
                       </Typography>
                       <Stack direction="row" spacing={0.5} alignItems="center">
                         {el.reviewed ? (
-                          <CheckCircleIcon
-                            sx={{ fontSize: 13, color: 'success.main', flexShrink: 0 }}
+                          <Box
+                            component={CheckCircleIcon}
+                            size={13}
+                            sx={{ color: 'success.main', flexShrink: 0 }}
                           />
                         ) : (
-                          <RadioButtonUncheckedIcon
-                            sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }}
+                          <Box
+                            component={RadioButtonUncheckedIcon}
+                            size={13}
+                            sx={{ color: 'text.disabled', flexShrink: 0 }}
                           />
                         )}
                         <Typography
@@ -814,7 +820,7 @@ function ElementSidebar({
                       onClick={() => onRestore(el)}
                       title="恢复到 elements 列表"
                     >
-                      <RestoreIcon sx={{ fontSize: 16 }} />
+                      <RestoreIcon size={16} />
                     </IconButton>
                   </Stack>
                 ))}
@@ -971,7 +977,7 @@ function ElementCanvas({
         bgcolor: 'background.default',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: 1,
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
@@ -1200,7 +1206,7 @@ function ElementDetail({
             {element.reviewed ? '已确认' : '确认'}
           </Button>
           <IconButton color="error" onClick={onDelete}>
-            <DeleteIcon />
+            <DeleteIcon size={18} />
           </IconButton>
         </Stack>
       </Stack>

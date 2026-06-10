@@ -21,18 +21,21 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import ContentCutIcon from '@mui/icons-material/ContentCut'
-import HealingIcon from '@mui/icons-material/Healing'
-import DeleteIcon from '@mui/icons-material/Delete'
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
-import AddIcon from '@mui/icons-material/Add'
 import Tooltip from '@mui/material/Tooltip'
-import PhotoLibraryOutlinedIcon from '@mui/icons-material/PhotoLibraryOutlined'
-import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
+import {
+  ChevronDown as ExpandMoreIcon,
+  ChevronUp as ExpandLessIcon,
+  RotateCw as RefreshIcon,
+  Scissors as ContentCutIcon,
+  WandSparkles as HealingIcon,
+  Trash2 as DeleteIcon,
+  GripVertical as DragIndicatorIcon,
+  Plus as AddIcon,
+  Images as PhotoLibraryOutlinedIcon,
+  Puzzle as ExtensionOutlinedIcon,
+} from 'lucide-react'
 import { alpha } from '@mui/material/styles'
+import { PRIMARY } from '@/theme'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -636,7 +639,7 @@ function SliceGrid({
         overflowY: 'auto',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: 1,
         p: 1.5,
         bgcolor: 'background.paper',
       }}
@@ -806,7 +809,7 @@ function KeyedCategoryRow({
                 p: 1,
                 border: '1px dashed',
                 borderColor: 'divider',
-                borderRadius: 1.5,
+                borderRadius: 1,
                 bgcolor: 'background.default',
                 // 棋盘格背景表示透明区域
                 backgroundImage:
@@ -911,7 +914,7 @@ function CategorySection({
               pickedSlice.category === s.category &&
               pickedSlice.idx === s.idx
             const borderColor = isPicked
-              ? '#0d99ff'
+              ? PRIMARY
               : usedByCurrent
                 ? CATEGORY_COLOR.subject
                 : usedByOthers
@@ -942,7 +945,7 @@ function CategorySection({
                   width: 96,
                   height: 96,
                   border: `${isPicked ? 3 : 2}px solid ${borderColor}`,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   overflow: 'hidden',
                   cursor: 'grab',
                   bgcolor: 'background.default',
@@ -952,7 +955,7 @@ function CategorySection({
                   justifyContent: 'center',
                   // 选中态:浅蓝色光晕 + 微 scale(跟 picked 边框呼应)
                   boxShadow: isPicked
-                    ? `0 0 0 3px ${alpha('#0d99ff', 0.25)}`
+                    ? `0 0 0 3px ${alpha(PRIMARY, 0.25)}`
                     : 'none',
                   transform: isPicked ? 'scale(1.04)' : 'scale(1)',
                   zIndex: isPicked ? 1 : 0,
@@ -960,7 +963,7 @@ function CategorySection({
                     'box-shadow 150ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms cubic-bezier(0.2, 0, 0, 1), transform 150ms cubic-bezier(0.2, 0, 0, 1)',
                   // hover:抬一档 + 显出 drag handle / crop btn
                   '&:hover': {
-                    borderColor: isPicked ? '#0d99ff' : alpha('#0d99ff', 0.5),
+                    borderColor: isPicked ? PRIMARY : alpha(PRIMARY, 0.5),
                   },
                   '&:hover .crop-btn, &:hover .drag-handle': { opacity: 1 },
                   '&:active': { cursor: 'grabbing' },
@@ -986,7 +989,7 @@ function CategorySection({
                     pointerEvents: 'none',
                   }}
                 >
-                  <DragIndicatorIcon sx={{ fontSize: 14 }} />
+                  <DragIndicatorIcon size={14} />
                 </Box>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -1034,7 +1037,7 @@ function CategorySection({
                     '&:hover': { bgcolor: 'white' },
                   }}
                 >
-                  <ContentCutIcon sx={{ fontSize: 14 }} />
+                  <ContentCutIcon size={14} />
                 </IconButton>
               </Box>
             )
@@ -1108,7 +1111,7 @@ function ElementList({
         overflowY: 'auto',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: 1,
         p: 1.5,
         bgcolor: 'background.paper',
       }}
@@ -1172,10 +1175,10 @@ function ElementList({
             mb: 1.5,
             px: 1.5,
             py: 1,
-            borderRadius: 1.5,
-            bgcolor: alpha('#0d99ff', 0.08),
+            borderRadius: 1,
+            bgcolor: alpha(PRIMARY, 0.08),
             border: '1px solid',
-            borderColor: alpha('#0d99ff', 0.4),
+            borderColor: alpha(PRIMARY, 0.4),
             fontSize: 13,
             color: 'primary.main',
             display: 'flex',
@@ -1183,7 +1186,7 @@ function ElementList({
             gap: 1,
           }}
         >
-          <DragIndicatorIcon sx={{ fontSize: 16 }} />
+          <DragIndicatorIcon size={16} />
           <Box sx={{ flexGrow: 1 }}>
             已选切片 <code>#{pickedSlice.idx}</code>(
             {VISUAL_CATEGORY_CN[pickedSlice.category]}) · 点元素行或 ↑↓+Enter 指派
@@ -1227,7 +1230,7 @@ function ElementList({
       )}
 
       {allAssigned && (
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'success.light', color: 'success.contrastText', borderRadius: 2 }}>
+        <Box sx={{ mt: 3, p: 2, bgcolor: 'success.light', color: 'success.contrastText', borderRadius: 1 }}>
           <Typography variant="body2" sx={{ mb: 1 }}>
             全部已指派,可以进入下一步
           </Typography>
@@ -1370,7 +1373,7 @@ function ElementRow({
         borderLeft: 3,
         borderLeftColor: color,
         borderColor: pickedSlice
-          ? alpha('#0d99ff', 0.55)
+          ? alpha(PRIMARY, 0.55)
           : isSelected
             ? 'primary.main'
             : 'divider',
@@ -1378,7 +1381,7 @@ function ElementRow({
         bgcolor: hover
           ? 'action.hover'
           : pickedSlice
-            ? alpha('#0d99ff', 0.04)
+            ? alpha(PRIMARY, 0.04)
             : undefined,
         transition:
           'border-color 150ms cubic-bezier(0.2, 0, 0, 1), background-color 150ms cubic-bezier(0.2, 0, 0, 1)',
@@ -1387,8 +1390,8 @@ function ElementRow({
           : {}),
         '&:hover': pickedSlice
           ? {
-              bgcolor: alpha('#0d99ff', 0.12),
-              borderColor: '#0d99ff',
+              bgcolor: alpha(PRIMARY, 0.12),
+              borderColor: PRIMARY,
             }
           : {},
       }}
@@ -1413,8 +1416,8 @@ function ElementRow({
             borderColor: asset
               ? 'transparent'
               : pickedSlice || hover
-                ? '#0d99ff'
-                : alpha('#0d99ff', 0.4),
+                ? PRIMARY
+                : alpha(PRIMARY, 0.4),
             borderRadius: 1,
             display: 'flex',
             flexDirection: 'column',
@@ -1424,13 +1427,13 @@ function ElementRow({
             bgcolor: asset
               ? 'background.default'
               : pickedSlice || hover
-                ? alpha('#0d99ff', 0.08)
-                : alpha('#0d99ff', 0.03),
+                ? alpha(PRIMARY, 0.08)
+                : alpha(PRIMARY, 0.03),
             backgroundImage: asset
               ? 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50%/10px 10px'
               : undefined,
             transition: 'all 150ms cubic-bezier(0.2, 0, 0, 1)',
-            color: pickedSlice || hover ? '#0d99ff' : alpha('#0d99ff', 0.55),
+            color: pickedSlice || hover ? PRIMARY : alpha(PRIMARY, 0.55),
           }}
         >
           {asset ? (
@@ -1445,7 +1448,7 @@ function ElementRow({
             />
           ) : (
             <>
-              <AddIcon sx={{ fontSize: 18, color: 'inherit' }} />
+              <AddIcon size={18} />
               <Typography
                 sx={{
                   fontSize: 9,
@@ -1527,7 +1530,7 @@ function ElementRow({
                 void onUnassign(element.id)
               }}
             >
-              <DeleteIcon fontSize="small" />
+              <DeleteIcon size={16} />
             </IconButton>
           )}
         </Stack>
@@ -1695,8 +1698,8 @@ function SubCropDialog({
                     top: imgRect.offsetY + r.y * sy,
                     width: r.w * sx,
                     height: r.h * sy,
-                    border: '2px solid #0d99ff',
-                    bgcolor: 'rgba(13, 153, 255, 0.15)',
+                    border: `2px solid ${PRIMARY}`,
+                    bgcolor: alpha(PRIMARY, 0.15),
                     pointerEvents: 'none',
                   }}
                 >
@@ -1705,7 +1708,7 @@ function SubCropDialog({
                       position: 'absolute',
                       top: -20,
                       left: 0,
-                      bgcolor: '#0d99ff',
+                      bgcolor: PRIMARY,
                       color: 'white',
                       px: 0.75,
                       py: 0.25,

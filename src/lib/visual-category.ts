@@ -83,7 +83,7 @@ export const VISUAL_CATEGORY_UPPER: Record<VisualCategory, string> = {
 
 /** UI 用 — bbox 边框 / 左条 / chip 颜色等场景统一一份 */
 export const VISUAL_CATEGORY_COLOR: Record<VisualCategory, string> = {
-  subject: '#0d99ff',
+  subject: '#0070f3',
   button: '#f59e0b',
   container: '#10b981',
   background: '#a78bfa',

@@ -35,6 +35,9 @@ importers:
       geist:
         specifier: ^1.7.0
         version: 1.7.0(next@15.5.18(@babel/core@7.29.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.6)
       nanoid:
         specifier: ^5.0.9
         version: 5.1.11
@@ -272,13 +275,13 @@ packages:
     engines: {node: '>=6.9.0'}
 
   '@emnapi/core@1.10.0':
-    resolution: {integrity: sha1-OAzMjyQS6iLR2XLff47iOjucdGc=, tarball: http://r.npm.sankuai.com/@emnapi/core/download/@emnapi/core-1.10.0.tgz}
+    resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
 
   '@emnapi/runtime@1.10.0':
-    resolution: {integrity: sha1-SyYMDTU0IE6YxhELjbGph9JuyHw=, tarball: http://r.npm.sankuai.com/@emnapi/runtime/download/@emnapi/runtime-1.10.0.tgz}
+    resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
 
   '@emnapi/wasi-threads@1.2.1':
-    resolution: {integrity: sha1-KP7SGhuhznl8RKBwq8lNQvOuhUg=, tarball: http://r.npm.sankuai.com/@emnapi/wasi-threads/download/@emnapi/wasi-threads-1.2.1.tgz}
+    resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
 
   '@emotion/babel-plugin@11.13.5':
     resolution: {integrity: sha1-6rjWXb3tdODs/SjcIY51YHxOe8A=, tarball: http://r.npm.sankuai.com/@emotion/babel-plugin/download/@emotion/babel-plugin-11.13.5.tgz}
@@ -405,267 +408,267 @@ packages:
     engines: {node: '>=18'}
 
   '@img/sharp-darwin-arm64@0.33.5':
-    resolution: {integrity: sha1-71taB4YoBfHoFFo3fIum6YgTygg=, tarball: http://r.npm.sankuai.com/@img/sharp-darwin-arm64/download/@img/sharp-darwin-arm64-0.33.5.tgz}
+    resolution: {integrity: sha512-UT4p+iz/2H4twwAoLCqfA9UH5pI6DggwKEGuaPy7nCVQ8ZsiY5PIcrRvD1DzuY3qYL07NtIQcWnBSY/heikIFQ==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [darwin]
 
   '@img/sharp-darwin-arm64@0.34.5':
-    resolution: {integrity: sha1-bgcy3K3hJrZnCveqFwYLkmg16oY=, tarball: http://r.npm.sankuai.com/@img/sharp-darwin-arm64/download/@img/sharp-darwin-arm64-0.34.5.tgz}
+    resolution: {integrity: sha512-imtQ3WMJXbMY4fxb/Ndp6HBTNVtWCUI0WdobyheGf5+ad6xX8VIDO8u2xE4qc/fr08CKG/7dDseFtn6M6g/r3w==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [darwin]
 
   '@img/sharp-darwin-x64@0.33.5':
-    resolution: {integrity: sha1-4D00Uc2eZk+qcpSMxwpAPqQGPWE=, tarball: http://r.npm.sankuai.com/@img/sharp-darwin-x64/download/@img/sharp-darwin-x64-0.33.5.tgz}
+    resolution: {integrity: sha512-fyHac4jIc1ANYGRDxtiqelIbdWkIuQaI84Mv45KvGRRxSAa7o7d1ZKAOBaYbnepLC1WqxfpimdeWfvqqSGwR2Q==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [darwin]
 
   '@img/sharp-darwin-x64@0.34.5':
-    resolution: {integrity: sha1-Gbwd1uum1alig0mLnJ9AEYDunHs=, tarball: http://r.npm.sankuai.com/@img/sharp-darwin-x64/download/@img/sharp-darwin-x64-0.34.5.tgz}
+    resolution: {integrity: sha512-YNEFAF/4KQ/PeW0N+r+aVVsoIY0/qxxikF2SWdp+NRkmMB7y9LBZAVqQ4yhGCm/H3H270OSykqmQMKLBhBJDEw==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [darwin]
 
   '@img/sharp-libvips-darwin-arm64@1.0.4':
-    resolution: {integrity: sha1-RHxQJnAMAamTx4BOuK9fbphowH8=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-darwin-arm64/download/@img/sharp-libvips-darwin-arm64-1.0.4.tgz}
+    resolution: {integrity: sha512-XblONe153h0O2zuFfTAbQYAX2JhYmDHeWikp1LM9Hul9gVPjFY427k6dFEcOL72O01QxQsWi761svJ/ev9xEDg==}
     cpu: [arm64]
     os: [darwin]
 
   '@img/sharp-libvips-darwin-arm64@1.2.4':
-    resolution: {integrity: sha1-KJTAy4fUInbDiJlC6OLbUXpJLEM=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-darwin-arm64/download/@img/sharp-libvips-darwin-arm64-1.2.4.tgz}
+    resolution: {integrity: sha512-zqjjo7RatFfFoP0MkQ51jfuFZBnVE2pRiaydKJ1G/rHZvnsrHAOcQALIi9sA5co5xenQdTugCvtb1cuf78Vf4g==}
     cpu: [arm64]
     os: [darwin]
 
   '@img/sharp-libvips-darwin-x64@1.0.4':
-    resolution: {integrity: sha1-4EVvj3xiP52/vcdzg8qnIoHYYGI=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-darwin-x64/download/@img/sharp-libvips-darwin-x64-1.0.4.tgz}
+    resolution: {integrity: sha512-xnGR8YuZYfJGmWPvmlunFaWJsb9T/AO2ykoP3Fz/0X5XV2aoYBPkX6xqCQvUTKKiLddarLaxpzNe+b1hjeWHAQ==}
     cpu: [x64]
     os: [darwin]
 
   '@img/sharp-libvips-darwin-x64@1.2.4':
-    resolution: {integrity: sha1-5jaB9FOalK+c0XJG7YiBc0OG+Mw=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-darwin-x64/download/@img/sharp-libvips-darwin-x64-1.2.4.tgz}
+    resolution: {integrity: sha512-1IOd5xfVhlGwX+zXv2N93k0yMONvUlANylbJw1eTah8K/Jtpi15KC+WSiaX/nBmbm2HxRM1gZ0nSdjSsrZbGKg==}
     cpu: [x64]
     os: [darwin]
 
   '@img/sharp-libvips-linux-arm64@1.0.4':
-    resolution: {integrity: sha1-l5scZsmpH3/yiTVW7yZ/kOvlFwQ=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-arm64/download/@img/sharp-libvips-linux-arm64-1.0.4.tgz}
+    resolution: {integrity: sha512-9B+taZ8DlyyqzZQnoeIvDVR/2F4EbMepXMc/NdVbkzsJbzkUjhXv/70GQJ7tdLA4YJgNP25zukcxpX2/SueNrA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-arm64@1.2.4':
-    resolution: {integrity: sha1-sbKIs2hks7zlRa2R+m2tzxpK0xg=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-arm64/download/@img/sharp-libvips-linux-arm64-1.2.4.tgz}
+    resolution: {integrity: sha512-excjX8DfsIcJ10x1Kzr4RcWe1edC9PquDRRPx3YVCvQv+U5p7Yin2s32ftzikXojb1PIFc/9Mt28/y+iRklkrw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-arm@1.0.5':
-    resolution: {integrity: sha1-mfki1OFSFuwgXctokbchv9KIQZc=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-arm/download/@img/sharp-libvips-linux-arm-1.0.5.tgz}
+    resolution: {integrity: sha512-gvcC4ACAOPRNATg/ov8/MnbxFDJqf/pDePbBnuBDcjsI8PssmjoKMAz4LtLaVi+OnSb5FK/yIOamqDwGmXW32g==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-arm@1.2.4':
-    resolution: {integrity: sha1-uSYN0evm+eO9vL3KydKsEl81hS0=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-arm/download/@img/sharp-libvips-linux-arm-1.2.4.tgz}
+    resolution: {integrity: sha512-bFI7xcKFELdiNCVov8e44Ia4u2byA+l3XtsAj+Q8tfCwO6BQ8iDojYdvoPMqsKDkuoOo+X6HZA0s0q11ANMQ8A==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-ppc64@1.2.4':
-    resolution: {integrity: sha1-S4Ps8qgpBXIis4hIx7Ai57TQeqc=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-ppc64/download/@img/sharp-libvips-linux-ppc64-1.2.4.tgz}
+    resolution: {integrity: sha512-FMuvGijLDYG6lW+b/UvyilUWu5Ayu+3r2d1S8notiGCIyYU/76eig1UfMmkZ7vwgOrzKzlQbFSuQfgm7GYUPpA==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-riscv64@1.2.4':
-    resolution: {integrity: sha1-iAtGeACeWiCArxkjMrALCq+KSN4=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-riscv64/download/@img/sharp-libvips-linux-riscv64-1.2.4.tgz}
+    resolution: {integrity: sha512-oVDbcR4zUC0ce82teubSm+x6ETixtKZBh/qbREIOcI3cULzDyb18Sr/Wcyx7NRQeQzOiHTNbZFF1UwPS2scyGA==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-s390x@1.0.4':
-    resolution: {integrity: sha1-+KXrHzdKCC9ys/ReL7JbgRiopc4=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-s390x/download/@img/sharp-libvips-linux-s390x-1.0.4.tgz}
+    resolution: {integrity: sha512-u7Wz6ntiSSgGSGcjZ55im6uvTrOxSIS8/dgoVMoiGE9I6JAfU50yH5BoDlYA1tcuGS7g/QNtetJnxA6QEsCVTA==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-s390x@1.2.4':
-    resolution: {integrity: sha1-dPNDyOEPrYIbOPdc7TBIiTncWew=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-s390x/download/@img/sharp-libvips-linux-s390x-1.2.4.tgz}
+    resolution: {integrity: sha512-qmp9VrzgPgMoGZyPvrQHqk02uyjA0/QrTO26Tqk6l4ZV0MPWIW6LTkqOIov+J1yEu7MbFQaDpwdwJKhbJvuRxQ==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-x64@1.0.4':
-    resolution: {integrity: sha1-1MRhnN0Vd3SQbhV3DuEZkxx+9eA=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-x64/download/@img/sharp-libvips-linux-x64-1.0.4.tgz}
+    resolution: {integrity: sha512-MmWmQ3iPFZr0Iev+BAgVMb3ZyC4KeFc3jFxnNbEPas60e1cIfevbtuyf9nDGIzOaW9PdnDciJm+wFFaTlj5xYw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linux-x64@1.2.4':
-    resolution: {integrity: sha1-30GD6L2EEPfWG2aFmjXt6rClMc4=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linux-x64/download/@img/sharp-libvips-linux-x64-1.2.4.tgz}
+    resolution: {integrity: sha512-tJxiiLsmHc9Ax1bz3oaOYBURTXGIRDODBqhveVHonrHJ9/+k89qbLl0bcJns+e4t4rvaNBxaEZsFtSfAdquPrw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-libvips-linuxmusl-arm64@1.0.4':
-    resolution: {integrity: sha1-Fmd42g9I3Sve0fowM87mtYjw1dU=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linuxmusl-arm64/download/@img/sharp-libvips-linuxmusl-arm64-1.0.4.tgz}
+    resolution: {integrity: sha512-9Ti+BbTYDcsbp4wfYib8Ctm1ilkugkA/uscUn6UXK1ldpC1JjiXbLfFZtRlBhjPZ5o1NCLiDbg8fhUPKStHoTA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-libvips-linuxmusl-arm64@1.2.4':
-    resolution: {integrity: sha1-yNa0ghHfZxN1QQB+6NG3sfjKjgY=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linuxmusl-arm64/download/@img/sharp-libvips-linuxmusl-arm64-1.2.4.tgz}
+    resolution: {integrity: sha512-FVQHuwx1IIuNow9QAbYUzJ+En8KcVm9Lk5+uGUQJHaZmMECZmOlix9HnH7n1TRkXMS0pGxIJokIVB9SuqZGGXw==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-libvips-linuxmusl-x64@1.0.4':
-    resolution: {integrity: sha1-k3lOTXcgsHf8rT4CmC8vHCRnUf8=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linuxmusl-x64/download/@img/sharp-libvips-linuxmusl-x64-1.0.4.tgz}
+    resolution: {integrity: sha512-viYN1KX9m+/hGkJtvYYp+CCLgnJXwiQB39damAO7WMdKWlIhmYTfHjwSbQeUK/20vY154mwezd9HflVFM1wVSw==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-libvips-linuxmusl-x64@1.2.4':
-    resolution: {integrity: sha1-vhHHW+5bCAy+4xoVOod5RI+Rn3U=, tarball: http://r.npm.sankuai.com/@img/sharp-libvips-linuxmusl-x64/download/@img/sharp-libvips-linuxmusl-x64-1.2.4.tgz}
+    resolution: {integrity: sha512-+LpyBk7L44ZIXwz/VYfglaX/okxezESc6UxDSoyo2Ks6Jxc4Y7sGjpgU9s4PMgqgjj1gZCylTieNamqA1MF7Dg==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-linux-arm64@0.33.5':
-    resolution: {integrity: sha1-7bBpfnqCecn8gppg/DVkTEg5uyI=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-arm64/download/@img/sharp-linux-arm64-0.33.5.tgz}
+    resolution: {integrity: sha512-JMVv+AMRyGOHtO1RFBiJy/MBsgz0x4AWrT6QoEVVTyh1E39TrCUpTRI7mx9VksGX4awWASxqCYLCV4wBZHAYxA==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-arm64@0.34.5':
-    resolution: {integrity: sha1-eqd2TvnAAfFeYQVG1C/OVpEXkMw=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-arm64/download/@img/sharp-linux-arm64-0.34.5.tgz}
+    resolution: {integrity: sha512-bKQzaJRY/bkPOXyKx5EVup7qkaojECG6NLYswgktOZjaXecSAeCWiZwwiFf3/Y+O1HrauiE3FVsGxFg8c24rZg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-arm@0.33.5':
-    resolution: {integrity: sha1-QiwaNS57WDKEJXfcUWArzVtvXv8=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-arm/download/@img/sharp-linux-arm-0.33.5.tgz}
+    resolution: {integrity: sha512-JTS1eldqZbJxjvKaAkxhZmBqPRGmxgu+qFKSInv8moZ2AmT5Yib3EQ1c6gp493HvrvV8QgdOXdyaIBrhvFhBMQ==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-arm@0.34.5':
-    resolution: {integrity: sha1-X7DDaV3RJSLTnD/3pryBZGF4Cg0=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-arm/download/@img/sharp-linux-arm-0.34.5.tgz}
+    resolution: {integrity: sha512-9dLqsvwtg1uuXBGZKsxem9595+ujv0sJ6Vi8wcTANSFpwV/GONat5eCkzQo/1O6zRIkh0m/8+5BjrRr7jDUSZw==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-ppc64@0.34.5':
-    resolution: {integrity: sha1-nCE6gVIKIMr2aXjz1MB0Vv8uCBM=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-ppc64/download/@img/sharp-linux-ppc64-0.34.5.tgz}
+    resolution: {integrity: sha512-7zznwNaqW6YtsfrGGDA6BRkISKAAE1Jo0QdpNYXNMHu2+0dTrPflTLNkpc8l7MUP5M16ZJcUvysVWWrMefZquA==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-riscv64@0.34.5':
-    resolution: {integrity: sha1-zdKBgndOrb4E9iZ1oWqrvMuDP2A=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-riscv64/download/@img/sharp-linux-riscv64-0.34.5.tgz}
+    resolution: {integrity: sha512-51gJuLPTKa7piYPaVs8GmByo7/U7/7TZOq+cnXJIHZKavIRHAP77e3N2HEl3dgiqdD/w0yUfiJnII77PuDDFdw==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-s390x@0.33.5':
-    resolution: {integrity: sha1-9cB3kmtI6X5KBNAE368XWXIFlmc=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-s390x/download/@img/sharp-linux-s390x-0.33.5.tgz}
+    resolution: {integrity: sha512-y/5PCd+mP4CA/sPDKl2961b+C9d+vPAveS33s6Z3zfASk2j5upL6fXVPZi7ztePZ5CuH+1kW8JtvxgbuXHRa4Q==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-s390x@0.34.5':
-    resolution: {integrity: sha1-k+rGAbnzKbsnkX4OGQmMci1jDfc=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-s390x/download/@img/sharp-linux-s390x-0.34.5.tgz}
+    resolution: {integrity: sha512-nQtCk0PdKfho3eC5MrbQoigJ2gd1CgddUMkabUj+rBevs8tZ2cULOx46E7oyX+04WGfABgIwmMC0VqieTiR4jg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-x64@0.33.5':
-    resolution: {integrity: sha1-2Abgr9ca5ndcyH8NqPLQOnwiCcs=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-x64/download/@img/sharp-linux-x64-0.33.5.tgz}
+    resolution: {integrity: sha512-opC+Ok5pRNAzuvq1AG0ar+1owsu842/Ab+4qvU879ippJBHvyY5n2mxF1izXqkPYlGuP/M556uh53jRLJmzTWA==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linux-x64@0.34.5':
-    resolution: {integrity: sha1-VavHzXVP/KUAK2wrcZq9/IRoGag=, tarball: http://r.npm.sankuai.com/@img/sharp-linux-x64/download/@img/sharp-linux-x64-0.34.5.tgz}
+    resolution: {integrity: sha512-MEzd8HPKxVxVenwAa+JRPwEC7QFjoPWuS5NZnBt6B3pu7EG2Ge0id1oLHZpPJdn3OQK+BQDiw9zStiHBTJQQQQ==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@img/sharp-linuxmusl-arm64@0.33.5':
-    resolution: {integrity: sha1-JSl1uRWJT7MVr13uoXRlHiCNPWs=, tarball: http://r.npm.sankuai.com/@img/sharp-linuxmusl-arm64/download/@img/sharp-linuxmusl-arm64-0.33.5.tgz}
+    resolution: {integrity: sha512-XrHMZwGQGvJg2V/oRSUfSAfjfPxO+4DkiRh6p2AFjLQztWUuY/o8Mq0eMQVIY7HJ1CDQUJlxGGZRw1a5bqmd1g==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-linuxmusl-arm64@0.34.5':
-    resolution: {integrity: sha1-1lFe6XG7YvcwAaSCm52GWhG3cIY=, tarball: http://r.npm.sankuai.com/@img/sharp-linuxmusl-arm64/download/@img/sharp-linuxmusl-arm64-0.34.5.tgz}
+    resolution: {integrity: sha512-fprJR6GtRsMt6Kyfq44IsChVZeGN97gTD331weR1ex1c1rypDEABN6Tm2xa1wE6lYb5DdEnk03NZPqA7Id21yg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-linuxmusl-x64@0.33.5':
-    resolution: {integrity: sha1-P0YJrF2O+Ox9re6AtWCWGmD9T0g=, tarball: http://r.npm.sankuai.com/@img/sharp-linuxmusl-x64/download/@img/sharp-linuxmusl-x64-0.33.5.tgz}
+    resolution: {integrity: sha512-WT+d/cgqKkkKySYmqoZ8y3pxx7lx9vVejxW/W4DOFMYVSkErR+w7mf2u8m/y4+xHe7yY9DAXQMWQhpnMuFfScw==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-linuxmusl-x64@0.34.5':
-    resolution: {integrity: sha1-2Xl4rsfFIS+ZlxTy9bc2RX4S7p8=, tarball: http://r.npm.sankuai.com/@img/sharp-linuxmusl-x64/download/@img/sharp-linuxmusl-x64-0.34.5.tgz}
+    resolution: {integrity: sha512-Jg8wNT1MUzIvhBFxViqrEhWDGzqymo3sV7z7ZsaWbZNDLXRJZoRGrjulp60YYtV4wfY8VIKcWidjojlLcWrd8Q==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@img/sharp-wasm32@0.33.5':
-    resolution: {integrity: sha1-b0TzKDBp2TW7XKWBMVNXLz5vYaE=, tarball: http://r.npm.sankuai.com/@img/sharp-wasm32/download/@img/sharp-wasm32-0.33.5.tgz}
+    resolution: {integrity: sha512-ykUW4LVGaMcU9lu9thv85CbRMAwfeadCJHRsg2GmeRa/cJxsVY9Rbd57JcMxBkKHag5U/x7TSBpScF4U8ElVzg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [wasm32]
 
   '@img/sharp-wasm32@0.34.5':
-    resolution: {integrity: sha1-LxWAOqYm+MWd18nQu8dm8atSz6A=, tarball: http://r.npm.sankuai.com/@img/sharp-wasm32/download/@img/sharp-wasm32-0.34.5.tgz}
+    resolution: {integrity: sha512-OdWTEiVkY2PHwqkbBI8frFxQQFekHaSSkUIJkwzclWZe64O1X4UlUjqqqLaPbUpMOQk6FBu/HtlGXNblIs0huw==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [wasm32]
 
   '@img/sharp-win32-arm64@0.34.5':
-    resolution: {integrity: sha1-Nwbp46w1/d/ByH+U6Enxt1MHzgo=, tarball: http://r.npm.sankuai.com/@img/sharp-win32-arm64/download/@img/sharp-win32-arm64-0.34.5.tgz}
+    resolution: {integrity: sha512-WQ3AgWCWYSb2yt+IG8mnC6Jdk9Whs7O0gxphblsLvdhSpSTtmu69ZG1Gkb6NuvxsNACwiPV6cNSZNzt0KPsw7g==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [arm64]
     os: [win32]
 
   '@img/sharp-win32-ia32@0.33.5':
-    resolution: {integrity: sha1-GgyDmkDFNR6YhWKMhfLl39ArUqk=, tarball: http://r.npm.sankuai.com/@img/sharp-win32-ia32/download/@img/sharp-win32-ia32-0.33.5.tgz}
+    resolution: {integrity: sha512-T36PblLaTwuVJ/zw/LaH0PdZkRz5rd3SmMHX8GSmR7vtNSP5Z6bQkExdSK7xGWyxLw4sUknBuugTelgw2faBbQ==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [ia32]
     os: [win32]
 
   '@img/sharp-win32-ia32@0.34.5':
-    resolution: {integrity: sha1-C3EWZZmwSeAy8IX7kmPgL05HiN4=, tarball: http://r.npm.sankuai.com/@img/sharp-win32-ia32/download/@img/sharp-win32-ia32-0.34.5.tgz}
+    resolution: {integrity: sha512-FV9m/7NmeCmSHDD5j4+4pNI8Cp3aW+JvLoXcTUo0IqyjSfAZJ8dIUmijx1qaJsIiU+Hosw6xM5KijAWRJCSgNg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [ia32]
     os: [win32]
 
   '@img/sharp-win32-x64@0.33.5':
-    resolution: {integrity: sha1-VvAJYv8MTg65PTSgR9KfqZXj40I=, tarball: http://r.npm.sankuai.com/@img/sharp-win32-x64/download/@img/sharp-win32-x64-0.33.5.tgz}
+    resolution: {integrity: sha512-MpY/o8/8kj+EcnxwvrP4aTJSWw/aZ7JIGR4aBeZkZw5B7/Jn+tY9/VNwtcoGmdT7GfggGIU4kygOMSbYnOrAbg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [win32]
 
   '@img/sharp-win32-x64@0.34.5':
-    resolution: {integrity: sha1-qB/7AOaSZ80KHWJurtuKhDCysvg=, tarball: http://r.npm.sankuai.com/@img/sharp-win32-x64/download/@img/sharp-win32-x64-0.34.5.tgz}
+    resolution: {integrity: sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [win32]
@@ -796,7 +799,7 @@ packages:
         optional: true
 
   '@napi-rs/wasm-runtime@0.2.12':
-    resolution: {integrity: sha1-PniouW5sM6bFF+GJTvvVOFp8tvI=, tarball: http://r.npm.sankuai.com/@napi-rs/wasm-runtime/download/@napi-rs/wasm-runtime-0.2.12.tgz}
+    resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
   '@next/env@15.5.18':
     resolution: {integrity: sha1-IHqxUNPxx4esNDlGFVOS1HhQbBs=, tarball: http://r.npm.sankuai.com/@next/env/download/@next/env-15.5.18.tgz}
@@ -805,53 +808,53 @@ packages:
     resolution: {integrity: sha1-DgoZ3ZGdZI6mAgov6rILeA52uhc=, tarball: http://r.npm.sankuai.com/@next/eslint-plugin-next/download/@next/eslint-plugin-next-15.5.18.tgz}
 
   '@next/swc-darwin-arm64@15.5.18':
-    resolution: {integrity: sha1-1DduLTH5BnkSjF2Drs+3qiROR1w=, tarball: http://r.npm.sankuai.com/@next/swc-darwin-arm64/download/@next/swc-darwin-arm64-15.5.18.tgz}
+    resolution: {integrity: sha512-w0WvQf1n+txiwns/9pwIQteCJpZTbxzO2SE0FLcwuD4v0WEh1JPOjdyxWL21XwJsdpx8cFRjyzxzCS/siP7HcQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
 
   '@next/swc-darwin-x64@15.5.18':
-    resolution: {integrity: sha1-NeF58oY9DqGySdX4oWFlk0MfFkU=, tarball: http://r.npm.sankuai.com/@next/swc-darwin-x64/download/@next/swc-darwin-x64-15.5.18.tgz}
+    resolution: {integrity: sha512-znn71QmDuxm+BOaglihMZfvyySMnNljkVIY5Z2TCssBmm+WqL6c19VhtH5ktFkHa8EZ2bnTUpcNcmNSQsg67og==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
 
   '@next/swc-linux-arm64-gnu@15.5.18':
-    resolution: {integrity: sha1-XJe9hCLMDUO2sHMpUUv6zrBLgBQ=, tarball: http://r.npm.sankuai.com/@next/swc-linux-arm64-gnu/download/@next/swc-linux-arm64-gnu-15.5.18.tgz}
+    resolution: {integrity: sha512-yPPe5MNL+igZUa+OsqQJisqSfh6oarIuA1Q0BDxljGJhRQyZeP+WRHh7rs/jZUGMh5aY0YdIjXZG0VohkKkUdw==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@next/swc-linux-arm64-musl@15.5.18':
-    resolution: {integrity: sha1-SX3aa+bpBeOrewJiSlSTzPCPBuc=, tarball: http://r.npm.sankuai.com/@next/swc-linux-arm64-musl/download/@next/swc-linux-arm64-musl-15.5.18.tgz}
+    resolution: {integrity: sha512-glaCczEWIrHsokFZ3pP08U4BpKxwIdnT+txdOM32OBgpL9Yw4aqx8NejmgtZQZOdstQ5f0L3CasIZudzCuD+nw==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@next/swc-linux-x64-gnu@15.5.18':
-    resolution: {integrity: sha1-xYYxAChMAYL/VG0hLHTck0jRZWQ=, tarball: http://r.npm.sankuai.com/@next/swc-linux-x64-gnu/download/@next/swc-linux-x64-gnu-15.5.18.tgz}
+    resolution: {integrity: sha512-oUfg2EgJmU3R0OCOWiokGFUTvZiPfXtriXiuF3YNxRoROCdgvTedHIzYoeKH34gsZxS/V7mHbfq2hpAHwhH1/A==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@next/swc-linux-x64-musl@15.5.18':
-    resolution: {integrity: sha1-JvP9wmcHRYSB1AZJoUIFhL8fO/c=, tarball: http://r.npm.sankuai.com/@next/swc-linux-x64-musl/download/@next/swc-linux-x64-musl-15.5.18.tgz}
+    resolution: {integrity: sha512-JLxSP3KTd9iu/bvUMQxH7RJo9xKSHf55/6RPE4a6FTSZygGn7uvZbCej0AHXydwkggQGSD9UddSjwv6Xz5ESfA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@next/swc-win32-arm64-msvc@15.5.18':
-    resolution: {integrity: sha1-is2yruxtdov/owQ0hdIuzfSKbkw=, tarball: http://r.npm.sankuai.com/@next/swc-win32-arm64-msvc/download/@next/swc-win32-arm64-msvc-15.5.18.tgz}
+    resolution: {integrity: sha512-ir1v7enP52K2HNz3tQQvwF+x7VNxBk1ciiZ18WBPvxf4C59IqdfmHPJYK3vH7rSxpuCVw/8C712wTXNAtEp+NA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
 
   '@next/swc-win32-x64-msvc@15.5.18':
-    resolution: {integrity: sha1-vqxiKOYOPuCM56ILf2Gz3FFtSxA=, tarball: http://r.npm.sankuai.com/@next/swc-win32-x64-msvc/download/@next/swc-win32-x64-msvc-15.5.18.tgz}
+    resolution: {integrity: sha512-LIu5me6QTANCd25E7I5uIEfvgQ06RK7tvHAbYo3zCb3VpxQEPvMcSpd87NwUABDT6MbGPdEGR5VRiK4PPTJhQg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -924,7 +927,7 @@ packages:
     resolution: {integrity: sha1-ee+rNExYGez4OkPz+fgR/IS1Ftc=, tarball: http://r.npm.sankuai.com/@swc/helpers/download/@swc/helpers-0.5.15.tgz}
 
   '@tybys/wasm-util@0.10.1':
-    resolution: {integrity: sha1-7N3TIFzx4tUnRkn/Du3SmR7X9BQ=, tarball: http://r.npm.sankuai.com/@tybys/wasm-util/download/@tybys/wasm-util-0.10.1.tgz}
+    resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha1-zz8Oh2177hWpOrkluCv1cKOQSiQ=, tarball: http://r.npm.sankuai.com/@types/estree/download/@types/estree-1.0.9.tgz}
@@ -1017,105 +1020,105 @@ packages:
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@unrs/resolver-binding-android-arm-eabi@1.11.1':
-    resolution: {integrity: sha1-n1sEUDCI5qNUKV6OqP48uZ5Dr4E=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-android-arm-eabi/download/@unrs/resolver-binding-android-arm-eabi-1.11.1.tgz}
+    resolution: {integrity: sha512-ppLRUgHVaGRWUx0R0Ut06Mjo9gBaBkg3v/8AxusGLhsIotbBLuRk51rAzqLC8gq6NyyAojEXglNjzf6R948DNw==}
     cpu: [arm]
     os: [android]
 
   '@unrs/resolver-binding-android-arm64@1.11.1':
-    resolution: {integrity: sha1-dBSIVDG9cXi5ia7cTSXMyzhlvJ8=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-android-arm64/download/@unrs/resolver-binding-android-arm64-1.11.1.tgz}
+    resolution: {integrity: sha512-lCxkVtb4wp1v+EoN+HjIG9cIIzPkX5OtM03pQYkG+U5O/wL53LC4QbIeazgiKqluGeVEeBlZahHalCaBvU1a2g==}
     cpu: [arm64]
     os: [android]
 
   '@unrs/resolver-binding-darwin-arm64@1.11.1':
-    resolution: {integrity: sha1-tKhVb0IXH7nJ97rII1BF6Cqgy98=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-darwin-arm64/download/@unrs/resolver-binding-darwin-arm64-1.11.1.tgz}
+    resolution: {integrity: sha512-gPVA1UjRu1Y/IsB/dQEsp2V1pm44Of6+LWvbLc9SDk1c2KhhDRDBUkQCYVWe6f26uJb3fOK8saWMgtX8IrMk3g==}
     cpu: [arm64]
     os: [darwin]
 
   '@unrs/resolver-binding-darwin-x64@1.11.1':
-    resolution: {integrity: sha1-/U2BJXsT9NGgg4kKahfADeVx8Nw=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-darwin-x64/download/@unrs/resolver-binding-darwin-x64-1.11.1.tgz}
+    resolution: {integrity: sha512-cFzP7rWKd3lZaCsDze07QX1SC24lO8mPty9vdP+YVa3MGdVgPmFc59317b2ioXtgCMKGiCLxJ4HQs62oz6GfRQ==}
     cpu: [x64]
     os: [darwin]
 
   '@unrs/resolver-binding-freebsd-x64@1.11.1':
-    resolution: {integrity: sha1-0lEwhNDzfEB3V+IvMr2SSnjP2Zs=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-freebsd-x64/download/@unrs/resolver-binding-freebsd-x64-1.11.1.tgz}
+    resolution: {integrity: sha512-fqtGgak3zX4DCB6PFpsH5+Kmt/8CIi4Bry4rb1ho6Av2QHTREM+47y282Uqiu3ZRF5IQioJQ5qWRV6jduA+iGw==}
     cpu: [x64]
     os: [freebsd]
 
   '@unrs/resolver-binding-linux-arm-gnueabihf@1.11.1':
-    resolution: {integrity: sha1-hE0mBdBXSI13+rCXBfKGa4YWTgo=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-arm-gnueabihf/download/@unrs/resolver-binding-linux-arm-gnueabihf-1.11.1.tgz}
+    resolution: {integrity: sha512-u92mvlcYtp9MRKmP+ZvMmtPN34+/3lMHlyMj7wXJDeXxuM0Vgzz0+PPJNsro1m3IZPYChIkn944wW8TYgGKFHw==}
     cpu: [arm]
     os: [linux]
 
   '@unrs/resolver-binding-linux-arm-musleabihf@1.11.1':
-    resolution: {integrity: sha1-IEiSmVzvtr0dAX1S0JcZO8Yd2tM=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-arm-musleabihf/download/@unrs/resolver-binding-linux-arm-musleabihf-1.11.1.tgz}
+    resolution: {integrity: sha512-cINaoY2z7LVCrfHkIcmvj7osTOtm6VVT16b5oQdS4beibX2SYBwgYLmqhBjA1t51CarSaBuX5YNsWLjsqfW5Cw==}
     cpu: [arm]
     os: [linux]
 
   '@unrs/resolver-binding-linux-arm64-gnu@1.11.1':
-    resolution: {integrity: sha1-Aj6ww6rEYGahC+ej82Lns087350=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-arm64-gnu/download/@unrs/resolver-binding-linux-arm64-gnu-1.11.1.tgz}
+    resolution: {integrity: sha512-34gw7PjDGB9JgePJEmhEqBhWvCiiWCuXsL9hYphDF7crW7UgI05gyBAi6MF58uGcMOiOqSJ2ybEeCvHcq0BCmQ==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@unrs/resolver-binding-linux-arm64-musl@1.11.1':
-    resolution: {integrity: sha1-nm+auwZCTjFApgrJlhOXhvXZm+A=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-arm64-musl/download/@unrs/resolver-binding-linux-arm64-musl-1.11.1.tgz}
+    resolution: {integrity: sha512-RyMIx6Uf53hhOtJDIamSbTskA99sPHS96wxVE/bJtePJJtpdKGXO1wY90oRdXuYOGOTuqjT8ACccMc4K6QmT3w==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@unrs/resolver-binding-linux-ppc64-gnu@1.11.1':
-    resolution: {integrity: sha1-sRFBfxfJ0bAu++yOCDmPDFUnu0Q=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-ppc64-gnu/download/@unrs/resolver-binding-linux-ppc64-gnu-1.11.1.tgz}
+    resolution: {integrity: sha512-D8Vae74A4/a+mZH0FbOkFJL9DSK2R6TFPC9M+jCWYia/q2einCubX10pecpDiTmkJVUH+y8K3BZClycD8nCShA==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
   '@unrs/resolver-binding-linux-riscv64-gnu@1.11.1':
-    resolution: {integrity: sha1-kv+/AnSK8+mYc5RcmoperQHVCKk=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-riscv64-gnu/download/@unrs/resolver-binding-linux-riscv64-gnu-1.11.1.tgz}
+    resolution: {integrity: sha512-frxL4OrzOWVVsOc96+V3aqTIQl1O2TjgExV4EKgRY09AJ9leZpEg8Ak9phadbuX0BA4k8U5qtvMSQQGGmaJqcQ==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
   '@unrs/resolver-binding-linux-riscv64-musl@1.11.1':
-    resolution: {integrity: sha1-C+xvElj8OQ5rMF6f9EJWyyB94WU=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-riscv64-musl/download/@unrs/resolver-binding-linux-riscv64-musl-1.11.1.tgz}
+    resolution: {integrity: sha512-mJ5vuDaIZ+l/acv01sHoXfpnyrNKOk/3aDoEdLO/Xtn9HuZlDD6jKxHlkN8ZhWyLJsRBxfv9GYM2utQ1SChKew==}
     cpu: [riscv64]
     os: [linux]
     libc: [musl]
 
   '@unrs/resolver-binding-linux-s390x-gnu@1.11.1':
-    resolution: {integrity: sha1-V3hDoITFlS9ZBncGM8z7idrJvJQ=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-s390x-gnu/download/@unrs/resolver-binding-linux-s390x-gnu-1.11.1.tgz}
+    resolution: {integrity: sha512-kELo8ebBVtb9sA7rMe1Cph4QHreByhaZ2QEADd9NzIQsYNQpt9UkM9iqr2lhGr5afh885d/cB5QeTXSbZHTYPg==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
   '@unrs/resolver-binding-linux-x64-gnu@1.11.1':
-    resolution: {integrity: sha1-NvsxjuvdaQ9toyrF4EmadvqIGTU=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-x64-gnu/download/@unrs/resolver-binding-linux-x64-gnu-1.11.1.tgz}
+    resolution: {integrity: sha512-C3ZAHugKgovV5YvAMsxhq0gtXuwESUKc5MhEtjBpLoHPLYM+iuwSj3lflFwK3DPm68660rZ7G8BMcwSro7hD5w==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@unrs/resolver-binding-linux-x64-musl@1.11.1':
-    resolution: {integrity: sha1-v7mvdfeD+Y9qIsQkQhTv5N8YU9Y=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-linux-x64-musl/download/@unrs/resolver-binding-linux-x64-musl-1.11.1.tgz}
+    resolution: {integrity: sha512-rV0YSoyhK2nZ4vEswT/QwqzqQXw5I6CjoaYMOX0TqBlWhojUf8P94mvI7nuJTeaCkkds3QE4+zS8Ko+GdXuZtA==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@unrs/resolver-binding-wasm32-wasi@1.11.1':
-    resolution: {integrity: sha1-dSw1ndh1aEsnQpUA2IIm18xy9x0=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-wasm32-wasi/download/@unrs/resolver-binding-wasm32-wasi-1.11.1.tgz}
+    resolution: {integrity: sha512-5u4RkfxJm+Ng7IWgkzi3qrFOvLvQYnPBmjmZQ8+szTK/b31fQCnleNl1GgEt7nIsZRIf5PLhPwT0WM+q45x/UQ==}
     engines: {node: '>=14.0.0'}
     cpu: [wasm32]
 
   '@unrs/resolver-binding-win32-arm64-msvc@1.11.1':
-    resolution: {integrity: sha1-zlc15gDkwvu0Cc0FGzt9pKOZrzU=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-win32-arm64-msvc/download/@unrs/resolver-binding-win32-arm64-msvc-1.11.1.tgz}
+    resolution: {integrity: sha512-nRcz5Il4ln0kMhfL8S3hLkxI85BXs3o8EYoattsJNdsX4YUU89iOkVn7g0VHSRxFuVMdM4Q1jEpIId1Ihim/Uw==}
     cpu: [arm64]
     os: [win32]
 
   '@unrs/resolver-binding-win32-ia32-msvc@1.11.1':
-    resolution: {integrity: sha1-cvxXvHxk7Fw94NZO4NGBAxe8YKY=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-win32-ia32-msvc/download/@unrs/resolver-binding-win32-ia32-msvc-1.11.1.tgz}
+    resolution: {integrity: sha512-DCEI6t5i1NmAZp6pFonpD5m7i6aFrpofcp4LA2i8IIq60Jyo28hamKBxNrZcyOwVOZkgsRp9O2sXWBWP8MnvIQ==}
     cpu: [ia32]
     os: [win32]
 
   '@unrs/resolver-binding-win32-x64-msvc@1.11.1':
-    resolution: {integrity: sha1-U4seEDv42YZOe4XMlvqNb7bEB3c=, tarball: http://r.npm.sankuai.com/@unrs/resolver-binding-win32-x64-msvc/download/@unrs/resolver-binding-win32-x64-msvc-1.11.1.tgz}
+    resolution: {integrity: sha512-lrW200hZdbfRtztbygyaq/6jP6AKE8qQN2KvPcJ+x7wiD038YtnYtZ82IMNJ69GJibV7bwL3y9FgK+5w/pYt6g==}
     cpu: [x64]
     os: [win32]
 
@@ -1907,6 +1910,11 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha1-HaJ+ZxAnGUdpXa9oSOhH8B2EuSA=, tarball: http://r.npm.sankuai.com/lru-cache/download/lru-cache-5.1.1.tgz}
 
+  lucide-react@1.17.0:
+    resolution: {integrity: sha512-9FA9evdox/JQL5PT57fdA1x/yg8T7knJ98+zjTL3UfKza6pflQUUh3XtaQIHKvnsJw1lmsEyHVlt5jchYxOQ5w==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   math-intrinsics@1.1.0:
     resolution: {integrity: sha1-oN10voHiqlwvJ+Zc4oNgXuTit/k=, tarball: http://r.npm.sankuai.com/math-intrinsics/download/math-intrinsics-1.1.0.tgz}
     engines: {node: '>= 0.4'}
@@ -2198,7 +2206,7 @@ packages:
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
 
   sharp@0.34.5:
-    resolution: {integrity: sha1-tvFI5LjGHxeXveEanRz+u64sV7A=, tarball: http://r.npm.sankuai.com/sharp/download/sharp-0.34.5.tgz}
+    resolution: {integrity: sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
 
   shebang-command@2.0.0:
@@ -4522,6 +4530,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-react@1.17.0(react@19.2.6):
+    dependencies:
+      react: 19.2.6
 
   math-intrinsics@1.1.0: {}
 

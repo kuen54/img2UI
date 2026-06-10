@@ -7,8 +7,7 @@ import Box from '@mui/material/Box'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
-import HomeIcon from '@mui/icons-material/Home'
-import SettingsIcon from '@mui/icons-material/Settings'
+import { Home as HomeIcon, Settings as SettingsIcon } from 'lucide-react'
 
 export interface BreadcrumbItem {
   label: string
@@ -36,7 +35,8 @@ export function AppShell({
     if (onNavigate && !onNavigate(href)) e.preventDefault()
   }
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    // 不设 bgcolor:让 body 上的草稿本点阵透出来(实底会整层盖住)
+    <Box sx={{ minHeight: '100vh' }}>
       <AppBar position="sticky">
         <Toolbar>
           <IconButton
@@ -47,7 +47,7 @@ export function AppShell({
             aria-label="回首页"
             onClick={guardClick('/')}
           >
-            <HomeIcon />
+            <HomeIcon size={18} />
           </IconButton>
           {breadcrumbs && breadcrumbs.length > 0 ? (
             <Breadcrumbs sx={{ flexGrow: 1 }} separator="›">
@@ -94,7 +94,7 @@ export function AppShell({
             aria-label="设置"
             onClick={guardClick('/settings/providers')}
           >
-            <SettingsIcon />
+            <SettingsIcon size={18} />
           </IconButton>
         </Toolbar>
       </AppBar>
