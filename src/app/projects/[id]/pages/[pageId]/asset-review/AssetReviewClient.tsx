@@ -812,9 +812,9 @@ function KeyedCategoryRow({
                 borderColor: 'divider',
                 borderRadius: 1,
                 bgcolor: 'background.default',
-                // 棋盘格背景表示透明区域(墨色跟随配色方案)
+                // 棋盘格背景表示透明区域(墨色 + 暗部增益跟随配色方案)
                 backgroundImage:
-                  'linear-gradient(45deg, rgba(var(--img2ui-dot-rgb),0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(var(--img2ui-dot-rgb),0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(var(--img2ui-dot-rgb),0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(var(--img2ui-dot-rgb),0.04) 75%)',
+                  'linear-gradient(45deg, rgba(var(--img2ui-dot-rgb),calc(0.04 * var(--img2ui-dot-boost))) 25%, transparent 25%), linear-gradient(-45deg, rgba(var(--img2ui-dot-rgb),calc(0.04 * var(--img2ui-dot-boost))) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(var(--img2ui-dot-rgb),calc(0.04 * var(--img2ui-dot-boost))) 75%), linear-gradient(-45deg, transparent 75%, rgba(var(--img2ui-dot-rgb),calc(0.04 * var(--img2ui-dot-boost))) 75%)',
                 backgroundSize: '12px 12px',
                 backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
                 position: 'relative',

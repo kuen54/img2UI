@@ -69,6 +69,8 @@ export const FONT_MONO =
 // 卡片与弹层是实底,内容浮在点阵之上。调参只动这两个常量。
 // 点/格的墨色走 --img2ui-dot-rgb(CssBaseline 里按 scheme 定义:浅色黑墨、深色白墨),
 // 这样 dotGridBg / checkerboardBg 的产物天然跟随配色方案。
+// --img2ui-dot-boost:同一 alpha 下白墨叠近黑底的对比在暗部被压缩,肉眼上
+// "波点消失",深色 scheme 统一乘一档增益补回来(0.11 → ~0.19)。
 const DOT_SPACING = 20
 const DOT_ALPHA = 0.11
 
@@ -78,14 +80,14 @@ export function dotGridBg(alpha: number = DOT_ALPHA, spacing: number = DOT_SPACI
   backgroundSize: string
 } {
   return {
-    backgroundImage: `radial-gradient(circle, rgba(var(--img2ui-dot-rgb), ${alpha}) 1px, transparent 1px)`,
+    backgroundImage: `radial-gradient(circle, rgba(var(--img2ui-dot-rgb), calc(${alpha} * var(--img2ui-dot-boost))) 1px, transparent 1px)`,
     backgroundSize: `${spacing}px ${spacing}px`,
   }
 }
 
 /** 透明 PNG 底纹棋盘格(slice 缩略图 / keyed 预览),跟随配色方案 */
 export function checkerboardBg(size = 12): string {
-  return `repeating-conic-gradient(rgba(var(--img2ui-dot-rgb), 0.10) 0% 25%, transparent 0% 50%) 50%/${size}px ${size}px`
+  return `repeating-conic-gradient(rgba(var(--img2ui-dot-rgb), calc(0.10 * var(--img2ui-dot-boost))) 0% 25%, transparent 0% 50%) 50%/${size}px ${size}px`
 }
 
 // ─── 进场动效 ─────────────────────────────────────────────────────────────
@@ -353,12 +355,15 @@ export const theme = createTheme({
     },
     MuiCssBaseline: {
       styleOverrides: {
-        // 点阵/棋盘格墨色:浅色黑墨、深色白墨(dotGridBg / checkerboardBg 消费)
+        // 点阵/棋盘格墨色:浅色黑墨、深色白墨 + 暗部对比增益
+        // (dotGridBg / checkerboardBg 消费)
         ':root': {
           '--img2ui-dot-rgb': '0, 0, 0',
+          '--img2ui-dot-boost': '1',
         },
         '[data-mui-color-scheme="dark"]': {
           '--img2ui-dot-rgb': '255, 255, 255',
+          '--img2ui-dot-boost': '1.7',
         },
         body: {
           WebkitFontSmoothing: 'antialiased',
