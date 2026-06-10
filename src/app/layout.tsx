@@ -23,7 +23,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body>
-        <InitColorSchemeScript attribute="data" defaultMode="system" />
+        {/* attribute 必须与 theme 的 colorSchemeSelector 完全一致 */}
+        <InitColorSchemeScript attribute="data-mui-color-scheme" defaultMode="system" />
         <AppRouterCacheProvider>
           <ClientProviders>{children}</ClientProviders>
         </AppRouterCacheProvider>

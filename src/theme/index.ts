@@ -172,8 +172,10 @@ const SHADOW = {
 export const theme = createTheme({
   cssVariables: {
     // html[data-mui-color-scheme="dark"] 作为切换选择器;
-    // InitColorSchemeScript 在首帧前写好属性,SSR 不闪白
-    colorSchemeSelector: 'data',
+    // InitColorSchemeScript 在首帧前写好属性,SSR 不闪白。
+    // 注意必须用显式属性名:'data' 简写会生成 [data-dark],和
+    // CssBaseline / sx 里手写的 [data-mui-color-scheme="dark"] 对不上
+    colorSchemeSelector: 'data-mui-color-scheme',
   },
   colorSchemes: {
     light: {
@@ -363,7 +365,8 @@ export const theme = createTheme({
         },
         '[data-mui-color-scheme="dark"]': {
           '--img2ui-dot-rgb': '255, 255, 255',
-          '--img2ui-dot-boost': '1.7',
+          // 2.5:让深色波点(~#4a4a4a on #0a0a0a)和浅色档感知强度对齐
+          '--img2ui-dot-boost': '2.5',
         },
         body: {
           WebkitFontSmoothing: 'antialiased',
