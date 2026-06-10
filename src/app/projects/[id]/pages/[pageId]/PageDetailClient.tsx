@@ -54,6 +54,8 @@ import {
   type RunStatusKind,
 } from '@/lib/format'
 import {
+  ALL_VISUAL_CATEGORIES,
+  PASS1_ROUTES,
   VISUAL_CATEGORY_CN,
   VISUAL_CATEGORY_COLOR,
 } from '@/lib/visual-category'
@@ -944,6 +946,7 @@ function PipelinePanel({
           <RunningProgress
             stateId={state.id}
             runId={state.pass1_run_id}
+            kind="pass1"
             label="Pass 1 运行中"
           />
         )}
@@ -978,6 +981,7 @@ function PipelinePanel({
           <RunningProgress
             stateId={state.id}
             runId={state.pass2_run_id}
+            kind="pass2"
             label="Pass 2 运行中"
             estimate="1-3 分钟"
           />
@@ -1137,27 +1141,47 @@ function StageDot({
   )
 }
 
-// ─── RunningProgress:运行中进度(n/m 路完成 + 耗时秒表) ────────────────────
+// ─── RunningProgress:运行中进度(每路状态矩阵 + 耗时秒表) ──────────────────
 // sub-run(pass1_{cat} / pass2_{cat})在主 run 启动时一次性全部创建,所以
 // 「started_at >= 主 run started_at」即本次的路次;done = 非 running 的数量。
+// kind 给定时按 category 展开成实时矩阵:Pass 1 固定 5 路(sub-run 未出现 =
+// 排队态),Pass 2 按 category 分组、多 batch 时一批一个 dot。
 // 拿不到 sub-run(如 validate 无分路)时退化为 indeterminate 进度条。
+
+interface SubRunInfo {
+  id: string
+  pass: string
+  status: 'running' | 'completed' | 'failed'
+  started_at: string
+  completed_at?: string
+  batch_idx?: number
+  total_batches?: number
+  element_count?: number
+  slice_count?: number
+  result_count?: number
+  error_message?: string
+}
 
 function RunningProgress({
   stateId,
   runId,
+  kind,
   label,
   estimate,
 }: {
   stateId: string
   runId?: string | undefined
+  kind?: 'pass1' | 'pass2'
   label: string
   estimate?: string
 }): React.ReactElement {
-  const [elapsed, setElapsed] = useState<number | null>(null)
-  const [routes, setRoutes] = useState<{ done: number; total: number } | null>(null)
-  const startRef = useRef<number | null>(null)
+  const [now, setNow] = useState<number | null>(null)
+  const [start, setStart] = useState<number | null>(null)
+  const [subs, setSubs] = useState<SubRunInfo[] | null>(null)
 
-  // 主 run started_at → 秒表(刷新/重进页面也能恢复真实耗时)
+  // 主 run started_at → 秒表(刷新/重进页面也能恢复真实耗时)。
+  // now 走 state 每秒 tick:render 里不调 Date.now()(纯函数),矩阵行的
+  // 实时耗时也统一从这一个时钟算。
   useEffect(() => {
     if (!runId) return
     let cancelled = false
@@ -1165,62 +1189,60 @@ function RunningProgress({
       .then((r) => (r.ok ? r.json() : null))
       .then((run: { started_at?: string } | null) => {
         if (cancelled || !run?.started_at) return
-        startRef.current = new Date(run.started_at).getTime()
+        setStart(new Date(run.started_at).getTime())
       })
       .catch(() => {})
-    const t = setInterval(() => {
-      if (startRef.current !== null) {
-        setElapsed(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)))
-      }
-    }, 1000)
     return () => {
       cancelled = true
-      clearInterval(t)
     }
   }, [runId])
 
+  useEffect(() => {
+    if (start === null) return
+    setNow(Date.now())
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [start])
+
   // 轮询 sub-run 进度
   useEffect(() => {
-    if (!runId) return
+    if (!runId || start === null) return
     const poll = (): void => {
       void fetch(`/api/states/${stateId}/pipeline-runs`)
         .then((r) => (r.ok ? r.json() : null))
-        .then(
-          (
-            data: {
-              runs: Array<{ pass: string; status: string; started_at: string }>
-            } | null,
-          ) => {
-            if (!data || startRef.current === null) return
-            const subs = data.runs.filter(
-              (r) =>
-                /^pass[12]_/.test(r.pass) &&
-                new Date(r.started_at).getTime() >= startRef.current! - 2000,
-            )
-            if (subs.length === 0) return
-            setRoutes({
-              done: subs.filter((r) => r.status !== 'running').length,
-              total: subs.length,
-            })
-          },
-        )
+        .then((data: { runs: SubRunInfo[] } | null) => {
+          if (!data) return
+          const mine = data.runs.filter(
+            (r) =>
+              /^pass[12]_/.test(r.pass) &&
+              new Date(r.started_at).getTime() >= start - 2000,
+          )
+          if (mine.length === 0) return
+          setSubs(mine)
+        })
         .catch(() => {})
     }
     poll()
     const t = setInterval(poll, 2000)
     return () => clearInterval(t)
-  }, [stateId, runId])
+  }, [stateId, runId, start])
 
-  const pct =
-    routes && routes.total > 0 && routes.done > 0
-      ? (routes.done / routes.total) * 100
+  const elapsed =
+    now !== null && start !== null
+      ? Math.max(0, Math.floor((now - start) / 1000))
       : null
+  const done = subs ? subs.filter((r) => r.status !== 'running').length : 0
+  const pct = subs && subs.length > 0 && done > 0 ? (done / subs.length) * 100 : null
   return (
     <Box sx={{ mt: 3 }}>
       {pct !== null ? (
         <LinearProgress variant="determinate" value={pct} />
       ) : (
         <LinearProgress />
+      )}
+      {/* pass1 路次固定可以直接画排队态;pass2 要等 sub-run 落盘才知道有哪些路 */}
+      {kind && (kind === 'pass1' || (subs?.length ?? 0) > 0) && (
+        <RouteMatrix kind={kind} subs={subs ?? []} now={now} />
       )}
       <Stack
         direction="row"
@@ -1231,8 +1253,8 @@ function RunningProgress({
       >
         <Typography variant="body2" color="text.secondary">
           {label}
-          {routes ? ` · ${routes.done}/${routes.total} 路完成` : ''}
-          {!routes && estimate ? ` · ${estimate}` : ''}
+          {subs ? ` · ${done}/${subs.length} 路完成` : ''}
+          {!subs && estimate ? ` · ${estimate}` : ''}
         </Typography>
         {elapsed !== null && (
           <Typography
@@ -1249,6 +1271,144 @@ function RunningProgress({
         )}
       </Stack>
     </Box>
+  )
+}
+
+// ─── RouteMatrix:每 category 一行,看见 5 路谁在跑/谁完成/谁失败 ────────────
+
+function RouteMatrix({
+  kind,
+  subs,
+  now,
+}: {
+  kind: 'pass1' | 'pass2'
+  subs: SubRunInfo[]
+  now: number | null
+}): React.ReactElement {
+  const byCat = new Map<string, SubRunInfo[]>()
+  for (const s of subs) {
+    const cat = s.pass.replace(/^pass[12]_/, '')
+    const arr = byCat.get(cat)
+    if (arr) arr.push(s)
+    else byCat.set(cat, [s])
+  }
+  // Pass 1 路次固定,sub-run 还没落盘的行画成排队态;
+  // Pass 2 只画实际有任务的 category(空类不占行,'other' 兜底在最后)
+  const cats: string[] =
+    kind === 'pass1'
+      ? [...PASS1_ROUTES]
+      : ALL_VISUAL_CATEGORIES.filter((c) => byCat.has(c))
+  return (
+    <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+      {cats.map((cat) => (
+        <RouteRow
+          key={cat}
+          kind={kind}
+          cat={cat}
+          now={now}
+          runs={(byCat.get(cat) ?? []).sort(
+            (a, b) => (a.batch_idx ?? 0) - (b.batch_idx ?? 0),
+          )}
+        />
+      ))}
+    </Stack>
+  )
+}
+
+function RouteRow({
+  kind,
+  cat,
+  runs,
+  now,
+}: {
+  kind: 'pass1' | 'pass2'
+  cat: string
+  runs: SubRunInfo[]
+  now: number | null
+}): React.ReactElement {
+  const label = (VISUAL_CATEGORY_CN as Record<string, string>)[cat] ?? cat
+  const doneCount = runs.filter((r) => r.status === 'completed').length
+  const failed = runs.find((r) => r.status === 'failed')
+  const running = runs.some((r) => r.status === 'running')
+  const allDone = runs.length > 0 && doneCount === runs.length
+
+  let right: React.ReactNode
+  let rightColor = 'text.disabled'
+  if (runs.length === 0) {
+    right = '排队中'
+  } else if (failed) {
+    right = '失败'
+    rightColor = 'error.main'
+  } else if (allDone) {
+    const start = Math.min(...runs.map((r) => new Date(r.started_at).getTime()))
+    const end = Math.max(
+      ...runs.map((r) => new Date(r.completed_at ?? r.started_at).getTime()),
+    )
+    const dur = formatElapsed(Math.max(0, Math.round((end - start) / 1000)))
+    if (kind === 'pass1') {
+      const n = runs.reduce((sum, r) => sum + (r.result_count ?? 0), 0)
+      right = `${n} 元素 · ${dur}`
+    } else {
+      const n = runs.reduce((sum, r) => sum + (r.slice_count ?? 0), 0)
+      right = `${n} 切片 · ${dur}`
+    }
+    rightColor = 'text.secondary'
+  } else if (running) {
+    const start = Math.min(...runs.map((r) => new Date(r.started_at).getTime()))
+    const secs = now !== null ? Math.max(0, Math.floor((now - start) / 1000)) : null
+    const t = secs !== null ? formatElapsed(secs) : ''
+    right = runs.length > 1 ? `${doneCount}/${runs.length} 批${t ? ` · ${t}` : ''}` : t
+  } else {
+    right = ''
+  }
+
+  const row = (
+    <Stack direction="row" alignItems="center" gap={1}>
+      <Typography
+        variant="caption"
+        sx={{ width: 36, flexShrink: 0, color: 'text.secondary' }}
+      >
+        {label}
+      </Typography>
+      <Stack direction="row" gap={0.5} alignItems="center" sx={{ flexGrow: 1 }}>
+        {runs.length === 0 ? (
+          <StatusDot status="idle" size={7} />
+        ) : (
+          // 多 batch 一批一个 dot:看得见切块在并行推进
+          runs.map((r) => (
+            <StatusDot
+              key={r.id}
+              status={
+                r.status === 'completed'
+                  ? 'completed'
+                  : r.status === 'failed'
+                    ? 'failed'
+                    : 'running'
+              }
+              size={7}
+            />
+          ))
+        )}
+      </Stack>
+      <Typography
+        variant="caption"
+        sx={{
+          color: rightColor,
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+      >
+        {right}
+      </Typography>
+    </Stack>
+  )
+  return failed?.error_message ? (
+    <Tooltip title={errText(failed.error_message)} placement="left" arrow>
+      {row}
+    </Tooltip>
+  ) : (
+    row
   )
 }
 
