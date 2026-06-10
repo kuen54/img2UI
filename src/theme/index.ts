@@ -260,6 +260,8 @@ export const theme = createTheme({
           fontSize: '0.875rem',
           lineHeight: '1.25rem',
           letterSpacing: 0,
+          // 行尾按钮被 flex 挤压时不允许 label 折行(min-content 兜底)
+          whiteSpace: 'nowrap',
           minHeight: 36,
           paddingLeft: 16,
           paddingRight: 16,
@@ -736,8 +738,10 @@ export const theme = createTheme({
     },
     MuiFormControlLabel: {
       styleOverrides: {
-        label: {
-          marginLeft: 8,
+        // gap 而非 label.marginLeft:label 传自定义节点(非 string)时
+        // 不带 .MuiFormControlLabel-label class,marginLeft 会失效
+        root: {
+          gap: 8,
         },
       },
     },
