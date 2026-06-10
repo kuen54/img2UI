@@ -27,7 +27,7 @@ import Switch from '@mui/material/Switch'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Alert from '@mui/material/Alert'
 import { alpha } from '@mui/material/styles'
-import { dotGridBg } from '@/theme'
+import { dotGridBg, riseInSx } from '@/theme'
 import {
   FileUp as UploadFileIcon,
   RotateCw as RefreshIcon,
@@ -148,7 +148,7 @@ export function PageDetailClient({
         ) : !page ? (
           <NotFoundCard message="该页面不存在或已被删除。" />
         ) : (
-          <>
+          <Box sx={riseInSx}>
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="h2">{page.name}</Typography>
               {page.route_hint && (
@@ -170,7 +170,7 @@ export function PageDetailClient({
                 pageId={pageId}
               />
             )}
-          </>
+          </Box>
         )}
       </Container>
     </AppShell>

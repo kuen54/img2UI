@@ -1,6 +1,7 @@
 'use client'
 
 import { createElement } from 'react'
+import { keyframes } from '@emotion/react'
 import { createTheme, alpha } from '@mui/material/styles'
 import {
   ChevronDown,
@@ -59,6 +60,27 @@ export function dotGridBg(alpha: number = DOT_ALPHA, spacing: number = DOT_SPACI
     backgroundSize: `${spacing}px ${spacing}px`,
   }
 }
+
+// ─── 进场动效 ─────────────────────────────────────────────────────────────
+// 「出现」的统一语言:fade + 4px rise,120ms,只用于内容首次出现
+// (skeleton → 实内容、Dialog 弹出)。hover/按压等反馈动效不走这里,
+// 局部展开收起继续用 Collapse。
+
+export const ENTER_EASING = 'cubic-bezier(0.05, 0.7, 0.1, 1)' // = transitions.easing.easeOut
+
+export const riseIn = keyframes`
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+`
+
+/**
+ * skeleton → 实内容切换:套在「加载完成」分支的根元素 sx 上。
+ * 注意 fill=both 动画期间元素带 transform,内部如有 position:fixed 子元素
+ * 会被它当作 containing block —— 浮动保存条等都在用户操作后才出现,安全。
+ */
+export const riseInSx = {
+  animation: `${riseIn} 120ms ${ENTER_EASING} both`,
+} as const
 
 // ─── surface token ───────────────────────────────────────────────────────
 // key 沿用 MD3 命名(应用层有 6 处引用,保持兼容),值重映射到单色系:
@@ -639,12 +661,17 @@ export const theme = createTheme({
       },
     },
     // 对话框:10px 圆角 + hairline 边 + xl ambient(告别 28px 大圆角)
+    // 进场 = 统一的 rise-in(paper 上跑 keyframe,默认 Fade 只管 backdrop 同步淡入)
     MuiDialog: {
+      defaultProps: {
+        transitionDuration: { enter: 120, exit: 150 },
+      },
       styleOverrides: {
         paper: {
           borderRadius: 10,
           backgroundColor: '#ffffff',
           border: `1px solid ${SURFACE.outlineVariant}`,
+          animation: `${riseIn} 120ms ${ENTER_EASING} both`,
         },
       },
     },

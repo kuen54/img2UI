@@ -36,7 +36,7 @@ import {
   Puzzle as ExtensionOutlinedIcon,
 } from 'lucide-react'
 import { alpha } from '@mui/material/styles'
-import { PRIMARY } from '@/theme'
+import { PRIMARY, riseInSx } from '@/theme'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -494,7 +494,7 @@ export function AssetReviewClient({
             <Skeleton variant="rounded" sx={{ flexGrow: 1, height: '100%' }} />
           </Stack>
         ) : (
-          <>
+          <Box sx={riseInSx}>
           {failedCats.length > 0 && (
             <Alert
               severity="warning"
@@ -555,7 +555,7 @@ export function AssetReviewClient({
               onGoBack={() => router.push(`/projects/${projectId}/pages/${pageId}`)}
             />
           </Stack>
-          </>
+          </Box>
         )}
       </Container>
 
