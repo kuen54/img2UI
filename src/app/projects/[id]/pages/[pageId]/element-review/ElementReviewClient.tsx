@@ -23,13 +23,26 @@ import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 import Divider from '@mui/material/Divider'
 import Collapse from '@mui/material/Collapse'
+import Slide from '@mui/material/Slide'
+import Paper from '@mui/material/Paper'
+import Popover from '@mui/material/Popover'
+import CircularProgress from '@mui/material/CircularProgress'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import DeleteIcon from '@mui/icons-material/Delete'
 import CheckIcon from '@mui/icons-material/Check'
 import RestoreIcon from '@mui/icons-material/Restore'
 import SaveIcon from '@mui/icons-material/Save'
+import KeyboardOutlinedIcon from '@mui/icons-material/KeyboardOutlined'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
+import FilterAltOffOutlinedIcon from '@mui/icons-material/FilterAltOffOutlined'
+import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import { AppShell } from '@/components/AppShell'
+import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
+import { EmptyState } from '@/components/EmptyState'
+import { KbdHintRow, type KbdHintItem } from '@/components/KbdHint'
+import { successFlash, MD3_STANDARD_EASING } from '@/components/flash'
 import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
 import type {
   LayoutElement,
@@ -83,6 +96,13 @@ export function ElementReviewClient({
   )
   // 「仅未确认」筛选:收尾阶段只看还没过的元素
   const [onlyUnreviewed, setOnlyUnreviewed] = useState(false)
+  // dirty 时拦下的导航目标(确认 Dialog 处理后 router.push)
+  const [pendingNav, setPendingNav] = useState<string | null>(null)
+  // 确认动作的绿闪微反馈:key 递增让同一行能重放动画
+  const [flash, setFlash] = useState<{ id: string; key: number }>({ id: '', key: 0 })
+  const confirmFlash = useCallback((id: string): void => {
+    setFlash((f) => ({ id, key: f.key + 1 }))
+  }, [])
   const router = useRouter()
 
   // 深链:?selected=<element_id> → 加载完元素后自动选中
@@ -308,6 +328,7 @@ export function ElementReviewClient({
         e.preventDefault()
         const confirming = !cur.reviewed
         updateElement(cur.id, { reviewed: confirming })
+        if (confirming) confirmFlash(cur.id)
         if (confirming) {
           // 自动跳下一个未确认(从当前往后找,wrap 回开头)
           const idx = visibleElements.findIndex((el) => el.id === cur.id)
@@ -325,6 +346,10 @@ export function ElementReviewClient({
       }
       if (e.key === 'Delete' && selectedId) {
         removeElement(selectedId)
+        return
+      }
+      if (e.key === 'Escape') {
+        setSelectedId(null)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -339,6 +364,7 @@ export function ElementReviewClient({
     updateElement,
     removeElement,
     scrollRowIntoView,
+    confirmFlash,
   ])
 
   const state = page?.states[0]
@@ -358,24 +384,21 @@ export function ElementReviewClient({
   return (
     <AppShell
       breadcrumbs={breadcrumbs}
-      onNavigate={() => !dirty || window.confirm('有未保存的修改,确定离开?')}
-      rightAction={
-        <Button
-          variant="contained"
-          color="primary"
-          size="small"
-          startIcon={<SaveIcon />}
-          disabled={!dirty || saving}
-          onClick={() => void save()}
-          sx={{ mr: 1 }}
-        >
-          保存
-        </Button>
-      }
+      onNavigate={(href) => {
+        if (!dirty) return true
+        setPendingNav(href) // 拦下,交给「未保存」Dialog 处理
+        return false
+      }}
+      rightAction={<ShortcutsHelp />}
     >
       <Container maxWidth={false} sx={{ py: 3 }}>
         {loading || !state ? (
-          <Skeleton variant="rounded" height={600} />
+          // 跟真实三栏布局同构的 Skeleton
+          <Stack direction="row" spacing={2} sx={{ height: 'calc(100vh - 120px)' }}>
+            <Skeleton variant="rounded" width={280} sx={{ height: '100%' }} />
+            <Skeleton variant="rounded" sx={{ flexGrow: 1, height: '100%' }} />
+            <Skeleton variant="rounded" width={320} sx={{ height: '100%' }} />
+          </Stack>
         ) : (
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ height: 'calc(100vh - 120px)' }}>
             {/* 左:Element 列表 */}
@@ -399,6 +422,7 @@ export function ElementReviewClient({
               allReviewed={allReviewed}
               onlyUnreviewed={onlyUnreviewed}
               onToggleOnlyUnreviewed={() => setOnlyUnreviewed((v) => !v)}
+              flash={flash}
               onProceed={async () => {
                 // P3-#14:保存失败 / 后端拒绝时不跳转,留在页面处理
                 if (dirty) {
@@ -439,13 +463,115 @@ export function ElementReviewClient({
             {/* 右:详情 */}
             <ElementDetail
               element={selected}
-              onChange={(patch) => selected && updateElement(selected.id, patch)}
+              onChange={(patch) => {
+                if (!selected) return
+                updateElement(selected.id, patch)
+                if (patch.reviewed === true) confirmFlash(selected.id)
+              }}
               onDelete={() => selected && removeElement(selected.id)}
             />
           </Stack>
         )}
       </Container>
+
+      {/* 浮动保存条:dirty 时从底部滑入(Linear 风格),主操作不再藏在 AppBar */}
+      <Slide direction="up" in={dirty || saving} mountOnEnter unmountOnExit>
+        <Paper
+          elevation={6}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%) !important',
+            zIndex: (t) => t.zIndex.snackbar,
+            borderRadius: 9999,
+            px: 2,
+            py: 0.75,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            bgcolor: 'grey.900',
+            color: '#fff',
+          }}
+        >
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: 'warning.main',
+              flexShrink: 0,
+            }}
+          />
+          <Typography variant="body2" sx={{ color: 'inherit' }}>
+            有未保存的修改
+          </Typography>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={
+              saving ? (
+                <CircularProgress size={14} color="inherit" />
+              ) : (
+                <SaveIcon sx={{ fontSize: 16 }} />
+              )
+            }
+            disabled={saving}
+            onClick={() => void save()}
+          >
+            {saving ? '保存中…' : '保存 ⌘S'}
+          </Button>
+        </Paper>
+      </Slide>
+
+      {/* 未保存离开确认(替代原生 window.confirm) */}
+      <UnsavedNavDialog
+        href={pendingNav}
+        onClose={() => setPendingNav(null)}
+        onSave={save}
+        onNavigate={(href) => router.push(href)}
+      />
     </AppShell>
+  )
+}
+
+// ─── ShortcutsHelp:AppBar「?」快捷键说明 ──────────────────────────────────
+
+const SHORTCUT_ITEMS: KbdHintItem[] = [
+  { keys: ['↑', '↓'], label: '上下切换元素' },
+  { keys: ['⏎'], label: '确认并跳到下一个未确认' },
+  { keys: ['⌘', 'S'], label: '保存' },
+  { keys: ['⌫'], label: '删除选中元素' },
+  { keys: ['Esc'], label: '取消选择' },
+]
+
+function ShortcutsHelp(): React.ReactElement {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label="快捷键说明"
+        onClick={(e) => setAnchor(e.currentTarget)}
+        sx={{ mr: 1 }}
+      >
+        <KeyboardOutlinedIcon />
+      </IconButton>
+      <Popover
+        open={!!anchor}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Stack spacing={1.25} sx={{ p: 2 }}>
+          <Typography variant="overline">键盘快捷键</Typography>
+          {SHORTCUT_ITEMS.map((item, i) => (
+            <KbdHintRow key={i} items={[item]} />
+          ))}
+        </Stack>
+      </Popover>
+    </>
   )
 }
 
@@ -468,6 +594,7 @@ function ElementSidebar({
   allReviewed,
   onlyUnreviewed,
   onToggleOnlyUnreviewed,
+  flash,
   onProceed,
 }: {
   elements: LayoutElement[]
@@ -486,6 +613,7 @@ function ElementSidebar({
   allReviewed: boolean
   onlyUnreviewed: boolean
   onToggleOnlyUnreviewed: () => void
+  flash: { id: string; key: number }
   onProceed: () => void
 }): React.ReactElement {
   const [tinyOpen, setTinyOpen] = useState(false)
@@ -598,16 +726,22 @@ function ElementSidebar({
       <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 1, pb: 2 }}>
         <Stack spacing={1}>
           {visibleElements.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              {elements.length === 0 ? '没有元素' : '当前过滤无匹配'}
-            </Typography>
+            <Box sx={{ py: 4 }}>
+              <EmptyState
+                variant="compact"
+                icon={<FilterAltOffOutlinedIcon />}
+                title={elements.length === 0 ? '没有元素' : '当前过滤无匹配'}
+              />
+            </Box>
           ) : (
             visibleElements.map((el) => {
               const color = CATEGORY_COLOR[el.visual_category]
               const isSel = selectedId === el.id
+              const isFlash = flash.id === el.id
               return (
                 <Card
-                  key={el.id}
+                  // flash 行换 key 重挂载 → 动画可重放
+                  key={isFlash ? `${el.id}-f${flash.key}` : el.id}
                   variant="outlined"
                   data-element-id={el.id}
                   sx={{
@@ -615,7 +749,11 @@ function ElementSidebar({
                     borderLeftColor: color,
                     bgcolor: isSel ? `${color}1f` : undefined,
                     borderColor: isSel ? color : 'divider',
-                    borderWidth: isSel ? 2 : 1,
+                    transition: 'border-color 150ms, box-shadow 150ms',
+                    ...(isSel ? { boxShadow: `0 0 0 1px ${color}` } : {}),
+                    ...(isFlash
+                      ? { animation: `${successFlash} 700ms ${MD3_STANDARD_EASING}` }
+                      : {}),
                   }}
                 >
                   <CardActionArea onClick={() => onSelect(el.id)} sx={{ p: 1.25 }}>
@@ -623,17 +761,28 @@ function ElementSidebar({
                       <Typography variant="body2" noWrap fontWeight={500}>
                         {el.name}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        noWrap
-                        component="div"
-                      >
-                        {el.reviewed ? '✅' : '⏳'} {el.type} ·{' '}
-                        <Box component="span" sx={{ color, fontWeight: 500 }}>
-                          {VISUAL_CATEGORY_CN[el.visual_category]}
-                        </Box>
-                      </Typography>
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        {el.reviewed ? (
+                          <CheckCircleIcon
+                            sx={{ fontSize: 13, color: 'success.main', flexShrink: 0 }}
+                          />
+                        ) : (
+                          <RadioButtonUncheckedIcon
+                            sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }}
+                          />
+                        )}
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          noWrap
+                          component="div"
+                        >
+                          {el.type} ·{' '}
+                          <Box component="span" sx={{ color, fontWeight: 500 }}>
+                            {VISUAL_CATEGORY_CN[el.visual_category]}
+                          </Box>
+                        </Typography>
+                      </Stack>
                     </Box>
                   </CardActionArea>
                 </Card>
@@ -690,9 +839,17 @@ function ElementSidebar({
           >
             返回页面 · 运行 Pass 2
           </Button>
-          <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center' }}>
-            ↑↓ 切换 · Enter 确认+下一个 · ⌘S 保存 · Del 删除
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.5 }}>
+            <KbdHintRow
+              wrap
+              items={[
+                { keys: ['↑', '↓'], label: '切换' },
+                { keys: ['⏎'], label: '确认' },
+                { keys: ['⌘S'], label: '保存' },
+                { keys: ['⌫'], label: '删除' },
+              ]}
+            />
+          </Box>
         </Stack>
       </Box>
     </Box>
@@ -937,10 +1094,12 @@ function ElementDetail({
 }): React.ReactElement {
   if (!element) {
     return (
-      <Box sx={{ width: 320, flexShrink: 0, p: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          点击元素查看 / 编辑
-        </Typography>
+      <Box sx={{ width: 320, flexShrink: 0, p: 2, pt: 8 }}>
+        <EmptyState
+          variant="compact"
+          icon={<TouchAppOutlinedIcon />}
+          title="点击元素查看 / 编辑"
+        />
       </Box>
     )
   }

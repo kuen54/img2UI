@@ -24,15 +24,25 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Switch from '@mui/material/Switch'
 import FormControlLabel from '@mui/material/FormControlLabel'
+import Alert from '@mui/material/Alert'
 import { alpha } from '@mui/material/styles'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
 import HomeIcon from '@mui/icons-material/Home'
+import CheckIcon from '@mui/icons-material/Check'
+import CloseIcon from '@mui/icons-material/Close'
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined'
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined'
+import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined'
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined'
+import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { StatChip } from '@/components/StatChip'
+import { EmptyState } from '@/components/EmptyState'
 import { StatusDot } from '@/components/StatusDot'
 import {
   formatRelative,
@@ -112,7 +122,23 @@ export function PageDetailClient({
     >
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {loading ? (
-          <Skeleton variant="rounded" height={400} />
+          // 跟真实布局同构的 Skeleton:标题 + stats 行 + 左预览/右面板
+          <>
+            <Skeleton width={240} height={44} />
+            <Skeleton width={400} height={20} sx={{ mb: 3 }} />
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={3}
+              alignItems="flex-start"
+            >
+              <Skeleton
+                variant="rounded"
+                height={400}
+                sx={{ flexGrow: 1, alignSelf: 'stretch' }}
+              />
+              <Skeleton variant="rounded" width={320} height={340} />
+            </Stack>
+          </>
         ) : !page ? (
           <NotFoundCard message="该页面不存在或已被删除。" />
         ) : (
@@ -154,20 +180,6 @@ function PageStatsStrip({
   stats: PageStats
   hasState: boolean
 }): React.ReactElement {
-  const parts: string[] = [`${stats.state_count} 状态`]
-  if (stats.total_elements > 0) {
-    parts.push(`${stats.reviewed_elements}/${stats.total_elements} 元素已确认`)
-  }
-  if (stats.static_elements > 0) {
-    parts.push(`${stats.total_assets}/${stats.static_elements} 已指派`)
-  }
-  if (stats.total_assets > 0) {
-    parts.push(`${stats.uploaded_assets}/${stats.total_assets} 资产已上传`)
-  }
-  if (stats.last_run) {
-    parts.push(`最近活动 ${formatRelative(stats.last_run.at)}`)
-  }
-
   // 状态点 + 当前 pipeline_status 标签(整页主状态指示)
   const statusKind: RunStatusKind =
     stats.pipeline_status === null
@@ -189,12 +201,65 @@ function PageStatsStrip({
     <Stack
       direction="row"
       alignItems="center"
-      gap={1.25}
+      useFlexGap
+      columnGap={3}
+      rowGap={1}
       sx={{ mb: 3, flexWrap: 'wrap' }}
     >
-      <Typography variant="body2" color="text.secondary">
-        {parts.join(' · ')}
-      </Typography>
+      <StatChip
+        icon={<LayersOutlinedIcon />}
+        value={stats.state_count}
+        label="状态"
+      />
+      {stats.total_elements > 0 && (
+        <StatChip
+          icon={<TaskAltOutlinedIcon />}
+          value={`${stats.reviewed_elements}/${stats.total_elements}`}
+          label="元素已确认"
+          valueColor={
+            stats.reviewed_elements === stats.total_elements
+              ? 'success.main'
+              : 'text.primary'
+          }
+        />
+      )}
+      {stats.static_elements > 0 && (
+        <StatChip
+          icon={<ExtensionOutlinedIcon />}
+          value={`${stats.total_assets}/${stats.static_elements}`}
+          label="已指派"
+          valueColor={
+            stats.total_assets === stats.static_elements
+              ? 'success.main'
+              : 'text.primary'
+          }
+        />
+      )}
+      {stats.total_assets > 0 && (
+        <StatChip
+          icon={<CloudUploadOutlinedIcon />}
+          value={`${stats.uploaded_assets}/${stats.total_assets}`}
+          label="资产已上传"
+          valueColor={
+            stats.uploaded_assets === stats.total_assets
+              ? 'success.main'
+              : 'text.primary'
+          }
+        />
+      )}
+      {stats.last_run && (
+        <Stack
+          direction="row"
+          spacing={0.5}
+          alignItems="center"
+          sx={{ color: 'text.secondary' }}
+        >
+          <ScheduleOutlinedIcon sx={{ fontSize: 14 }} />
+          <Typography variant="caption">
+            最近活动 {formatRelative(stats.last_run.at)}
+          </Typography>
+        </Stack>
+      )}
       <Box sx={{ flex: 1 }} />
       <Stack direction="row" alignItems="center" gap={0.875}>
         <StatusDot status={statusKind} />
@@ -219,6 +284,7 @@ function UploadDropzone({
   onUploaded: () => void
 }): React.ReactElement {
   const [uploading, setUploading] = useState(false)
+  const [uploadingName, setUploadingName] = useState('')
   const [drag, setDrag] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -228,6 +294,7 @@ function UploadDropzone({
       return
     }
     setUploading(true)
+    setUploadingName(file.name)
     try {
       const fd = new FormData()
       fd.append('file', file)
@@ -270,9 +337,14 @@ function UploadDropzone({
       }}
     >
       {uploading ? (
-        <Stack alignItems="center" spacing={2}>
-          <CircularProgress />
-          <Typography color="text.secondary">上传中…</Typography>
+        <Stack alignItems="center" spacing={2} sx={{ px: 6 }}>
+          <UploadFileIcon sx={{ fontSize: 48, color: 'primary.main' }} />
+          <Box sx={{ width: '100%', maxWidth: 360 }}>
+            <LinearProgress />
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            上传中 <code>{uploadingName}</code> …
+          </Typography>
         </Stack>
       ) : (
         <Stack alignItems="center" spacing={2}>
@@ -336,20 +408,10 @@ function DesignWithPipeline({
 
   const inFlight = state.pipeline_status.endsWith('_running') || state.pipeline_status === 'validating'
   const inFlightWarning = inFlight ? (
-    <Box
-      sx={{
-        mt: 1.5,
-        p: 1.25,
-        borderRadius: 1.5,
-        border: '1px solid',
-        borderColor: alpha('#d97706', 0.3),
-        bgcolor: alpha('#d97706', 0.06),
-      }}
-    >
-      <Typography variant="caption" sx={{ color: 'warning.dark' }}>
-        ⚠ 当前 pipeline 还在跑(<code>{state.pipeline_status}</code>)。继续会丢失正在执行的结果(LLM 调用本身不会停止,但产物会被删)。
-      </Typography>
-    </Box>
+    <Alert severity="warning" sx={{ mt: 1.5 }}>
+      当前 pipeline 还在跑(<code>{state.pipeline_status}</code>
+      )。继续会丢失正在执行的结果(LLM 调用本身不会停止,但产物会被删)。
+    </Alert>
   ) : null
 
   const replaceUpload = async (file: File): Promise<void> => {
@@ -623,6 +685,11 @@ function PipelinePanel({
     if (status.endsWith('_failed')) return false
     return idx === currentIdx + 1
   }
+  const inFlightNow = status.endsWith('_running') || status === 'validating'
+  const isStageRunning = (key: string): boolean => {
+    const order = ['pass1', 'element_review', 'pass2', 'asset_review', 'validate', 'export']
+    return inFlightNow && order.indexOf(key) === currentStageIdx(status)
+  }
 
   const [running, setRunning] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -771,21 +838,42 @@ function PipelinePanel({
           Pipeline
         </Typography>
 
-        <Stack spacing={1.5}>
-          {STAGE_LABELS.map((s) => {
+        {/* 竖向 stepper:dot 之间连接线(完成段染主色),completed=✓ / failed=✕ /
+            running=脉动 ring / next-up=ring,流程推进感比 6 个孤立点强得多 */}
+        <Stack spacing={0}>
+          {STAGE_LABELS.map((s, i) => {
             const st = stageState(s.key)
             const isCurrent = isStageCurrent(s.key)
+            const isRunning = isStageRunning(s.key)
+            const isLast = i === STAGE_LABELS.length - 1
             return (
-              <Stack key={s.key} direction="row" alignItems="center" spacing={1.25}>
-                <StatusDot status={st} />
+              <Stack key={s.key} direction="row" spacing={1.25} alignItems="stretch">
+                <Stack alignItems="center" sx={{ width: 18, flexShrink: 0 }}>
+                  <StageDot state={st} current={isCurrent} running={isRunning} />
+                  {!isLast && (
+                    <Box
+                      sx={{
+                        width: '2px',
+                        flexGrow: 1,
+                        minHeight: 12,
+                        my: '3px',
+                        borderRadius: 1,
+                        bgcolor:
+                          st === 'completed' ? 'primary.main' : 'surface.outlineVariant',
+                      }}
+                    />
+                  )}
+                </Stack>
                 <Typography
                   variant="body2"
                   sx={{
+                    pb: isLast ? 0 : 1.5,
+                    lineHeight: '18px',
                     color:
                       st === 'failed' ? 'error.main'
-                      : st === 'completed' || isCurrent ? 'text.primary'
+                      : st === 'completed' || isCurrent || isRunning ? 'text.primary'
                       : 'text.secondary',
-                    fontWeight: isCurrent ? 600 : 400,
+                    fontWeight: isCurrent || isRunning ? 600 : 400,
                   }}
                 >
                   {s.label}
@@ -796,37 +884,25 @@ function PipelinePanel({
         </Stack>
 
         {errorMessage && (
-          <Box
-            sx={{
-              mt: 2.5,
-              p: 1.25,
-              borderRadius: 1.5,
-              border: '1px solid',
-              borderColor: alpha('#b91c1c', 0.3),
-              bgcolor: alpha('#b91c1c', 0.04),
-            }}
-          >
-            <Stack direction="row" spacing={1} alignItems="flex-start">
-              <ErrorOutlineIcon sx={{ fontSize: 16, mt: 0.25, color: 'error.main' }} />
-              <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, color: 'error.main' }}>
-                  上次失败原因
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: 'block',
-                    fontFamily: 'monospace',
-                    wordBreak: 'break-word',
-                    mt: 0.5,
-                    color: 'text.primary',
-                  }}
-                >
-                  {errorMessage}
-                </Typography>
-              </Box>
-            </Stack>
-          </Box>
+          <Alert severity="error" sx={{ mt: 2.5, alignItems: 'flex-start' }}>
+            <Typography
+              variant="caption"
+              sx={{ display: 'block', fontWeight: 600 }}
+            >
+              上次失败原因
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                fontFamily: 'monospace',
+                wordBreak: 'break-word',
+                mt: 0.5,
+              }}
+            >
+              {errorMessage}
+            </Typography>
+          </Alert>
         )}
 
         {(status === 'idle' || status === 'pass1_failed') && (
@@ -847,12 +923,11 @@ function PipelinePanel({
         )}
 
         {status === 'pass1_running' && (
-          <Box sx={{ mt: 3 }}>
-            <LinearProgress />
-            <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
-              Pass 1 运行中…
-            </Typography>
-          </Box>
+          <RunningProgress
+            stateId={state.id}
+            runId={state.pass1_run_id}
+            label="Pass 1 运行中"
+          />
         )}
 
         {status === 'pass1_done' && (
@@ -882,12 +957,16 @@ function PipelinePanel({
         )}
 
         {status === 'pass2_running' && (
-          <Box sx={{ mt: 3 }}>
-            <LinearProgress />
-            <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
-              Pass 2 运行中…1-3 分钟
-            </Typography>
-          </Box>
+          <RunningProgress
+            stateId={state.id}
+            runId={state.pass2_run_id}
+            label="Pass 2 运行中"
+            estimate="1-3 分钟"
+          />
+        )}
+
+        {status === 'validating' && (
+          <RunningProgress stateId={state.id} label="反向校验运行中" />
         )}
 
         {(status === 'pass2_done' || status === 'validated') && (
@@ -966,6 +1045,194 @@ function PipelinePanel({
   )
 }
 
+// ─── StageDot:stepper 节点 ─────────────────────────────────────────────────
+// completed=主色填充✓ / failed=红填充✕ / running=主色 ring+脉动芯 / next-up=主色 ring / idle=灰点
+
+function StageDot({
+  state,
+  current,
+  running,
+}: {
+  state: RunStatusKind
+  current: boolean
+  running: boolean
+}): React.ReactElement {
+  if (state === 'completed' || state === 'failed') {
+    const Icon = state === 'completed' ? CheckIcon : CloseIcon
+    return (
+      <Box
+        sx={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: state === 'completed' ? 'primary.main' : 'error.main',
+          color: '#fff',
+        }}
+      >
+        <Icon sx={{ fontSize: 12 }} />
+      </Box>
+    )
+  }
+  if (running || current) {
+    return (
+      <Box
+        sx={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '2px solid',
+          borderColor: 'primary.main',
+          bgcolor: 'background.paper',
+        }}
+      >
+        {running ? (
+          <StatusDot status="running" size={6} />
+        ) : (
+          <Box
+            sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'primary.main' }}
+          />
+        )}
+      </Box>
+    )
+  }
+  return (
+    <Box
+      sx={{
+        width: 18,
+        height: 18,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'grey.300' }} />
+    </Box>
+  )
+}
+
+// ─── RunningProgress:运行中进度(n/m 路完成 + 耗时秒表) ────────────────────
+// sub-run(pass1_{cat} / pass2_{cat})在主 run 启动时一次性全部创建,所以
+// 「started_at >= 主 run started_at」即本次的路次;done = 非 running 的数量。
+// 拿不到 sub-run(如 validate 无分路)时退化为 indeterminate 进度条。
+
+function RunningProgress({
+  stateId,
+  runId,
+  label,
+  estimate,
+}: {
+  stateId: string
+  runId?: string | undefined
+  label: string
+  estimate?: string
+}): React.ReactElement {
+  const [elapsed, setElapsed] = useState<number | null>(null)
+  const [routes, setRoutes] = useState<{ done: number; total: number } | null>(null)
+  const startRef = useRef<number | null>(null)
+
+  // 主 run started_at → 秒表(刷新/重进页面也能恢复真实耗时)
+  useEffect(() => {
+    if (!runId) return
+    let cancelled = false
+    void fetch(`/api/pipeline-runs/${runId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((run: { started_at?: string } | null) => {
+        if (cancelled || !run?.started_at) return
+        startRef.current = new Date(run.started_at).getTime()
+      })
+      .catch(() => {})
+    const t = setInterval(() => {
+      if (startRef.current !== null) {
+        setElapsed(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)))
+      }
+    }, 1000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [runId])
+
+  // 轮询 sub-run 进度
+  useEffect(() => {
+    if (!runId) return
+    const poll = (): void => {
+      void fetch(`/api/states/${stateId}/pipeline-runs`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then(
+          (
+            data: {
+              runs: Array<{ pass: string; status: string; started_at: string }>
+            } | null,
+          ) => {
+            if (!data || startRef.current === null) return
+            const subs = data.runs.filter(
+              (r) =>
+                /^pass[12]_/.test(r.pass) &&
+                new Date(r.started_at).getTime() >= startRef.current! - 2000,
+            )
+            if (subs.length === 0) return
+            setRoutes({
+              done: subs.filter((r) => r.status !== 'running').length,
+              total: subs.length,
+            })
+          },
+        )
+        .catch(() => {})
+    }
+    poll()
+    const t = setInterval(poll, 2000)
+    return () => clearInterval(t)
+  }, [stateId, runId])
+
+  const pct =
+    routes && routes.total > 0 && routes.done > 0
+      ? (routes.done / routes.total) * 100
+      : null
+  return (
+    <Box sx={{ mt: 3 }}>
+      {pct !== null ? (
+        <LinearProgress variant="determinate" value={pct} />
+      ) : (
+        <LinearProgress />
+      )}
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="baseline"
+        sx={{ mt: 1 }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          {label}
+          {routes ? ` · ${routes.done}/${routes.total} 路完成` : ''}
+          {!routes && estimate ? ` · ${estimate}` : ''}
+        </Typography>
+        {elapsed !== null && (
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}
+          >
+            {formatElapsed(elapsed)}
+          </Typography>
+        )}
+      </Stack>
+    </Box>
+  )
+}
+
+function formatElapsed(s: number): string {
+  const m = Math.floor(s / 60)
+  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`
+}
+
 function currentStageIdx(status: StatePipelineStatus): number {
   switch (status) {
     case 'pass1_running':
@@ -991,17 +1258,16 @@ function currentStageIdx(status: StatePipelineStatus): number {
 
 function NotFoundCard({ message }: { message: string }): React.ReactElement {
   return (
-    <Box sx={{ py: 8, textAlign: 'center' }}>
-      <Typography variant="h2" sx={{ fontSize: 56, color: 'text.disabled' }}>
-        404
-      </Typography>
-      <Typography variant="body1" sx={{ mt: 1, mb: 3 }} color="text.secondary">
-        {message}
-      </Typography>
-      <Button variant="contained" component={Link} href="/" startIcon={<HomeIcon />}>
-        回首页
-      </Button>
-    </Box>
+    <EmptyState
+      icon={<SearchOffOutlinedIcon />}
+      title="404"
+      description={message}
+      action={
+        <Button variant="contained" component={Link} href="/" startIcon={<HomeIcon />}>
+          回首页
+        </Button>
+      }
+    />
   )
 }
 

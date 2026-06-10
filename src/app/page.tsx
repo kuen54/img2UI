@@ -18,10 +18,20 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
+import Grow from '@mui/material/Grow'
 import { alpha } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined'
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
+import DashboardCustomizeOutlinedIcon from '@mui/icons-material/DashboardCustomizeOutlined'
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined'
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined'
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
 import { AppShell } from '@/components/AppShell'
 import { StatusDot } from '@/components/StatusDot'
+import { StatChip } from '@/components/StatChip'
+import { EmptyState } from '@/components/EmptyState'
 import {
   describeRunStatus,
   formatRelative,
@@ -35,9 +45,21 @@ interface ProjectListItem extends Project {
   stats: ProjectStats
 }
 
+/** 新建项目尚未有任何内容,零值 stats(局部插入用,后台 refetch 会校准) */
+const EMPTY_STATS: ProjectStats = {
+  total_pages: 0,
+  total_states: 0,
+  total_elements: 0,
+  total_assets: 0,
+  uploaded_assets: 0,
+  pipeline_coverage: { idle: 0, pass1_done: 0, pass2_done: 0, validated: 0, other: 0 },
+}
+
 export default function HomePage(): React.ReactElement {
   const [projects, setProjects] = useState<ProjectListItem[] | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  // 最近一次本地插入的项目 id:只让它做 Grow 进场,存量卡片不动
+  const [recentId, setRecentId] = useState<string | null>(null)
 
   const reload = (): void => {
     void fetch('/api/projects')
@@ -76,15 +98,21 @@ export default function HomePage(): React.ReactElement {
         ) : projects.length === 0 ? (
           <EmptyInline onCreate={() => setDialogOpen(true)} />
         ) : (
-          <ProjectCardGrid projects={projects} />
+          <ProjectCardGrid projects={projects} recentId={recentId} />
         )}
       </Container>
 
       <NewProjectDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onCreated={() => {
+        onCreated={(project) => {
           setDialogOpen(false)
+          // 局部插入(Grow 进场),后台 refetch 校准 stats/缩略图
+          setRecentId(project.id)
+          setProjects((prev) => [
+            { ...project, pages_count: 0, stats: EMPTY_STATS },
+            ...(prev ?? []),
+          ])
           reload()
         }}
       />
@@ -113,20 +141,44 @@ function StatsStrip({
     .filter((s): s is string => Boolean(s))
     .sort((a, b) => b.localeCompare(a))[0]
 
-  const parts: string[] = [
-    `${projects.length} 项目`,
-    `${totals.pages} 页`,
-    `${totals.elements} 元素`,
-    totals.assets > 0
-      ? `${totals.uploaded}/${totals.assets} 资产已上传`
-      : `${totals.assets} 资产`,
-  ]
-  if (lastRunAt) parts.push(`最近活动 ${formatRelative(lastRunAt)}`)
+  const allUploaded = totals.assets > 0 && totals.uploaded === totals.assets
 
   return (
-    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-      {parts.join(' · ')}
-    </Typography>
+    <Stack
+      direction="row"
+      useFlexGap
+      columnGap={3}
+      rowGap={1}
+      alignItems="center"
+      sx={{ mb: 3, flexWrap: 'wrap' }}
+    >
+      <StatChip icon={<FolderOutlinedIcon />} value={projects.length} label="项目" />
+      <StatChip icon={<ArticleOutlinedIcon />} value={totals.pages} label="页" />
+      <StatChip
+        icon={<DashboardCustomizeOutlinedIcon />}
+        value={totals.elements}
+        label="元素"
+      />
+      <StatChip
+        icon={<CloudUploadOutlinedIcon />}
+        value={totals.assets > 0 ? `${totals.uploaded}/${totals.assets}` : 0}
+        label={totals.assets > 0 ? '资产已上传' : '资产'}
+        valueColor={allUploaded ? 'success.main' : 'text.primary'}
+      />
+      {lastRunAt && (
+        <Stack
+          direction="row"
+          spacing={0.5}
+          alignItems="center"
+          sx={{ ml: 'auto', color: 'text.secondary' }}
+        >
+          <ScheduleOutlinedIcon sx={{ fontSize: 14 }} />
+          <Typography variant="caption">
+            最近活动 {formatRelative(lastRunAt)}
+          </Typography>
+        </Stack>
+      )}
+    </Stack>
   )
 }
 
@@ -134,8 +186,10 @@ function StatsStrip({
 
 function ProjectCardGrid({
   projects,
+  recentId,
 }: {
   projects: ProjectListItem[]
+  recentId: string | null
 }): React.ReactElement {
   return (
     <Stack
@@ -144,7 +198,12 @@ function ProjectCardGrid({
       sx={{ flexWrap: 'wrap', gap: 2.5 }}
     >
       {projects.map((p) => (
-        <ProjectCard key={p.id} project={p} />
+        // appear 只对「本地新插入」的卡片为 true:存量卡片首屏不播动画
+        <Grow key={p.id} in appear={p.id === recentId} timeout={250}>
+          <Box>
+            <ProjectCard project={p} />
+          </Box>
+        </Grow>
       ))}
     </Stack>
   )
@@ -156,14 +215,8 @@ function ProjectCard({
   project: ProjectListItem
 }): React.ReactElement {
   const { kind, label } = describeRunStatus(p.stats.last_run)
-
-  const metaParts: string[] = [
-    `${p.stats.total_pages} 页`,
-    p.stats.total_elements > 0 ? `${p.stats.total_elements} 元素` : null,
-    p.stats.total_assets > 0
-      ? `${p.stats.uploaded_assets}/${p.stats.total_assets} 资产已上传`
-      : null,
-  ].filter((s): s is string => s !== null)
+  const allUploaded =
+    p.stats.total_assets > 0 && p.stats.uploaded_assets === p.stats.total_assets
 
   return (
     <Card
@@ -193,18 +246,12 @@ function ProjectCard({
             }}
           />
         ) : (
-          <Box
-            sx={{
-              height: 180,
-              bgcolor: 'background.default',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'text.disabled',
-              fontSize: 12,
-            }}
-          >
-            (无设计稿)
+          <Box sx={{ height: 180, bgcolor: 'surface.container' }}>
+            <EmptyState
+              variant="compact"
+              icon={<ImageOutlinedIcon />}
+              title="无设计稿"
+            />
           </Box>
         )}
         <CardContent sx={{ pb: '16px !important' }}>
@@ -221,14 +268,37 @@ function ProjectCard({
               {p.description}
             </Typography>
           )}
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            noWrap
-            sx={{ mt: 0.5 }}
+          <Stack
+            direction="row"
+            useFlexGap
+            columnGap={1.5}
+            alignItems="center"
+            sx={{ mt: 0.75, flexWrap: 'wrap' }}
           >
-            {metaParts.join(' · ')}
-          </Typography>
+            <StatChip
+              size="small"
+              icon={<ArticleOutlinedIcon />}
+              value={p.stats.total_pages}
+              label="页"
+            />
+            {p.stats.total_elements > 0 && (
+              <StatChip
+                size="small"
+                icon={<DashboardCustomizeOutlinedIcon />}
+                value={p.stats.total_elements}
+                label="元素"
+              />
+            )}
+            {p.stats.total_assets > 0 && (
+              <StatChip
+                size="small"
+                icon={<CloudUploadOutlinedIcon />}
+                value={`${p.stats.uploaded_assets}/${p.stats.total_assets}`}
+                label="已上传"
+                valueColor={allUploaded ? 'success.main' : 'text.primary'}
+              />
+            )}
+          </Stack>
           <Stack
             direction="row"
             alignItems="center"
@@ -262,21 +332,23 @@ function EmptyInline({
   onCreate: () => void
 }): React.ReactElement {
   return (
-    <Card variant="outlined" sx={{ py: 8, textAlign: 'center' }}>
-      <Typography variant="h5" sx={{ mb: 1 }}>
-        还没有项目
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        创建第一个项目,把 AI 生图设计稿转成 coding agent 可消费的素材包
-      </Typography>
-      <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
-        新建项目
-      </Button>
+    <Card variant="outlined">
+      <EmptyState
+        icon={<FolderOutlinedIcon />}
+        title="还没有项目"
+        description="创建第一个项目,把 AI 生图设计稿转成 coding agent 可消费的素材包"
+        action={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
+            新建项目
+          </Button>
+        }
+      />
     </Card>
   )
 }
 
 function LoadingGrid(): React.ReactElement {
+  // 复合 Skeleton:跟真实卡片同构(图块 + 标题行 + meta 行),避免整块灰条感
   return (
     <Stack
       direction="row"
@@ -284,13 +356,14 @@ function LoadingGrid(): React.ReactElement {
       sx={{ flexWrap: 'wrap', gap: 2.5 }}
     >
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton
-          key={i}
-          variant="rounded"
-          width={280}
-          height={310}
-          sx={{ borderRadius: 3 }}
-        />
+        <Card key={i} sx={{ width: 280 }}>
+          <Skeleton variant="rectangular" height={180} animation="wave" />
+          <CardContent sx={{ pb: '16px !important' }}>
+            <Skeleton width="60%" height={24} />
+            <Skeleton width="85%" height={18} sx={{ mt: 0.5 }} />
+            <Skeleton width="40%" height={16} sx={{ mt: 1 }} />
+          </CardContent>
+        </Card>
       ))}
     </Stack>
   )
@@ -305,7 +378,7 @@ function NewProjectDialog({
 }: {
   open: boolean
   onClose: () => void
-  onCreated: () => void
+  onCreated: (project: Project) => void
 }): React.ReactElement {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -324,10 +397,11 @@ function NewProjectDialog({
         }),
       })
       if (!res.ok) throw new Error(await res.text())
+      const project = (await res.json()) as Project
       toast.success('项目已创建')
       setName('')
       setDescription('')
-      onCreated()
+      onCreated(project)
     } catch (err) {
       toast.error(`创建失败:${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -364,8 +438,11 @@ function NewProjectDialog({
           variant="contained"
           onClick={() => void submit()}
           disabled={!name.trim() || submitting}
+          startIcon={
+            submitting ? <CircularProgress size={14} color="inherit" /> : undefined
+          }
         >
-          创建
+          {submitting ? '创建中…' : '创建'}
         </Button>
       </DialogActions>
     </Dialog>

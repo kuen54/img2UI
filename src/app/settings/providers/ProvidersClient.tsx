@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import AppBar from '@mui/material/AppBar'
 import Toolbar from '@mui/material/Toolbar'
@@ -20,12 +21,14 @@ import FormControlLabel from '@mui/material/FormControlLabel'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
+import Skeleton from '@mui/material/Skeleton'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import HomeIcon from '@mui/icons-material/Home'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import BoltIcon from '@mui/icons-material/Bolt'
 import SaveIcon from '@mui/icons-material/Save'
+import { UnsavedNavDialog } from '@/components/UnsavedNavDialog'
 import type {
   AppConfig,
   ProviderConfig,
@@ -42,10 +45,13 @@ const KIND_LABEL: Record<ProviderKind, string> = {
 const KIND_ORDER: ProviderKind[] = ['mllm', 'image_gen', 'cdn', 'matting']
 
 export function ProvidersClient(): React.ReactElement {
+  const router = useRouter()
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // dirty 时拦下的导航目标(UnsavedNavDialog 处理)
+  const [pendingNav, setPendingNav] = useState<string | null>(null)
 
   useEffect(() => {
     void fetch('/api/config')
@@ -96,8 +102,9 @@ export function ProvidersClient(): React.ReactElement {
     setDirty(true)
   }
 
-  const save = async (): Promise<void> => {
-    if (!config) return
+  // 返回是否保存成功(UnsavedNavDialog 的「保存并离开」据此决定是否跳转)
+  const save = async (): Promise<boolean> => {
+    if (!config) return false
     setSaving(true)
     try {
       const res = await fetch('/api/config', {
@@ -113,18 +120,31 @@ export function ProvidersClient(): React.ReactElement {
       setConfig(updated)
       setDirty(false)
       toast.success('已保存')
+      return true
     } catch (err) {
       toast.error(`保存失败:${err instanceof Error ? err.message : String(err)}`)
+      return false
     } finally {
       setSaving(false)
     }
   }
 
   if (loading) {
+    // Accordion 形状的 Skeleton:跟真实布局同构
     return (
-      <Box sx={{ p: 8, textAlign: 'center' }}>
-        <CircularProgress />
-      </Box>
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Stack spacing={3}>
+          {KIND_ORDER.map((kind) => (
+            <Box key={kind}>
+              <Skeleton width={220} height={32} sx={{ mb: 1.5 }} />
+              <Stack spacing={1.5}>
+                <Skeleton variant="rounded" height={52} />
+                <Skeleton variant="rounded" height={52} />
+              </Stack>
+            </Box>
+          ))}
+        </Stack>
+      </Container>
     )
   }
   if (!config) return <Box sx={{ p: 8 }}>配置加载失败</Box>
@@ -144,8 +164,11 @@ export function ProvidersClient(): React.ReactElement {
             edge="start"
             sx={{ mr: 2 }}
             onClick={(e) => {
-              // Link 是客户端导航,beforeunload 拦不住,click 层拦
-              if (dirty && !window.confirm('有未保存的修改,确定离开?')) e.preventDefault()
+              // Link 是客户端导航,beforeunload 拦不住,click 层拦 → 走统一确认 Dialog
+              if (dirty) {
+                e.preventDefault()
+                setPendingNav('/')
+              }
             }}
           >
             <HomeIcon />
@@ -153,6 +176,21 @@ export function ProvidersClient(): React.ReactElement {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             img2UI · Settings · Providers
           </Typography>
+          {dirty && !saving && (
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mr: 1.5 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: 'warning.main',
+                }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                未保存
+              </Typography>
+            </Stack>
+          )}
           <Button
             variant="contained"
             color="primary"
@@ -160,10 +198,17 @@ export function ProvidersClient(): React.ReactElement {
             disabled={!dirty || saving}
             onClick={() => void save()}
           >
-            保存
+            {saving ? '保存中…' : '保存'}
           </Button>
         </Toolbar>
       </AppBar>
+
+      <UnsavedNavDialog
+        href={pendingNav}
+        onClose={() => setPendingNav(null)}
+        onSave={save}
+        onNavigate={(href) => router.push(href)}
+      />
 
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Stack spacing={3}>
