@@ -72,7 +72,8 @@ export const FONT_MONO =
 // --img2ui-dot-boost:同一 alpha 下白墨叠近黑底的对比在暗部被压缩,肉眼上
 // "波点消失",深色 scheme 统一乘一档增益补回来(0.11 → ~0.19)。
 const DOT_SPACING = 28
-const DOT_ALPHA = 0.11
+// 0.165 = 旧 0.11 × 1.5:28px 间距下点更疏,单点加重半档找回存在感(深浅共用)
+const DOT_ALPHA = 0.165
 
 /** dot grid 背景(dropzone 等"待绘制区域"可传更高 alpha 加强一档) */
 export function dotGridBg(alpha: number = DOT_ALPHA, spacing: number = DOT_SPACING): {
