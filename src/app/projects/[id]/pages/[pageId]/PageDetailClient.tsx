@@ -9,7 +9,6 @@ import Container from '@mui/material/Container'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
-import Paper from '@mui/material/Paper'
 import Button from '@mui/material/Button'
 import Skeleton from '@mui/material/Skeleton'
 import LinearProgress from '@mui/material/LinearProgress'
@@ -26,9 +25,8 @@ import Switch from '@mui/material/Switch'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Alert from '@mui/material/Alert'
 import { alpha } from '@mui/material/styles'
-import { dotGridBg, riseInSx } from '@/theme'
+import { riseInSx } from '@/theme'
 import {
-  FileUp as UploadFileIcon,
   RotateCw as RefreshIcon,
   Trash2 as DeleteIcon,
   Play as PlayArrowIcon,
@@ -44,6 +42,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { UploadDropzone } from '@/components/UploadDropzone'
 import { MoreMenu } from '@/components/MoreMenu'
 import { StatChip } from '@/components/StatChip'
 import { EmptyState } from '@/components/EmptyState'
@@ -325,114 +324,6 @@ function PageStatsStrip({
         </Typography>
       </Stack>
     </Stack>
-  )
-}
-
-// ─── Dropzone ──────────────────────────────────────────────────────────────
-
-function UploadDropzone({
-  pageId,
-  onUploaded,
-}: {
-  pageId: string
-  onUploaded: () => void
-}): React.ReactElement {
-  const [uploading, setUploading] = useState(false)
-  const [uploadingName, setUploadingName] = useState('')
-  const [drag, setDrag] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
-
-  const upload = async (file: File): Promise<void> => {
-    if (!file.type.includes('png') && !file.name.toLowerCase().endsWith('.png')) {
-      toast.error('只接受 PNG 文件')
-      return
-    }
-    setUploading(true)
-    setUploadingName(file.name)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`/api/pages/${pageId}/states`, {
-        method: 'POST',
-        body: fd,
-      })
-      if (!res.ok) throw new Error(await res.text())
-      toast.success('上传成功')
-      onUploaded()
-    } catch (err) {
-      toast.error(`上传失败:${errText(err)}`)
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  return (
-    <Paper
-      variant="outlined"
-      onDragOver={(e) => {
-        e.preventDefault()
-        setDrag(true)
-      }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDrag(false)
-        const file = e.dataTransfer.files[0]
-        if (file) void upload(file)
-      }}
-      sx={{
-        py: 8,
-        textAlign: 'center',
-        borderStyle: 'dashed',
-        borderWidth: 2,
-        borderColor: drag ? 'primary.main' : 'divider',
-        bgcolor: drag ? 'action.hover' : 'background.paper',
-        // 草稿本叙事:dropzone 是"待绘制区域",点阵比页面背景加强一档
-        ...dotGridBg(0.16),
-        transition: 'all 0.2s',
-      }}
-    >
-      {uploading ? (
-        <Stack alignItems="center" spacing={2} sx={{ px: 6 }}>
-          <Box sx={{ color: 'primary.main', display: 'flex' }}>
-            <UploadFileIcon size={44} strokeWidth={1.5} />
-          </Box>
-          <Box sx={{ width: '100%', maxWidth: 360 }}>
-            <LinearProgress />
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            上传中 <code>{uploadingName}</code> …
-          </Typography>
-        </Stack>
-      ) : (
-        <Stack alignItems="center" spacing={2}>
-          <Box sx={{ color: 'text.secondary', display: 'flex' }}>
-            <UploadFileIcon size={44} strokeWidth={1.5} />
-          </Box>
-          <Typography variant="h5">拖拽 PNG 到此处 或</Typography>
-          <Button
-            variant="contained"
-            startIcon={<UploadFileIcon />}
-            onClick={() => fileInput.current?.click()}
-          >
-            选择文件
-          </Button>
-          <Typography variant="body2" color="text.secondary">
-            每个页面仅支持 1 张设计稿
-          </Typography>
-        </Stack>
-      )}
-      <input
-        ref={fileInput}
-        type="file"
-        accept=".png,image/png"
-        hidden
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void upload(f)
-        }}
-      />
-    </Paper>
   )
 }
 

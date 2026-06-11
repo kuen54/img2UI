@@ -14,14 +14,9 @@ import CardContent from '@mui/material/CardContent'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Skeleton from '@mui/material/Skeleton'
-import Dialog from '@mui/material/Dialog'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import DialogActions from '@mui/material/DialogActions'
 import DialogContentText from '@mui/material/DialogContentText'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
-import CircularProgress from '@mui/material/CircularProgress'
 import Grow from '@mui/material/Grow'
 import Alert from '@mui/material/Alert'
 import {
@@ -39,6 +34,8 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { FormDialog } from '@/components/FormDialog'
+import { UploadDropzone } from '@/components/UploadDropzone'
 import { MoreMenu } from '@/components/MoreMenu'
 import { StatusDot } from '@/components/StatusDot'
 import { StatChip } from '@/components/StatChip'
@@ -579,13 +576,24 @@ function NewPageDialog({
   onClose: () => void
   onCreated: (page: Page) => void
 }): React.ReactElement {
+  const router = useRouter()
   const [name, setName] = useState('')
   const [routeHint, setRouteHint] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  // 提交分两阶段(创建页面 → 上传设计稿),用 phase 切 FormDialog 的 submittingLabel
+  const [phase, setPhase] = useState<'create' | 'upload'>('create')
+
+  const reset = (): void => {
+    setName('')
+    setRouteHint('')
+    setFile(null)
+    setPhase('create')
+  }
 
   const submit = async (): Promise<void> => {
-    if (!name.trim()) return
-    setSubmitting(true)
+    // ① 创建页面
+    setPhase('create')
+    let page: Page
     try {
       const res = await fetch(`/api/projects/${projectId}/pages`, {
         method: 'POST',
@@ -596,29 +604,64 @@ function NewPageDialog({
         }),
       })
       if (!res.ok) throw new Error(await res.text())
-      const page = (await res.json()) as Page
-      toast.success('页面已创建')
-      setName('')
-      setRouteHint('')
-      onCreated(page)
+      page = (await res.json()) as Page
     } catch (err) {
       toast.error(`创建失败:${errText(err)}`)
-    } finally {
-      setSubmitting(false)
+      throw err // reject:FormDialog 保持打开
     }
+
+    // 没选设计稿:维持原行为(留在列表,卡片局部插入)
+    if (!file) {
+      toast.success('页面已创建')
+      reset()
+      onCreated(page)
+      return
+    }
+
+    // ② 上传设计稿(同 UploadDropzone 上传模式的端点/格式,自动建 canonical state)
+    setPhase('upload')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/pages/${page.id}/states`, {
+        method: 'POST',
+        body: fd,
+      })
+      if (!res.ok) throw new Error(await res.text())
+      toast.success('页面已创建,设计稿已上传')
+    } catch (err) {
+      // 页面已经建出来了,不能让用户误以为整个操作失败:照样进详情页重传
+      toast.error(
+        `页面已创建,但设计稿上传失败,可进入页面重新上传(${errText(err)})`,
+      )
+    }
+    reset()
+    // 不走 onCreated 的列表局部插入:直接去页面详情,图已就位可跑布局分析
+    router.push(`/projects/${projectId}/pages/${page.id}`)
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>新建页面</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title="新建页面"
+      submitLabel="创建"
+      submittingLabel={phase === 'upload' ? '上传设计稿中…' : '创建中…'}
+      onSubmit={submit}
+      submitDisabled={!name.trim()}
+      maxWidth="sm"
+    >
+      {/* render-prop 拿 submitting:文本字段由 FormDialog 的 fieldset 原生禁用,
+          dropzone 的 drop 事件 fieldset 管不住,要显式传 disabled */}
+      {(submitting) => (
+        <Stack spacing={2}>
           <TextField
             label="页面名称"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="抽中页"
             autoFocus
+            required
             fullWidth
           />
           <TextField
@@ -628,22 +671,24 @@ function NewPageDialog({
             placeholder="/lottery/win"
             fullWidth
           />
+          <Box>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 0.75 }}
+            >
+              设计稿截图(PNG,可选——也可以建好后再传)
+            </Typography>
+            <UploadDropzone
+              compact
+              disabled={submitting}
+              selectedFile={file}
+              onFileSelected={setFile}
+            />
+          </Box>
         </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>取消</Button>
-        <Button
-          variant="contained"
-          onClick={() => void submit()}
-          disabled={!name.trim() || submitting}
-          startIcon={
-            submitting ? <CircularProgress size={14} color="inherit" /> : undefined
-          }
-        >
-          {submitting ? '创建中…' : '创建'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      )}
+    </FormDialog>
   )
 }
 

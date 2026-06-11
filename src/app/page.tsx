@@ -13,13 +13,8 @@ import CardMedia from '@mui/material/CardMedia'
 import CardContent from '@mui/material/CardContent'
 import Stack from '@mui/material/Stack'
 import Skeleton from '@mui/material/Skeleton'
-import Dialog from '@mui/material/Dialog'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
-import CircularProgress from '@mui/material/CircularProgress'
 import Grow from '@mui/material/Grow'
 import {
   Plus as AddIcon,
@@ -31,6 +26,7 @@ import {
   Image as ImageOutlinedIcon,
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
+import { FormDialog } from '@/components/FormDialog'
 import { StatusDot } from '@/components/StatusDot'
 import { StatChip } from '@/components/StatChip'
 import { EmptyState } from '@/components/EmptyState'
@@ -384,11 +380,8 @@ function NewProjectDialog({
 }): React.ReactElement {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [submitting, setSubmitting] = useState(false)
 
   const submit = async (): Promise<void> => {
-    if (!name.trim()) return
-    setSubmitting(true)
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
@@ -406,48 +399,41 @@ function NewProjectDialog({
       onCreated(project)
     } catch (err) {
       toast.error(`创建失败:${errText(err)}`)
-    } finally {
-      setSubmitting(false)
+      // rethrow:让 FormDialog 保持打开
+      throw err
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>新建项目</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="项目名称"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-            fullWidth
-          />
-          <TextField
-            label="描述(可选)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            multiline
-            rows={2}
-            fullWidth
-            helperText="一句话说明这是什么页面 / 活动,布局分析时会提供给 LLM 帮助理解上下文"
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>取消</Button>
-        <Button
-          variant="contained"
-          onClick={() => void submit()}
-          disabled={!name.trim() || submitting}
-          startIcon={
-            submitting ? <CircularProgress size={14} color="inherit" /> : undefined
-          }
-        >
-          {submitting ? '创建中…' : '创建'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title="新建项目"
+      description="一句话说明这是什么页面 / 活动,描述会在布局分析时提供给 LLM 帮助理解上下文"
+      submitLabel="创建"
+      onSubmit={submit}
+      submitDisabled={!name.trim()}
+      maxWidth="sm"
+    >
+      <Stack spacing={2}>
+        <TextField
+          label="项目名称"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+          required
+          fullWidth
+        />
+        <TextField
+          label="描述(可选)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          multiline
+          rows={2}
+          fullWidth
+        />
+      </Stack>
+    </FormDialog>
   )
 }
 
