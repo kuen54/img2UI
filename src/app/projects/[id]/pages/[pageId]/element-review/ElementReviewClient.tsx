@@ -48,6 +48,7 @@ import { KbdHintRow, type KbdHintItem } from '@/components/KbdHint'
 import { successFlash, MD3_STANDARD_EASING } from '@/components/flash'
 import { riseInSx } from '@/theme'
 import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
+import { ELEMENT_TYPE_CN, STAGE_CN } from '@/lib/ui-terms'
 import type {
   LayoutElement,
   Page,
@@ -379,7 +380,7 @@ export function ElementReviewClient({
             { label: '项目', href: '/' },
             { label: project.name, href: `/projects/${projectId}` },
             { label: page.name, href: `/projects/${projectId}/pages/${pageId}` },
-            { label: 'Element Review' },
+            { label: STAGE_CN.element_review },
           ]
         : [{ label: '加载中…' }],
     [project, page, projectId, pageId],
@@ -446,13 +447,13 @@ export function ElementReviewClient({
                     const msg = data?.unreviewed_count
                       ? `还有 ${data.unreviewed_count} 个元素未确认`
                       : (data?.error ?? `HTTP ${res.status}`)
-                    toast.error(`Pass 2 启动失败:${msg}`)
+                    toast.error(`素材生成启动失败:${msg}`)
                     return
                   }
-                  toast.info('Pass 2 启动…回到页面看进度')
+                  toast.info('素材生成已启动…回到页面看进度')
                   router.push(`/projects/${projectId}/pages/${pageId}`)
                 } catch (err) {
-                  toast.error(`Pass 2 启动失败:${errText(err)}`)
+                  toast.error(`素材生成启动失败:${errText(err)}`)
                 }
               }}
             />
@@ -633,7 +634,7 @@ function ElementSidebar({
     <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h5">
-          Elements ({filteringActive ? `${visibleElements.length}/${elements.length}` : elements.length})
+          元素 ({filteringActive ? `${visibleElements.length}/${elements.length}` : elements.length})
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {reviewedCount}/{elements.length} 已确认
@@ -649,7 +650,7 @@ function ElementSidebar({
               <Chip
                 key={t}
                 size="small"
-                label={`${t} ${typeCounts[t]}`}
+                label={`${ELEMENT_TYPE_CN[t]} ${typeCounts[t]}`}
                 onClick={() => onToggleType(t)}
                 variant={active ? 'filled' : 'outlined'}
                 {...(active
@@ -786,7 +787,7 @@ function ElementSidebar({
                           noWrap
                           component="div"
                         >
-                          {el.type} ·{' '}
+                          {ELEMENT_TYPE_CN[el.type]} ·{' '}
                           <Box component="span" sx={{ color, fontWeight: 500 }}>
                             {VISUAL_CATEGORY_CN[el.visual_category]}
                           </Box>
@@ -821,7 +822,7 @@ function ElementSidebar({
                     <IconButton
                       size="small"
                       onClick={() => onRestore(el)}
-                      title="恢复到 elements 列表"
+                      title="恢复到元素列表"
                     >
                       <RestoreIcon size={16} />
                     </IconButton>
@@ -846,7 +847,7 @@ function ElementSidebar({
             disabled={!allReviewed}
             onClick={onProceed}
           >
-            返回页面 · 运行 Pass 2
+            返回页面 · 生成素材
           </Button>
           <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.5 }}>
             <KbdHintRow
@@ -995,7 +996,7 @@ function ElementCanvas({
       <img
         ref={imgRef}
         src={`/api/raw/${state.id}`}
-        alt="design"
+        alt="设计稿"
         onLoad={recalcRect}
         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', pointerEvents: 'none' }}
       />
@@ -1121,7 +1122,13 @@ function ElementDetail({
         </Typography>
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           {element.pass1_routes_seen?.map((r) => (
-            <Chip key={r} size="small" label={r} variant="outlined" />
+            // 路由名即五个 visual_category key,渲染成中文类目名(防御:未知值原样显示)
+            <Chip
+              key={r}
+              size="small"
+              label={(VISUAL_CATEGORY_CN as Record<string, string | undefined>)[r] ?? r}
+              variant="outlined"
+            />
           ))}
         </Stack>
         <TextField
@@ -1131,19 +1138,19 @@ function ElementDetail({
           onChange={(e) => onChange({ name: e.target.value })}
         />
         <FormControl size="small">
-          <FormLabel>type</FormLabel>
+          <FormLabel>元素类型</FormLabel>
           <RadioGroup
             row
             value={element.type}
             onChange={(e) => onChange({ type: e.target.value as 'static' | 'code' })}
           >
-            <FormControlLabel value="static" control={<Radio size="small" />} label="static" />
-            <FormControlLabel value="code" control={<Radio size="small" />} label="code" />
+            <FormControlLabel value="static" control={<Radio size="small" />} label={ELEMENT_TYPE_CN.static} />
+            <FormControlLabel value="code" control={<Radio size="small" />} label={ELEMENT_TYPE_CN.code} />
           </RadioGroup>
         </FormControl>
         <TextField
           select
-          label="visual_category"
+          label="视觉类目"
           size="small"
           value={element.visual_category}
           onChange={(e) => onChange({ visual_category: e.target.value as VisualCategory })}
@@ -1171,7 +1178,7 @@ function ElementDetail({
         {element.type === 'code' && (
           <>
             <TextField
-              label="shape_spec"
+              label="形状描述"
               size="small"
               multiline
               rows={2}
@@ -1180,7 +1187,7 @@ function ElementDetail({
               helperText="SVG path / clip-path / 几何描述"
             />
             <TextField
-              label="material_spec"
+              label="质感描述"
               size="small"
               multiline
               rows={2}

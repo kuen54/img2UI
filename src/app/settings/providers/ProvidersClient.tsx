@@ -42,7 +42,7 @@ import type {
 
 const KIND_LABEL: Record<ProviderKind, string> = {
   mllm: 'MLLM (布局分析)',
-  image_gen: 'Image Gen (资产提取)',
+  image_gen: 'Image Gen (素材生成)',
   cdn: 'CDN (S3 兼容)',
   matting: 'Matting (抠图 fallback)',
 }

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { pageId } = await params
   const page = await getPage(pageId).catch(() => null)
-  return { title: page ? `Element Review · ${page.name}` : 'Element Review' }
+  return { title: page ? `元素确认 · ${page.name}` : '元素确认' }
 }
 
 export default async function ElementReviewPage({ params }: Props): Promise<React.ReactElement> {

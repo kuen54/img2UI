@@ -166,7 +166,7 @@ function StatsStrip({
       <StatChip
         icon={<CloudUploadOutlinedIcon />}
         value={totals.assets > 0 ? `${totals.uploaded}/${totals.assets}` : 0}
-        label={totals.assets > 0 ? '资产已上传' : '资产'}
+        label={totals.assets > 0 ? '素材已上传' : '素材'}
         valueColor={allUploaded ? 'success.main' : 'text.primary'}
       />
       {lastRunAt && (
@@ -430,7 +430,7 @@ function NewProjectDialog({
             multiline
             rows={2}
             fullWidth
-            helperText="一句话说明这是什么页面 / 活动,会写入 Pass 1 prompt 帮助 LLM 理解上下文"
+            helperText="一句话说明这是什么页面 / 活动,布局分析时会提供给 LLM 帮助理解上下文"
           />
         </Stack>
       </DialogContent>

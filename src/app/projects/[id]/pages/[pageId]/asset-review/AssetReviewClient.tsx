@@ -43,6 +43,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { KbdHintRow } from '@/components/KbdHint'
 import { successFlash, MD3_STANDARD_EASING } from '@/components/flash'
 import { ALL_VISUAL_CATEGORIES, VISUAL_CATEGORY_CN, VISUAL_CATEGORY_COLOR } from '@/lib/visual-category'
+import { STAGE_CN, ELEMENT_TYPE_CN } from '@/lib/ui-terms'
 import type {
   Asset,
   LayoutElement,
@@ -330,7 +331,7 @@ export function AssetReviewClient({
         else failed.push(p.elementId)
       }
       if (failed.length > 0) {
-        toast.error(`顺序指派:${failed.length} 个失败`)
+        toast.error(`顺序指派:${failed.length} 个切片指派失败`)
       }
       if (okIds.length > 0) {
         toast.success(`顺序指派完成 ${okIds.length} 个,请逐个检查`)
@@ -389,7 +390,7 @@ export function AssetReviewClient({
       })
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
-      toast.info(`重跑失败 ${cats.length} 路中…(可能要 1-3 分钟)`)
+      toast.info(`重跑失败的 ${cats.length} 个类目中…(可能要 1-3 分钟)`)
       const interval = setInterval(() => {
         void fetch(`/api/pipeline-runs/${run_id}`)
           .then((r) => r.json())
@@ -457,7 +458,7 @@ export function AssetReviewClient({
             { label: '项目', href: '/' },
             { label: project.name, href: `/projects/${projectId}` },
             { label: page.name, href: `/projects/${projectId}/pages/${pageId}` },
-            { label: 'Asset Review' },
+            { label: STAGE_CN.asset_review },
           ]
         : [{ label: '加载中…' }],
     [project, page, projectId, pageId],
@@ -506,13 +507,13 @@ export function AssetReviewClient({
                   disabled={rerunningFailed}
                   onClick={() => void rerunFailedRoutes()}
                 >
-                  {rerunningFailed ? '重跑中…' : `重跑失败 ${failedCats.length} 路`}
+                  {rerunningFailed ? '重跑中…' : `重跑失败的 ${failedCats.length} 个类目`}
                 </Button>
               }
             >
-              Pass 2 有 {failedCats.length} 路生成失败:
+              素材生成有 {failedCats.length} 个类目失败:
               {failedCats.map((c) => VISUAL_CATEGORY_CN[c]).join(' / ')}
-              —— 这些类别没有切片产物,对应元素暂时无法指派。
+              —— 这些类目没有切片产物,对应元素暂时无法指派。
             </Alert>
           )}
           <Stack
@@ -578,10 +579,10 @@ export function AssetReviewClient({
         body={
           <Box>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              用 koukoutu API 重新抠所有 category 的绿幕底片。**消耗 koukoutu 积分**(每 category 1 次调用)。
+              用 koukoutu API 重新抠所有类目的绿幕底片,会消耗 koukoutu 积分(每个类目 1 次调用)。
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              旧切片保留,新切片以 nextSliceIdx 追加 — 你可以在切片库里对比新旧。
+              旧切片保留,新切片以新编号追加 — 你可以在切片库里对比新旧。
             </Typography>
           </Box>
         }
@@ -678,7 +679,7 @@ function SliceGrid({
           <EmptyState
             variant="compact"
             icon={<PhotoLibraryOutlinedIcon />}
-            title="还没有切片,运行 Pass 2 后会出现"
+            title="还没有切片,完成素材生成后会出现"
           />
         </Box>
       )}
@@ -689,8 +690,8 @@ function SliceGrid({
         {(
           [
             ['rgba(0,0,0,0.25)', '未指派'],
-            [CATEGORY_COLOR.subject, '当前选中 element 已用'],
-            ['#f59e0b', '别的 element 已用(允许重复)'],
+            [CATEGORY_COLOR.subject, '当前选中元素已用'],
+            ['#f59e0b', '其他元素已用(允许重复)'],
           ] as const
         ).map(([c, label]) => (
           <Stack key={label} direction="row" spacing={0.75} alignItems="center">
@@ -739,7 +740,7 @@ function KeyedImagesPanel({
           fontWeight: 600,
         }}
       >
-        Pass 2 完整拆分图 ({categoriesWithElements.length})
+        素材生成完整拆分图 ({categoriesWithElements.length})
       </Button>
       <Collapse in={topOpen}>
         <Stack spacing={0.5} sx={{ pl: 1, mt: 0.5 }}>
@@ -800,7 +801,7 @@ function KeyedCategoryRow({
         <Stack spacing={0.5} sx={{ mt: 0.5, mb: 0.5 }}>
           {loaded && batches.length === 0 && (
             <Typography variant="caption" color="text.disabled" sx={{ px: 1 }}>
-              该 category 暂无 Pass 2 输出
+              该类目暂无素材生成输出
             </Typography>
           )}
           {batches.map((batchIdx) => (
@@ -840,7 +841,7 @@ function KeyedCategoryRow({
                     zIndex: 1,
                   }}
                 >
-                  batch {batchIdx + 1}/{batches.length}
+                  第 {batchIdx + 1}/{batches.length} 批
                 </Typography>
               )}
               <Box
@@ -854,7 +855,7 @@ function KeyedCategoryRow({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/api/states/${stateId}/keyed/${category}${batchIdx > 0 ? `?batch=${batchIdx}` : ''}`}
-                  alt={`Pass 2 输出 - ${category} batch ${batchIdx}`}
+                  alt={`素材生成输出 - ${VISUAL_CATEGORY_CN[category]} 第 ${batchIdx + 1} 批`}
                   style={{
                     maxWidth: '100%',
                     maxHeight: 360,
@@ -1136,7 +1137,7 @@ function ElementList({
         sx={{ mb: 1.5, flexWrap: 'wrap' }}
       >
         <Typography variant="h5" sx={{ whiteSpace: 'nowrap' }}>
-          元素列表 ({elements.length} 静态)
+          元素列表 ({elements.length} 个{ELEMENT_TYPE_CN.static})
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
           {autoAssignCount > 0 && (
@@ -1224,7 +1225,7 @@ function ElementList({
           <EmptyState
             variant="compact"
             icon={<ExtensionOutlinedIcon />}
-            title="没有 type=static 的元素"
+            title={`没有类型为「${ELEMENT_TYPE_CN.static}」的元素`}
           />
         </Box>
       ) : (
@@ -1460,7 +1461,7 @@ function ElementRow({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={`/api/asset-bin/${element.id}?t=${asset.updated_at}`}
-              alt="asset"
+              alt="素材"
               style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = 'none'
@@ -1668,7 +1669,7 @@ function SubCropDialog({
   return (
     <Dialog open onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
-        切片 sub-crop · {VISUAL_CATEGORY_CN[category]} #{idx} ({rects.length} 个框)
+        细分切片 · {VISUAL_CATEGORY_CN[category]} #{idx} ({rects.length} 个框)
       </DialogTitle>
       <DialogContent>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -1693,7 +1694,7 @@ function SubCropDialog({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/api/states/${stateId}/slices/${category}/${idx}`}
-            alt="slice"
+            alt="切片"
             onLoad={onImgLoad}
             draggable={false}
             style={{

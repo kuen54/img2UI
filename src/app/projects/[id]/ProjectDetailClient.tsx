@@ -213,7 +213,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
             <Stack spacing={1.5}>
               <DialogContentText>
                 将删除「{project?.name ?? ''}」及其 {pages.length} 个页面的所有
-                state / pass / asset。
+                设计稿、分析结果、切片与素材。
               </DialogContentText>
               <Alert severity="warning">此操作无法恢复</Alert>
             </Stack>
@@ -258,7 +258,7 @@ function StatsStrip({ pages }: { pages: PageListItem[] }): React.ReactElement {
       sx={{ mb: 3, flexWrap: 'wrap', ...riseInSx }}
     >
       <StatChip icon={<ArticleOutlinedIcon />} value={pages.length} label="页" />
-      <StatChip icon={<LayersOutlinedIcon />} value={totals.states} label="状态" />
+      <StatChip icon={<LayersOutlinedIcon />} value={totals.states} label="设计稿" />
       <StatChip
         icon={<DashboardCustomizeOutlinedIcon />}
         value={totals.elements}
@@ -267,7 +267,7 @@ function StatsStrip({ pages }: { pages: PageListItem[] }): React.ReactElement {
       <StatChip
         icon={<CloudUploadOutlinedIcon />}
         value={totals.assets > 0 ? `${totals.uploaded}/${totals.assets}` : 0}
-        label={totals.assets > 0 ? '资产已上传' : '资产'}
+        label={totals.assets > 0 ? '素材已上传' : '素材'}
         valueColor={allUploaded ? 'success.main' : 'text.primary'}
       />
       {lastRunAt && (
@@ -431,7 +431,7 @@ function PageCard({
               noWrap
               sx={{ mt: 0.5 }}
             >
-              {p.has_state ? '等待首次 Pass 1' : '尚未上传设计稿'}
+              {p.has_state ? '等待首次布局分析' : '尚未上传设计稿'}
             </Typography>
           )}
           <Stack
@@ -471,7 +471,7 @@ function EmptyInline({
       <EmptyState
         icon={<ArticleOutlinedIcon />}
         title="还没有页面"
-        description="新建页面后,上传设计稿截图,跑 Pass 1 / Pass 2 即可生成 coding agent 素材包"
+        description="新建页面后上传设计稿截图,完成布局分析与素材生成,即可导出给 coding agent 的素材包"
         action={
           <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
             新建页面
