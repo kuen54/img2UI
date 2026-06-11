@@ -11,7 +11,7 @@
 import path from 'node:path'
 import {
   DATA_ROOT,
-  readJsonIfExists,
+  readJsonLenient,
   readdirIfExists,
   ensureDataRoot,
 } from './fs-utils'
@@ -128,7 +128,7 @@ async function scanAssetsForPages(pageIds: Set<string>): Promise<Asset[]> {
   const all = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<Asset>(path.join(dir, f))),
+      .map((f) => readJsonLenient<Asset>(path.join(dir, f))),
   )
   return all.filter((a): a is Asset => a !== null && pageIds.has(a.page_id))
 }
@@ -140,7 +140,7 @@ async function scanRunsForStates(stateIds: Set<string>): Promise<PipelineRun[]> 
   const all = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<PipelineRun>(path.join(dir, f))),
+      .map((f) => readJsonLenient<PipelineRun>(path.join(dir, f))),
   )
   return all
     .filter((r): r is PipelineRun => r !== null && stateIds.has(r.state_id))

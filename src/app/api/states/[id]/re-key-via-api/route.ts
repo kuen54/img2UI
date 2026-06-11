@@ -54,10 +54,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
           }
           try {
             const transparent = await callMatting(provider, { png: buf })
-            await writeAtomic(b.keyedPath, transparent)
-            const slices = await sliceAssets(transparent)
             // matting 退化(全透明)会切出 0 片 —— 这种 batch 不算成功,
-            // 否则 0 切片仍报成功会误导用户以为有素材产出。
+            // 且先切片后落盘:退化结果不覆写 keyed,保留该 batch 旧的好图。
+            const slices = await sliceAssets(transparent)
             if (slices.length === 0) {
               console.warn(
                 `[re-key-via-api] ${cat} batch${b.batchIdx} 抠图后无切片(疑似全透明)`,
@@ -68,6 +67,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
               })
               continue
             }
+            await writeAtomic(b.keyedPath, transparent)
             for (const s of slices) {
               const idx = await nextSliceIdx(stateId, cat)
               await writeSlice(stateId, cat, idx, s.buffer, {

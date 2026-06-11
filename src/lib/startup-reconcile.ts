@@ -7,7 +7,7 @@
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { DATA_ROOT, paths, readJsonIfExists, writeJsonAtomic } from './fs-utils'
+import { DATA_ROOT, paths, readJsonLenient, writeJsonAtomic } from './fs-utils'
 import { nowIso } from './id'
 import type { PipelineRun, StateRecord, StatePipelineStatus } from './types'
 
@@ -26,7 +26,7 @@ export async function reconcileStaleRuns(): Promise<void> {
   const runFiles = await readdirSafe(path.join(DATA_ROOT, 'pipelines'))
   for (const f of runFiles) {
     if (!f.endsWith('.json')) continue
-    const run = await readJsonIfExists<PipelineRun>(
+    const run = await readJsonLenient<PipelineRun>(
       path.join(DATA_ROOT, 'pipelines', f),
     )
     if (!run || run.status !== 'running') continue
@@ -47,7 +47,7 @@ export async function reconcileStaleRuns(): Promise<void> {
   const stateFiles = await readdirSafe(path.join(DATA_ROOT, 'states'))
   for (const f of stateFiles) {
     if (!f.endsWith('.json')) continue
-    const state = await readJsonIfExists<StateRecord>(
+    const state = await readJsonLenient<StateRecord>(
       path.join(DATA_ROOT, 'states', f),
     )
     if (!state) continue

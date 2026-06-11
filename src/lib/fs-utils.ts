@@ -55,12 +55,27 @@ export async function writeAtomic(
 }
 
 /**
- * 读 JSON,文件不存在返回 null。
- * data/ 用户可手动编辑,单个文件 JSON 损坏不该让整个列表接口 500 ——
- * 解析失败时 warn 带路径后当作 null(调用方本来就按 null=跳过处理)。
- * 其他 IO 错误继续抛。
+ * 读 JSON,文件不存在返回 null;JSON 损坏照常抛。
+ * 用于单记录读取(getProject/getPage/getState/elements/config 等):
+ * 损坏必须响(500),静默当 null 会把数据损坏伪装成 404 / 空集,
+ * 下游(如 Pass 2 跑在空 elements 上)会安静地产出错误结果。
  */
 export async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
+  try {
+    const buf = await fs.readFile(filePath, 'utf-8')
+    return JSON.parse(buf) as T
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
+  }
+}
+
+/**
+ * 宽容版:文件不存在或 JSON 损坏都返回 null(损坏时 warn 带路径)。
+ * 只给目录扫描类调用方(listProjects 等 Promise.all 扫盘):
+ * data/ 用户可手动编辑,单个坏文件不该 500 整个列表。其他 IO 错误继续抛。
+ */
+export async function readJsonLenient<T>(filePath: string): Promise<T | null> {
   let buf: string
   try {
     buf = await fs.readFile(filePath, 'utf-8')
@@ -72,7 +87,7 @@ export async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
     return JSON.parse(buf) as T
   } catch (err) {
     console.warn(
-      `[readJsonIfExists] JSON 解析失败,跳过 ${filePath}: ${
+      `[readJsonLenient] JSON 解析失败,跳过 ${filePath}: ${
         err instanceof Error ? err.message : String(err)
       }`,
     )

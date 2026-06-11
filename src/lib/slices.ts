@@ -7,7 +7,7 @@ import path from 'node:path'
 import sharp from 'sharp'
 import {
   paths,
-  readJsonIfExists,
+  readJsonLenient,
   readdirIfExists,
   writeAtomic,
   writeJsonAtomic,
@@ -77,7 +77,7 @@ export async function listSlicesForCategory(
     const m = f.match(/^(\d+)\.json$/)
     if (!m) continue
     const idx = parseInt(m[1]!, 10)
-    const sidecar = await readJsonIfExists<SliceSidecar>(path.join(dir, f))
+    const sidecar = await readJsonLenient<SliceSidecar>(path.join(dir, f))
     if (!sidecar) continue
     out.push({
       state_id: stateId,

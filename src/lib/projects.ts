@@ -1,6 +1,7 @@
 import {
   paths,
   readJsonIfExists,
+  readJsonLenient,
   writeJsonAtomic,
   writeAtomic,
   unlinkIfExists,
@@ -48,7 +49,7 @@ export async function listProjects(): Promise<Project[]> {
   const projects = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<Project>(path.join(dir, f))),
+      .map((f) => readJsonLenient<Project>(path.join(dir, f))),
   )
   return projects
     .filter((p): p is Project => p !== null)
@@ -113,7 +114,7 @@ export async function listPagesByProject(projectId: string): Promise<Page[]> {
   const pages = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<Page>(path.join(dir, f))),
+      .map((f) => readJsonLenient<Page>(path.join(dir, f))),
   )
   return pages
     .filter((p): p is Page => p !== null && p.project_id === projectId)
@@ -188,7 +189,7 @@ export async function listStatesByPage(pageId: string): Promise<StateRecord[]> {
   const states = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<StateRecord>(path.join(dir, f))),
+      .map((f) => readJsonLenient<StateRecord>(path.join(dir, f))),
   )
   return states
     .filter((s): s is StateRecord => s !== null && s.page_id === pageId)
@@ -238,7 +239,7 @@ export async function deleteState(id: string): Promise<void> {
   const piDir = path.join(DATA_ROOT, 'pipelines')
   const piFiles = await readdirIfExists(piDir)
   for (const f of piFiles.filter((f) => f.endsWith('.json'))) {
-    const run = await readJsonIfExists<PipelineRun>(path.join(piDir, f))
+    const run = await readJsonLenient<PipelineRun>(path.join(piDir, f))
     if (run?.state_id === id) {
       await unlinkIfExists(path.join(piDir, f))
     }
