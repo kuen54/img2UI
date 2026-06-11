@@ -10,6 +10,7 @@ import {
   DATA_ROOT,
 } from './fs-utils'
 import { newId, nowIso } from './id'
+import { deleteAssetsNotIn } from './assets'
 import type { Project, Page, StateRecord, PipelineRun } from './types'
 import path from 'node:path'
 
@@ -142,6 +143,8 @@ export async function deletePage(id: string): Promise<void> {
   for (const s of states) {
     await deleteState(s.id)
   }
+  // 删除弹窗承诺连「素材」一起删:keep 集合传空 = 该页所有 Asset 记录 + assets-bin PNG 全删
+  await deleteAssetsNotIn(id, new Set())
   await unlinkIfExists(paths.elements(id))
   await unlinkIfExists(paths.page(id))
 }

@@ -27,6 +27,7 @@ import Collapse from '@mui/material/Collapse'
 import Slide from '@mui/material/Slide'
 import Paper from '@mui/material/Paper'
 import Popover from '@mui/material/Popover'
+import Tooltip from '@mui/material/Tooltip'
 import CircularProgress from '@mui/material/CircularProgress'
 import {
   ChevronDown as ExpandMoreIcon,
@@ -175,12 +176,6 @@ export function ElementReviewClient({
     [],
   )
 
-  const removeElement = useCallback((id: string): void => {
-    setElements((prev) => prev.filter((el) => el.id !== id))
-    setSelectedId((prev) => (prev === id ? null : prev))
-    setDirty(true)
-  }, [])
-
   const restoreFromTiny = useCallback((el: LayoutElement): void => {
     setFilteredTiny((prev) => prev.filter((t) => t.id !== el.id))
     setElements((prev) => [...prev, { ...el, reviewed: false }])
@@ -287,6 +282,48 @@ export function ElementReviewClient({
     }, 0)
   }, [])
 
+  // 删除 + toast 撤销:review 是高频流水操作,不弹确认 Dialog 打断节奏。
+  // 删除是本地 staged(dirty + 浮动保存条统一 PUT 全量),撤销 = 原 index 塞回数组,
+  // 不存在「撤销了但保存后还是没了」的假撤销。闭包捕获被删元素与原位置,
+  // 连续删除多个时每条 toast 各自撤销各自的元素。
+  const deleteElementWithUndo = useCallback(
+    (id: string): void => {
+      const idx = elements.findIndex((el) => el.id === id)
+      if (idx === -1) return
+      const removed = elements[idx]!
+      // 选中态跳到下一个可见元素(没有下一个则上一个),保持键盘流不断
+      if (selectedId === id) {
+        const vIdx = visibleElements.findIndex((el) => el.id === id)
+        const next =
+          vIdx === -1
+            ? undefined
+            : (visibleElements[vIdx + 1] ?? (vIdx > 0 ? visibleElements[vIdx - 1] : undefined))
+        setSelectedId(next ? next.id : null)
+        if (next) scrollRowIntoView(next.id)
+      }
+      setElements((prev) => prev.filter((el) => el.id !== id))
+      setDirty(true)
+      toast(`已删除「${removed.name || '未命名'}」`, {
+        action: {
+          label: '撤销',
+          onClick: () => {
+            setElements((prev) => {
+              if (prev.some((el) => el.id === removed.id)) return prev // 防重复恢复
+              const next = [...prev]
+              next.splice(Math.min(idx, next.length), 0, removed)
+              return next
+            })
+            setDirty(true)
+            // 撤销后选中态回到该元素并滚动到可见
+            setSelectedId(removed.id)
+            scrollRowIntoView(removed.id)
+          },
+        },
+      })
+    },
+    [elements, visibleElements, selectedId, scrollRowIntoView],
+  )
+
   // 键盘快捷键:↑/↓ 切元素、Enter 确认并跳下一个未确认、⌘/Ctrl+S 保存、Delete 删除。
   // review 是高频流水操作(几十个元素逐个过),不该每个都要鼠标点 3 次。
   useEffect(() => {
@@ -350,7 +387,7 @@ export function ElementReviewClient({
         return
       }
       if (e.key === 'Delete' && selectedId) {
-        removeElement(selectedId)
+        deleteElementWithUndo(selectedId)
         return
       }
       if (e.key === 'Escape') {
@@ -367,7 +404,7 @@ export function ElementReviewClient({
     saving,
     save,
     updateElement,
-    removeElement,
+    deleteElementWithUndo,
     scrollRowIntoView,
     confirmFlash,
   ])
@@ -473,7 +510,7 @@ export function ElementReviewClient({
                 updateElement(selected.id, patch)
                 if (patch.reviewed === true) confirmFlash(selected.id)
               }}
-              onDelete={() => selected && removeElement(selected.id)}
+              onDelete={() => selected && deleteElementWithUndo(selected.id)}
             />
           </Stack>
         )}
@@ -1117,9 +1154,26 @@ function ElementDetail({
   return (
     <Box sx={{ width: 320, flexShrink: 0, p: 2, overflowY: 'auto' }}>
       <Stack spacing={2}>
-        <Typography variant="h5" noWrap>
-          {element.name || '(未命名)'}
-        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+          <Typography variant="h5" noWrap sx={{ minWidth: 0 }}>
+            {element.name || '(未命名)'}
+          </Typography>
+          {/* 低调 ghost 删除入口:默认 disabled 灰,hover 才显 error 红,不与主按钮抢权重 */}
+          <Tooltip title="删除元素(可撤销)">
+            <IconButton
+              size="small"
+              aria-label="删除元素(可撤销)"
+              onClick={onDelete}
+              sx={{
+                flexShrink: 0,
+                color: 'text.disabled',
+                '&:hover': { color: 'error.main' },
+              }}
+            >
+              <DeleteIcon size={16} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           {element.pass1_routes_seen?.map((r) => (
             // 路由名即五个 visual_category key,渲染成中文类目名(防御:未知值原样显示)
@@ -1205,20 +1259,15 @@ function ElementDetail({
           onChange={(e) => onChange({ z_index: parseInt(e.target.value, 10) || 0 })}
         />
         <Divider />
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant={element.reviewed ? 'outlined' : 'contained'}
-            color="primary"
-            startIcon={<CheckIcon />}
-            onClick={() => onChange({ reviewed: !element.reviewed })}
-            fullWidth
-          >
-            {element.reviewed ? '已确认' : '确认'}
-          </Button>
-          <IconButton color="error" onClick={onDelete}>
-            <DeleteIcon size={18} />
-          </IconButton>
-        </Stack>
+        <Button
+          variant={element.reviewed ? 'outlined' : 'contained'}
+          color="primary"
+          startIcon={<CheckIcon />}
+          onClick={() => onChange({ reviewed: !element.reviewed })}
+          fullWidth
+        >
+          {element.reviewed ? '已确认' : '确认'}
+        </Button>
       </Stack>
     </Box>
   )
