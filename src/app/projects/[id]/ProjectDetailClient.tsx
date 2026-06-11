@@ -132,20 +132,6 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
           ? [{ label: '项目', href: '/' }, { label: project.name }]
           : [{ label: '项目', href: '/' }]
       }
-      rightAction={
-        project && (
-          <MoreMenu
-            items={[
-              {
-                label: '删除项目',
-                icon: <DeleteIcon size={16} />,
-                danger: true,
-                onClick: () => setConfirmDelOpen(true),
-              },
-            ]}
-          />
-        )
-      }
     >
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Stack
@@ -168,14 +154,28 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
               <Skeleton variant="text" width={320} height={48} />
             </Box>
           )}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setDialogOpen(true)}
-            sx={{ flexShrink: 0 }}
-          >
-            新建页面
-          </Button>
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setDialogOpen(true)}
+            >
+              新建页面
+            </Button>
+            {/* 删除项目收在主操作右侧的 ⋯ 里:跟着对象走,不进全局顶栏 */}
+            {project && (
+              <MoreMenu
+                items={[
+                  {
+                    label: '删除项目',
+                    icon: <DeleteIcon size={16} />,
+                    danger: true,
+                    onClick: () => setConfirmDelOpen(true),
+                  },
+                ]}
+              />
+            )}
+          </Stack>
         </Stack>
 
         {pages && pages.length > 0 && <StatsStrip pages={pages} />}

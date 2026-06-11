@@ -136,21 +136,6 @@ export function PageDetailClient({
             ]
           : [{ label: '加载中…' }]
       }
-      rightAction={
-        page && (
-          <MoreMenu
-            items={[
-              {
-                label: '删除页面',
-                icon: <DeleteIcon size={16} />,
-                danger: true,
-                disabled: deletingPage,
-                onClick: () => setConfirmDeletePageOpen(true),
-              },
-            ]}
-          />
-        )
-      }
     >
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {loading ? (
@@ -175,14 +160,35 @@ export function PageDetailClient({
           <NotFoundCard message="该页面不存在或已被删除。" />
         ) : (
           <Box sx={riseInSx}>
-            <Box sx={{ mb: 1.5 }}>
-              <Typography variant="h2">{page.name}</Typography>
-              {page.route_hint && (
-                <Typography color="text.secondary" sx={{ mt: 0.25 }}>
-                  路由 {page.route_hint}
-                </Typography>
-              )}
-            </Box>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="flex-start"
+              sx={{ mb: 1.5, gap: 2 }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h2">{page.name}</Typography>
+                {page.route_hint && (
+                  <Typography color="text.secondary" sx={{ mt: 0.25 }}>
+                    路由 {page.route_hint}
+                  </Typography>
+                )}
+              </Box>
+              {/* 删除页面收在标题行右侧的 ⋯ 里:跟着对象走,不进全局顶栏(与项目详情同位) */}
+              <Box sx={{ flexShrink: 0 }}>
+                <MoreMenu
+                  items={[
+                    {
+                      label: '删除页面',
+                      icon: <DeleteIcon size={16} />,
+                      danger: true,
+                      disabled: deletingPage,
+                      onClick: () => setConfirmDeletePageOpen(true),
+                    },
+                  ]}
+                />
+              </Box>
+            </Stack>
 
             <PageStatsStrip stats={page.stats} hasState={hasState} />
 
