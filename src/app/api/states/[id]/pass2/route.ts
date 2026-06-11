@@ -128,6 +128,17 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
           ]
           await updateState(stateId, { pass2_failed_categories: failedCats })
 
+          // 本次跑的全部路次都失败 → 不该落 pass2_done。runPass2MultiRoute 用
+          // allSettled 永不 throw,这里显式抛出让状态机走 failStatus=pass2_failed。
+          // 口径:看的是「本次实际跑的路次」—— 部分重跑(categoryFilter)时,
+          // 若本次重跑的 category 全失败也算失败,与全量跑一致。
+          if (result.successes.length === 0 && result.failures.length > 0) {
+            const reasons = result.failures
+              .map((f) => `${f.category}: ${f.error}`)
+              .join('; ')
+            throw new Error(`Pass 2 全部路次失败 —— ${reasons}`)
+          }
+
           return {
             successful_routes: result.successes,
             failed_routes: result.failures,

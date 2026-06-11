@@ -5,6 +5,7 @@ import { getElementsForPage } from '@/lib/elements'
 import { listAssetsForPage, saveAsset } from '@/lib/assets'
 import { uploadAssetToCdn } from '@/lib/cdn-client'
 import { getActiveProvider } from '@/lib/config'
+import { invalidatePageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId, nowIso } from '@/lib/id'
 import { paths } from '@/lib/fs-utils'
@@ -55,6 +56,8 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
         })
       }
     }
+    // 只要有任何 asset 翻成 uploaded 就影响 stats 口径,部分失败也失效缓存
+    if (uploaded > 0) invalidatePageStats(pageId)
     return jsonResponse({ uploaded, failed })
   } catch (err) {
     return errorToResponse(err)

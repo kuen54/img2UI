@@ -4,6 +4,7 @@ import { getAsset, saveAsset, listAssetsForPage } from '@/lib/assets'
 import { getPage, getState } from '@/lib/projects'
 import { uploadAssetToCdn } from '@/lib/cdn-client'
 import { getActiveProvider } from '@/lib/config'
+import { invalidatePageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId, nowIso } from '@/lib/id'
 import { paths } from '@/lib/fs-utils'
@@ -41,6 +42,8 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
     const page = await getPage(asset.page_id)
     if (!page) return jsonResponse({ error: 'page not found' }, { status: 404 })
     const updated = await uploadOne(asset, page.project_id)
+    // status 翻成 uploaded 影响 stats 口径,失效缓存(lib 层会成环,故放路由层)
+    invalidatePageStats(asset.page_id)
     return jsonResponse(updated)
   } catch (err) {
     return errorToResponse(err)

@@ -58,6 +58,16 @@ export interface Pass1RouteSubFailure {
   subRunId: string
 }
 
+/** runRoute 失败时抛出,携带已落盘的 failed sub-run id,供 collector 接回诊断链路 */
+class Pass1RouteError extends Error {
+  readonly subRunId: string
+  constructor(subRunId: string, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause))
+    this.name = 'Pass1RouteError'
+    this.subRunId = subRunId
+  }
+}
+
 export interface Pass1MultiResult {
   successes: Pass1RouteSubResult[]
   failures: Pass1RouteSubFailure[]
@@ -122,10 +132,11 @@ export async function runPass1MultiRoute(input: {
     if (r.status === 'fulfilled') {
       successes.push(r.value)
     } else {
+      // runRoute 失败前已落盘 failed sub-run,error 上挂着它的 id;读出来接回诊断链路
       failures.push({
         category,
         error: r.reason instanceof Error ? r.reason.message : String(r.reason),
-        subRunId: '', // sub-run 创建早于失败,但拿不到 id;前端不依赖
+        subRunId: r.reason instanceof Pass1RouteError ? r.reason.subRunId : '',
       })
     }
   }
@@ -255,7 +266,7 @@ async function runRoute(input: {
       completed_at: nowIso(),
       error: { code: 'PASS1_ROUTE_ERROR', message, retryable: true },
     }).catch(() => {})
-    throw err
+    throw new Pass1RouteError(subRun.id, err)
   }
 }
 

@@ -114,7 +114,7 @@ step "1. Pass 1:5 路 mock → IoU 合并"
 PROJ=$(curl -s -X POST "$B/projects" -H 'Content-Type: application/json' -d '{"name":"回归测试项目","description":"mock 回归"}' | jget "['id']")
 PAGE=$(curl -s -X POST "$B/projects/$PROJ/pages" -H 'Content-Type: application/json' -d '{"name":"回归页"}' | jget "['id']")
 STATE=$(curl -s -X POST "$B/pages/$PAGE/states" -F "file=@$TMP/design.png;type=image/png" | jget "['id']")
-export STATE PAGE
+export STATE PAGE PROJ
 
 RUN=$(curl -s -X POST "$B/states/$STATE/pass1" | jget "['run_id']")
 S=$(wait_run "$RUN")
@@ -329,6 +329,38 @@ curl -s -X POST "$B/elements/$EL/assign-slice" -H 'Content-Type: application/jso
 MD5_AFTER=$(md5 -q "data/assets-bin/$EL.png" 2>/dev/null || echo missing)
 [ "$MD5_AFTER" = "$MD5_BEFORE" ] \
   && ok "slice_source 重放还原:png md5 一致" || fail "重放后像素不一致 before=$MD5_BEFORE after=$MD5_AFTER"
+
+# PUT 删元素级联删 asset:此刻 $EL(红色方块)已指派 + json/png 在盘上。
+# 整页备份后,PUT 一个不含 $EL 的 elements 数组 → deleteAssetsNotIn 应连带删掉它的
+# asset 记录与 assets-bin PNG;PUT 在缓存失效写路径上,total_assets 须立即归 0(不等 5s TTL)。
+curl -s "$B/pages/$PAGE/elements" > "$TMP/els-full.json"  # 备份整页 elements,断言后还原
+curl -s "$B/pages/$PAGE/elements" | python3 -c "
+import json,sys,os
+d=json.load(sys.stdin)
+d['elements']=[e for e in d['elements'] if e['id']!=os.environ['EL']]  # 抠掉已指派的红色方块
+print(json.dumps(d))
+" > "$TMP/els.json"
+curl -s -o /dev/null "$B/pages/$PAGE"  # 灌 5s TTL 缓存,供 PUT 后「立即 GET」检验失效
+curl -s -X PUT "$B/pages/$PAGE/elements" -H 'Content-Type: application/json' -d @"$TMP/els.json" > /dev/null
+ASSET_GONE=$(curl -s "$B/pages/$PAGE/assets" | python3 -c "import json,sys,os;print('yes' if os.environ['EL'] not in [a['element_id'] for a in json.load(sys.stdin)['assets']] else 'no')")
+STATS_T=$(curl -s "$B/pages/$PAGE" | jget "['stats']['total_assets']")  # 立即 GET,不 sleep
+[ "$ASSET_GONE" = yes ] && [ ! -f "data/assets/$EL.json" ] && [ ! -f "data/assets-bin/$EL.png" ] && [ "$STATS_T" = 0 ] \
+  && ok "PUT 删元素级联删 asset:记录+PNG 消失,total_assets 立即归 0" \
+  || fail "PUT 删元素级联失败(asset_gone=$ASSET_GONE stats_total=$STATS_T 或文件残留)"
+# 还原:PUT 回整页 elements(id 不变,reviewed 保持),再用 $SRC 重放指派,供 step 9/11 复用现场
+curl -s -X PUT "$B/pages/$PAGE/elements" -H 'Content-Type: application/json' -d @"$TMP/els-full.json" > /dev/null
+curl -s -X POST "$B/elements/$EL/assign-slice" -H 'Content-Type: application/json' -d "$BODY" > /dev/null
+
+# 损坏 JSON 不再打挂列表接口:往 data/projects 落一个非法 .json(readJsonIfExists 应 warn+skip),
+# GET /api/projects 须仍 200 且原有 $PROJ 还在;断言后立刻删掉垃圾文件,避免污染并行其他用例。
+GARBAGE="data/projects/regress-garbage-$$.json"
+printf '%s' '{garbage' > "$GARBAGE"
+CODE=$(curl -s -o "$TMP/projects-list.json" -w "%{http_code}" "$B/projects")
+HAS_PROJ=$(python3 -c "import json,os;print('yes' if os.environ['PROJ'] in [p['id'] for p in json.load(open('$TMP/projects-list.json'))] else 'no')" 2>/dev/null || echo no)
+rm -f "$GARBAGE"
+[ "$CODE" = 200 ] && [ "$HAS_PROJ" = yes ] \
+  && ok "损坏 JSON 不打挂列表接口:GET /projects 仍 200 且原数据在(warn+skip)" \
+  || fail "损坏 JSON 打挂列表接口(code=$CODE has_proj=$HAS_PROJ)"
 
 # ════ 9. 运行中删除保护(409) ════════════════════════════════════════════
 step "9. 运行中删除保护:run 持锁时 DELETE 页面/项目 → 409"

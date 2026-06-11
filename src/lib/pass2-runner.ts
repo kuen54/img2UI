@@ -12,6 +12,7 @@ import type {
   PipelinePassKind,
   Page,
   Project,
+  Pass2RouteParsedResult,
 } from './types'
 import { newId, nowIso } from './id'
 import {
@@ -290,10 +291,13 @@ async function runRoute(input: {
       parsed_result: {
         slice_count: slices.length,
         element_count: validElements.length,
+        // 本 batch 实际画进绿幕图的 element id —— validate 据此把发给单张图的
+        // 元素列表过滤成该子集,避免不在图里的元素被误判 complete=false
+        element_ids: validElements.map((e) => e.id),
         ...(totalBatches > 1
           ? { batch_idx: batchIdx, total_batches: totalBatches }
           : {}),
-      },
+      } satisfies Pass2RouteParsedResult,
     })
 
     return {

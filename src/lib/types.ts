@@ -263,6 +263,20 @@ export interface PipelineRun {
   error?: PipelineRunError
 }
 
+/**
+ * pass2_<category> sub-run 的 parsed_result 形状(运行时 PipelineRun.parsed_result
+ * 是 unknown,这里给 pass2 路次的写入/读取用一个收敛的形状)。
+ * element_ids:本 batch 实际画进绿幕图的 element id 列表 —— validate 据此把发给
+ * 单张 batch 图的元素过滤成该子集。旧数据无此字段,读取方须按可选处理后回退。
+ */
+export interface Pass2RouteParsedResult {
+  slice_count: number
+  element_count: number
+  element_ids?: string[]
+  batch_idx?: number
+  total_batches?: number
+}
+
 // ─── 工具类型 ────────────────────────────────────────────────────────────────
 
 export type Brand<T, B> = T & { __brand: B }

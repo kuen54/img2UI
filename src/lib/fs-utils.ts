@@ -54,14 +54,29 @@ export async function writeAtomic(
   await fs.rename(tmp, filePath)
 }
 
-/** 读 JSON,文件不存在返回 null */
+/**
+ * 读 JSON,文件不存在返回 null。
+ * data/ 用户可手动编辑,单个文件 JSON 损坏不该让整个列表接口 500 ——
+ * 解析失败时 warn 带路径后当作 null(调用方本来就按 null=跳过处理)。
+ * 其他 IO 错误继续抛。
+ */
 export async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
+  let buf: string
   try {
-    const buf = await fs.readFile(filePath, 'utf-8')
-    return JSON.parse(buf) as T
+    buf = await fs.readFile(filePath, 'utf-8')
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw err
+  }
+  try {
+    return JSON.parse(buf) as T
+  } catch (err) {
+    console.warn(
+      `[readJsonIfExists] JSON 解析失败,跳过 ${filePath}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    )
+    return null
   }
 }
 

@@ -56,6 +56,18 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
             const transparent = await callMatting(provider, { png: buf })
             await writeAtomic(b.keyedPath, transparent)
             const slices = await sliceAssets(transparent)
+            // matting 退化(全透明)会切出 0 片 —— 这种 batch 不算成功,
+            // 否则 0 切片仍报成功会误导用户以为有素材产出。
+            if (slices.length === 0) {
+              console.warn(
+                `[re-key-via-api] ${cat} batch${b.batchIdx} 抠图后无切片(疑似全透明)`,
+              )
+              failed.push({
+                category: cat,
+                error: `batch${b.batchIdx}: 抠图后无有效切片(疑似全透明结果)`,
+              })
+              continue
+            }
             for (const s of slices) {
               const idx = await nextSliceIdx(stateId, cat)
               await writeSlice(stateId, cat, idx, s.buffer, {
@@ -75,10 +87,11 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
         if (anyBatchSuccess) refreshed.push(cat)
       }
 
+      // 没有任何 batch 产出有效切片(API 报错或全透明退化)= 整体失败。
       if (refreshed.length === 0 && failed.length > 0) {
         return jsonResponse(
           {
-            error: '抠图 API 全失败',
+            error: '抠图未产出任何素材,请稍后重试',
             failed,
           },
           { status: 502 },

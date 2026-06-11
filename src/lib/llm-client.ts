@@ -269,6 +269,10 @@ async function callApimartAsync(
     // Pass 2 subject 路 19+ 个参考图时 body 可能 ~4MB,30s 上传不够。
     // 实测 19 张 ref 在普通带宽下 30s × 3 retry 全部超时(89s 左右挂)。
     timeoutMs: 180_000,
+    // submit 是非幂等提交:服务端建 task 后若响应超时/5xx,fetchWithRetry 默认
+    // maxRetries=3 会再 POST 一次,产生重复计费的幽灵 task。这里显式关掉重试,
+    // 失败由上层(pass2 部分重跑)兜底。轮询的 GET 是幂等的,保持默认重试。
+    maxRetries: 0,
     ...(opts.signal ? { externalSignal: opts.signal } : {}),
   })
   const submitJson = (await submitRes.json()) as {
