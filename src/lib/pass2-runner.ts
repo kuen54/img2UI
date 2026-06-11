@@ -34,6 +34,7 @@ import {
   renderPass2ReExtract,
 } from './prompts/render-pass2-route'
 import { createPipelineRun, updatePipelineRun } from './elements'
+import { withLock } from './run-lock'
 
 export interface Pass2RouteResult {
   category: VisualCategory
@@ -396,10 +397,16 @@ export async function runReExtract(input: {
     // 写到该 element 的 visual_category 路下
     const cat = element.visual_category
     const { nextSliceIdx } = await import('./slices')
-    const idx = await nextSliceIdx(state.id, cat)
-    await writeSlice(state.id, cat, idx, main.buffer, {
-      opaque_pct: main.opaque_pct,
-      bbox: main.bbox,
+    // 与 subCropSlice 共用同一把 slices 锁:idx 分配 + 写入整段串行化,
+    // 防止并发 sub-crop 拿到同一 nextSliceIdx 后写覆盖。死锁安全:
+    // state 锁 fail-fast 从不等待,这里持 state 锁等 leaf 锁方向单一,无环。
+    const idx = await withLock(`slices:${state.id}:${cat}`, async () => {
+      const allocated = await nextSliceIdx(state.id, cat)
+      await writeSlice(state.id, cat, allocated, main.buffer, {
+        opaque_pct: main.opaque_pct,
+        bbox: main.bbox,
+      })
+      return allocated
     })
 
     await updatePipelineRun(subRun.id, {

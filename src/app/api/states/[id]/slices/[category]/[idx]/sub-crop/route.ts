@@ -25,8 +25,9 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
     const idxNum = parseInt(idx, 10)
     if (!Number.isInteger(idxNum) || idxNum < 0)
       return jsonResponse({ error: 'invalid idx' }, { status: 400 })
-    // re-key 等持 state 锁的任务也会追加切片 idx,与 sub-crop 不共锁
-    // (sub-crop 只持 slices 队列锁),靠这里的入口检查避免撞 idx
+    // 撞 idx 由 slices:{state}:{cat} 队列锁防住(re-key / re-extract 的
+    // 写切片段与 sub-crop 共用);这里的入口检查只是避免用户在 pipeline
+    // 运行中对着中间态切片下刀
     if (isStateLocked(id)) return jsonResponse({ error: 'state busy' }, { status: 409 })
 
     const body = (await req.json()) as {

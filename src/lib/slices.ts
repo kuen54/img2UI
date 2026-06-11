@@ -144,8 +144,9 @@ export async function subCropSlice(
   // 同一 (state, category) 的 idx 分配串行化:两个并发 sub-crop 否则会拿到同一个
   // nextSliceIdx,后写覆盖前写(writeAtomic 只保证无半文件,不防覆盖)。
   // 刻意不抢 pipeline 的 state 锁——validate 等长任务运行时用户仍要能切素材;
-  // 与持 state 锁的 re-key 理论上仍可能撞 idx,由 sub-crop route 入口的
-  // isStateLocked 检查(409)兜住。
+  // re-key / re-extract 的 idx 分配+写入段也套同一把 slices 锁,撞 idx 已被
+  // 锁本身消除(sub-crop route 入口的 isStateLocked 检查只是避免在 pipeline
+  // 运行中切到中间态切片,不再承担防撞职责)。
   return withLock(`slices:${stateId}:${category}`, async () => {
     const orig = await readSliceBuffer(stateId, category, idx)
     const meta = await sharp(orig).metadata()

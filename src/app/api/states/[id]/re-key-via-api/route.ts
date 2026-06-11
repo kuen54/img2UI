@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { promises as fs } from 'node:fs'
 import { getState } from '@/lib/projects'
-import { withStateLock, isStateLocked, StateBusyError } from '@/lib/run-lock'
+import { withStateLock, isStateLocked, StateBusyError, withLock } from '@/lib/run-lock'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
 import { writeAtomic, listPass2Batches } from '@/lib/fs-utils'
@@ -68,13 +68,18 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
               continue
             }
             await writeAtomic(b.keyedPath, transparent)
-            for (const s of slices) {
-              const idx = await nextSliceIdx(stateId, cat)
-              await writeSlice(stateId, cat, idx, s.buffer, {
-                opaque_pct: s.opaque_pct,
-                bbox: s.bbox,
-              })
-            }
+            // 与 subCropSlice 共用同一把 slices 锁:idx 分配 + 写入整段串行化,
+            // 防止并发 sub-crop 拿到同一 nextSliceIdx 后写覆盖。死锁安全:
+            // state 锁 fail-fast 从不等待,这里持 state 锁等 leaf 锁方向单一,无环。
+            await withLock(`slices:${stateId}:${cat}`, async () => {
+              for (const s of slices) {
+                const idx = await nextSliceIdx(stateId, cat)
+                await writeSlice(stateId, cat, idx, s.buffer, {
+                  opaque_pct: s.opaque_pct,
+                  bbox: s.bbox,
+                })
+              }
+            })
             anyBatchSuccess = true
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)

@@ -22,11 +22,14 @@ export async function chromaGreenKey(
 
   const { data, info } = await sharp(greenScreenPng)
     .removeAlpha()
+    // 显式钉死 sRGB 3 通道:生图素材本就是 sRGB,此处恒等(实测 bit 级不变);
+    // 灰度/调色板等非常规 PNG 也会被规整成 sRGB 而不是走到下面的 throw
+    .toColourspace('srgb')
     .raw()
     .toBuffer({ resolveWithObject: true })
 
   const { width, height, channels: ch } = info
-  // removeAlpha 后生图素材恒为 RGB 3 通道,通道步长提为常量;防御性校验一次
+  // removeAlpha + toColourspace('srgb') 后恒为 3 通道;此 throw 仅作断言,正常不可达
   if (ch !== 3) throw new Error(`chromaGreenKey expects 3 channels after removeAlpha, got ${ch}`)
   const N = width * height
   // 下方循环覆写 out 的全部 N*4 字节,allocUnsafe 免去清零

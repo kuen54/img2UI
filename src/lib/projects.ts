@@ -79,6 +79,9 @@ export async function deleteProject(id: string): Promise<void> {
   // 级联删除前全量预检:任一 state 持锁就整个项目不动,
   // 避免删了若干 page 后才在深处 409 留下半删项目。
   // (真正的互斥在 deleteState 的 withStateLock,这里只是快速失败)
+  // 注意:预检后中途仍可能有 state 被 audit job 抢锁,deleteState 抛 StateBusyError
+  // → 路由 409,已删的兄弟 state 不回滚,会暂留半删项目;但 deleteState 幂等、
+  // project 记录最后才删,用户重试删除即可收敛。
   const stateLists = await Promise.all(pages.map((p) => listStatesByPage(p.id)))
   for (const states of stateLists) {
     for (const s of states) {
@@ -153,6 +156,9 @@ export async function deletePage(id: string): Promise<void> {
   const states = await listStatesByPage(id)
   // 级联删除前预检:任一 state 持锁就整页不动,避免删到一半才 409 留下半删页面。
   // (真正的互斥在 deleteState 的 withStateLock,这里只是快速失败)
+  // 注意:预检后中途仍可能有 state 被 audit job 抢锁,deleteState 抛 StateBusyError
+  // → 路由 409,已删的兄弟 state 不回滚,会暂留半删页面;但 deleteState 幂等、
+  // page 记录最后才删,用户重试删除即可收敛。
   for (const s of states) {
     if (isStateLocked(s.id)) throw new StateBusyError(s.id)
   }
