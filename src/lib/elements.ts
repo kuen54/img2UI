@@ -1,6 +1,7 @@
 import {
   paths,
   readJsonIfExists,
+  readJsonLenient,
   writeJsonAtomic,
   unlinkIfExists,
   ensureDataRoot,
@@ -76,7 +77,7 @@ export async function listPipelineRunsByState(
   const runs = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<PipelineRun>(path.join(dir, f))),
+      .map((f) => readJsonLenient<PipelineRun>(path.join(dir, f))),
   )
   return runs
     .filter((r): r is PipelineRun => r !== null && r.state_id === stateId)

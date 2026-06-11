@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getElementsForPage, saveElementsForPage } from '@/lib/elements'
+import { deleteAssetsNotIn } from '@/lib/assets'
 import { invalidatePageStats } from '@/lib/page-stats'
 import { getPage } from '@/lib/projects'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
@@ -47,6 +48,10 @@ export async function PUT(req: NextRequest, { params }: RouteParams): Promise<Re
       updated_at: now,
     }))
     await saveElementsForPage(id, cleaned)
+    // 删元素后清理孤儿 asset(连带 assets-bin PNG),否则旧记录永久残留污染 export。
+    // 口径按 element id 清理:type 从 static 翻成 code 的元素其 id 仍在 cleaned 里,asset 保留
+    //(用户把 type 翻回 static 不丢已有指派)。仅当 element 被整体删除时其 asset 才被清。
+    await deleteAssetsNotIn(id, new Set(cleaned.map((e) => e.id)))
     // 整批替换会改 type / 增删元素,直接影响 stats 口径(assigned_static_elements 等),
     // 与 assign/unassign 同理需失效缓存;lib 层加会 elements↔page-stats 成环,故放路由层
     invalidatePageStats(id)

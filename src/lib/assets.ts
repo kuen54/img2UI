@@ -1,6 +1,7 @@
 import {
   paths,
   readJsonIfExists,
+  readJsonLenient,
   writeJsonAtomic,
   unlinkIfExists,
   ensureDataRoot,
@@ -31,7 +32,7 @@ export async function listAssetsForPage(pageId: string): Promise<Asset[]> {
   const all = await Promise.all(
     files
       .filter((f) => f.endsWith('.json'))
-      .map((f) => readJsonIfExists<Asset>(path.join(dir, f))),
+      .map((f) => readJsonLenient<Asset>(path.join(dir, f))),
   )
   return all.filter((a): a is Asset => a !== null && a.page_id === pageId)
 }

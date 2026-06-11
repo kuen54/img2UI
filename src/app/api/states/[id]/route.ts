@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getState, deleteState, getPage, updatePage } from '@/lib/projects'
+import { invalidatePageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
 
@@ -31,6 +32,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams): Promis
       await updatePage(state.page_id, { canonical_state_id: '' })
     }
     await deleteState(id)
+    // 删 state 改 state_count / pipeline_status 等口径,失效缓存(lib 层会成环,故放路由层)
+    invalidatePageStats(state.page_id)
     return new Response(null, { status: 204 })
   } catch (err) {
     return errorToResponse(err)
