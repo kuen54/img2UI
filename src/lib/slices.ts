@@ -18,6 +18,7 @@ import {
 import type { SliceInfo, SliceSource, VisualCategory, Asset } from './types'
 import { ALL_VISUAL_CATEGORIES } from './visual-category'
 import { invalidatePageStats } from './page-stats'
+import { withLock } from './run-lock'
 
 interface SliceSidecar {
   idx: number
@@ -33,16 +34,26 @@ export async function writeSlice(
   category: VisualCategory,
   idx: number,
   buffer: Buffer,
-  meta: { opaque_pct: number; bbox: [number, number, number, number] },
+  meta: {
+    opaque_pct: number
+    bbox: [number, number, number, number]
+    /** 调用方已知 buffer 尺寸时传入,省一次 PNG 解码(必须与实际尺寸一致) */
+    width?: number
+    height?: number
+  },
 ): Promise<SliceInfo> {
   await ensureDataRoot()
   const dir = paths.sliceDir(stateId, category)
   await fs.mkdir(dir, { recursive: true })
   const png = paths.slice(stateId, category, idx)
   await writeAtomic(png, buffer)
-  const sharpMeta = await sharp(buffer).metadata()
-  const w = sharpMeta.width ?? 0
-  const h = sharpMeta.height ?? 0
+  let w = meta.width
+  let h = meta.height
+  if (w === undefined || h === undefined) {
+    const sharpMeta = await sharp(buffer).metadata()
+    w = sharpMeta.width ?? 0
+    h = sharpMeta.height ?? 0
+  }
   const sidecar: SliceSidecar = { idx, width: w, height: h, opaque_pct: meta.opaque_pct, bbox: meta.bbox }
   await writeJsonAtomic(paths.sliceSidecar(stateId, category, idx), sidecar)
   return {
@@ -130,47 +141,60 @@ export async function subCropSlice(
   rects: Array<{ x: number; y: number; w: number; h: number }>,
 ): Promise<SliceInfo[]> {
   if (rects.length === 0) return []
-  const orig = await readSliceBuffer(stateId, category, idx)
-  const meta = await sharp(orig).metadata()
-  const W = meta.width ?? 0
-  const H = meta.height ?? 0
-  const created: SliceInfo[] = []
-  for (const r of rects) {
-    let left = Math.round(r.x)
-    let top = Math.round(r.y)
-    let width = Math.round(r.w)
-    let height = Math.round(r.h)
-    if (left < 0) { width += left; left = 0 }
-    if (top < 0) { height += top; top = 0 }
-    if (left + width > W) width = W - left
-    if (top + height > H) height = H - top
-    if (width < 4 || height < 4) continue
+  // 同一 (state, category) 的 idx 分配串行化:两个并发 sub-crop 否则会拿到同一个
+  // nextSliceIdx,后写覆盖前写(writeAtomic 只保证无半文件,不防覆盖)。
+  // 刻意不抢 pipeline 的 state 锁——validate 等长任务运行时用户仍要能切素材;
+  // re-key / re-extract 的 idx 分配+写入段也套同一把 slices 锁,撞 idx 已被
+  // 锁本身消除(sub-crop route 入口的 isStateLocked 检查只是避免在 pipeline
+  // 运行中切到中间态切片,不再承担防撞职责)。
+  return withLock(`slices:${stateId}:${category}`, async () => {
+    const orig = await readSliceBuffer(stateId, category, idx)
+    const meta = await sharp(orig).metadata()
+    const W = meta.width ?? 0
+    const H = meta.height ?? 0
+    const created: SliceInfo[] = []
+    // 锁内提到循环外自增即可(语义同逐次 max+1),省每个 rect 一次目录扫描
+    let nextIdx = await nextSliceIdx(stateId, category)
+    for (const r of rects) {
+      let left = Math.round(r.x)
+      let top = Math.round(r.y)
+      let width = Math.round(r.w)
+      let height = Math.round(r.h)
+      if (left < 0) { width += left; left = 0 }
+      if (top < 0) { height += top; top = 0 }
+      if (left + width > W) width = W - left
+      if (top + height > H) height = H - top
+      if (width < 4 || height < 4) continue
 
-    const buf = await sharp(orig)
-      .extract({ left, top, width, height })
-      .png()
-      .toBuffer()
+      const buf = await sharp(orig)
+        .extract({ left, top, width, height })
+        .png()
+        .toBuffer()
 
-    // opaque_pct on sub-crop
-    const { data, info } = await sharp(buf)
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true })
-    const N = info.width * info.height
-    let opaque = 0
-    for (let i = 0; i < N; i++) {
-      if (data[i * info.channels + 3]! > 200) opaque++
+      // opaque_pct on sub-crop
+      const { data, info } = await sharp(buf)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      const N = info.width * info.height
+      let opaque = 0
+      for (let i = 0; i < N; i++) {
+        if (data[i * info.channels + 3]! > 200) opaque++
+      }
+      const pct = (opaque / N) * 100
+
+      // 尺寸直接用 raw 解码的 info,writeSlice 不必再 decode 一次
+      const info2 = await writeSlice(stateId, category, nextIdx, buf, {
+        opaque_pct: pct,
+        bbox: [left, top, width, height],
+        width: info.width,
+        height: info.height,
+      })
+      nextIdx++
+      created.push(info2)
     }
-    const pct = (opaque / N) * 100
-
-    const newIdx = await nextSliceIdx(stateId, category)
-    const info2 = await writeSlice(stateId, category, newIdx, buf, {
-      opaque_pct: pct,
-      bbox: [left, top, width, height],
-    })
-    created.push(info2)
-  }
-  return created
+    return created
+  })
 }
 
 // ─── 指派 / 撤销(MVP S3:Asset.slice_source 反查) ────────────────────────
@@ -184,56 +208,64 @@ export async function assignSliceToElement(input: {
   pageId: string
   source: SliceSource
 }): Promise<Asset> {
-  const sliceBuf = await readSliceBuffer(input.source.state_id, input.source.category, input.source.idx)
-  const meta = await sharp(sliceBuf).metadata()
-  const w = meta.width ?? 0
-  const h = meta.height ?? 0
+  // 同一 element 的 Asset 读改写(getAsset→saveAsset)串行化,防并发 assign /
+  // unassign 交错丢更新。刻意不抢 pipeline 的 state 锁——validate 等长任务
+  // 运行时用户仍要能指派素材,这是有意的取舍。
+  return withLock(`asset:${input.elementId}`, async () => {
+    const sliceBuf = await readSliceBuffer(input.source.state_id, input.source.category, input.source.idx)
 
-  // copy 到 assets-bin/{element-id}.png(asset.id == element.id)
-  await writeAtomic(paths.assetBin(input.elementId), sliceBuf)
+    // copy 到 assets-bin/{element-id}.png(asset.id == element.id)
+    await writeAtomic(paths.assetBin(input.elementId), sliceBuf)
 
-  // 计算 alpha_quality(opaque% / 100,简版)
-  const { data, info } = await sharp(sliceBuf)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true })
-  const N = info.width * info.height
-  let opaque = 0
-  for (let i = 0; i < N; i++) {
-    if (data[i * info.channels + 3]! > 200) opaque++
-  }
-  const alpha = N > 0 ? opaque / N : 0
+    // 计算 alpha_quality(opaque% / 100,简版);尺寸从同一次 raw 解码拿,
+    // 不再单独 sharp().metadata() 多解码一遍
+    const { data, info } = await sharp(sliceBuf)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const w = info.width
+    const h = info.height
+    const N = info.width * info.height
+    let opaque = 0
+    for (let i = 0; i < N; i++) {
+      if (data[i * info.channels + 3]! > 200) opaque++
+    }
+    const alpha = N > 0 ? opaque / N : 0
 
-  const existing = await getAsset(input.elementId)
-  const now = nowIso()
-  const asset: Asset = {
-    id: input.elementId,
-    element_id: input.elementId,
-    page_id: input.pageId,
-    local_path: paths.assetBin(input.elementId),
-    ...(existing?.cdn_url ? { cdn_url: existing.cdn_url } : {}),
-    width: w,
-    height: h,
-    alpha_quality: alpha,
-    status: 'extracted',
-    slice_source: input.source,
-    created_at: existing?.created_at ?? now,
-    updated_at: now,
-  }
-  await saveAsset(asset)
-  // 指派改变 total_assets / assigned_static_elements,5s TTL 缓存必须立即失效,
-  // 否则导航回详情页的那次 reload 会拿到指派前的 stats(主按钮挂错状态)
-  invalidatePageStats(input.pageId)
-  return asset
+    const existing = await getAsset(input.elementId)
+    const now = nowIso()
+    const asset: Asset = {
+      id: input.elementId,
+      element_id: input.elementId,
+      page_id: input.pageId,
+      local_path: paths.assetBin(input.elementId),
+      ...(existing?.cdn_url ? { cdn_url: existing.cdn_url } : {}),
+      width: w,
+      height: h,
+      alpha_quality: alpha,
+      status: 'extracted',
+      slice_source: input.source,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    }
+    await saveAsset(asset)
+    // 指派改变 total_assets / assigned_static_elements,5s TTL 缓存必须立即失效,
+    // 否则导航回详情页的那次 reload 会拿到指派前的 stats(主按钮挂错状态)
+    invalidatePageStats(input.pageId)
+    return asset
+  })
 }
 
 /** 撤销指派:删 assets-bin + 删 Asset 记录 */
 export async function unassignAsset(elementId: string): Promise<void> {
-  // 先读出 page_id 再删(asset.id === element.id),删后失效 page stats 缓存
-  const existing = await getAsset(elementId)
-  await unlinkIfExists(paths.assetBin(elementId))
-  await deleteAsset(elementId)
-  if (existing) invalidatePageStats(existing.page_id)
+  // 与 assign 同一把 asset 锁,防 assign/unassign 交错出现半删半建状态
+  return withLock(`asset:${elementId}`, async () => {
+    // 先读出 page_id 再删(asset.id === element.id),删后失效 page stats 缓存
+    const existing = await getAsset(elementId)
+    await unlinkIfExists(paths.assetBin(elementId))
+    await deleteAsset(elementId)
+    if (existing) invalidatePageStats(existing.page_id)
+  })
 }
 
 /** 反查:某切片当前被哪些 asset 引用(可能多个,因 MVP S3 允许重复指派) */

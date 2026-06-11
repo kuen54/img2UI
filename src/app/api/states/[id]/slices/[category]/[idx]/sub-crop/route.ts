@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { subCropSlice } from '@/lib/slices'
+import { isStateLocked } from '@/lib/run-lock'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
 import { ALL_VISUAL_CATEGORIES } from '@/lib/visual-category'
@@ -24,6 +25,10 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
     const idxNum = parseInt(idx, 10)
     if (!Number.isInteger(idxNum) || idxNum < 0)
       return jsonResponse({ error: 'invalid idx' }, { status: 400 })
+    // 撞 idx 由 slices:{state}:{cat} 队列锁防住(re-key / re-extract 的
+    // 写切片段与 sub-crop 共用);这里的入口检查只是避免用户在 pipeline
+    // 运行中对着中间态切片下刀
+    if (isStateLocked(id)) return jsonResponse({ error: 'state busy' }, { status: 409 })
 
     const body = (await req.json()) as {
       rects?: Array<{ x: number; y: number; w: number; h: number }>

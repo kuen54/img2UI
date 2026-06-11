@@ -22,16 +22,24 @@ export async function chromaGreenKey(
 
   const { data, info } = await sharp(greenScreenPng)
     .removeAlpha()
+    // 显式钉死 sRGB 3 通道:生图素材本就是 sRGB,此处恒等(实测 bit 级不变);
+    // 灰度/调色板等非常规 PNG 也会被规整成 sRGB 而不是走到下面的 throw
+    .toColourspace('srgb')
     .raw()
     .toBuffer({ resolveWithObject: true })
 
   const { width, height, channels: ch } = info
-  const out = Buffer.alloc(width * height * 4)
+  // removeAlpha + toColourspace('srgb') 后恒为 3 通道;此 throw 仅作断言,正常不可达
+  if (ch !== 3) throw new Error(`chromaGreenKey expects 3 channels after removeAlpha, got ${ch}`)
+  const N = width * height
+  // 下方循环覆写 out 的全部 N*4 字节,allocUnsafe 免去清零
+  const out = Buffer.allocUnsafe(N * 4)
 
-  for (let i = 0; i < width * height; i++) {
-    const r = data[i * ch]!
-    const g = data[i * ch + 1]!
-    const b = data[i * ch + 2]!
+  for (let i = 0; i < N; i++) {
+    const p = i * 3
+    const r = data[p]!
+    const g = data[p + 1]!
+    const b = data[p + 2]!
     const maxRB = r > b ? r : b
     const gExcess = g - maxRB
 
@@ -48,10 +56,11 @@ export async function chromaGreenKey(
       outG = Math.max(0, g - gExcess)
     }
 
-    out[i * 4] = r
-    out[i * 4 + 1] = outG
-    out[i * 4 + 2] = b
-    out[i * 4 + 3] = alpha
+    const o = i * 4
+    out[o] = r
+    out[o + 1] = outG
+    out[o + 2] = b
+    out[o + 3] = alpha
   }
 
   return sharp(out, { raw: { width, height, channels: 4 } })

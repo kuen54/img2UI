@@ -11,6 +11,7 @@ import {
   DATA_ROOT,
 } from './fs-utils'
 import { newId, nowIso } from './id'
+import { withStateLock, isStateLocked, StateBusyError } from './run-lock'
 import { deleteAssetsNotIn } from './assets'
 import type { Project, Page, StateRecord, PipelineRun } from './types'
 import path from 'node:path'
@@ -75,6 +76,18 @@ export async function updateProject(
 
 export async function deleteProject(id: string): Promise<void> {
   const pages = await listPagesByProject(id)
+  // 级联删除前全量预检:任一 state 持锁就整个项目不动,
+  // 避免删了若干 page 后才在深处 409 留下半删项目。
+  // (真正的互斥在 deleteState 的 withStateLock,这里只是快速失败)
+  // 注意:预检后中途仍可能有 state 被 audit job 抢锁,deleteState 抛 StateBusyError
+  // → 路由 409,已删的兄弟 state 不回滚,会暂留半删项目;但 deleteState 幂等、
+  // project 记录最后才删,用户重试删除即可收敛。
+  const stateLists = await Promise.all(pages.map((p) => listStatesByPage(p.id)))
+  for (const states of stateLists) {
+    for (const s of states) {
+      if (isStateLocked(s.id)) throw new StateBusyError(s.id)
+    }
+  }
   for (const p of pages) {
     await deletePage(p.id)
   }
@@ -141,6 +154,14 @@ export async function updatePage(
 
 export async function deletePage(id: string): Promise<void> {
   const states = await listStatesByPage(id)
+  // 级联删除前预检:任一 state 持锁就整页不动,避免删到一半才 409 留下半删页面。
+  // (真正的互斥在 deleteState 的 withStateLock,这里只是快速失败)
+  // 注意:预检后中途仍可能有 state 被 audit job 抢锁,deleteState 抛 StateBusyError
+  // → 路由 409,已删的兄弟 state 不回滚,会暂留半删页面;但 deleteState 幂等、
+  // page 记录最后才删,用户重试删除即可收敛。
+  for (const s of states) {
+    if (isStateLocked(s.id)) throw new StateBusyError(s.id)
+  }
   for (const s of states) {
     await deleteState(s.id)
   }
@@ -214,6 +235,12 @@ export async function updateState(
 }
 
 export async function deleteState(id: string): Promise<void> {
+  // 真互斥:pipeline 持锁期间删除直接抛 StateBusyError(409 语义),
+  // 消除「预检通过 → 实删之间 pipeline 起跑」的 check-then-act 窗口
+  return withStateLock(id, () => deleteStateUnlocked(id))
+}
+
+async function deleteStateUnlocked(id: string): Promise<void> {
   // 删 raw / thumb / pass2 / keyed / slices / pipeline-runs of this state
   await unlinkIfExists(paths.raw(id))
   await unlinkIfExists(paths.thumb(id))
@@ -235,14 +262,17 @@ export async function deleteState(id: string): Promise<void> {
       .filter((d) => d.startsWith(`${id}-`))
       .map((d) => rmIfExists(path.join(slicesDir, d))),
   )
-  // pipeline-runs by state_id
+  // pipeline-runs by state_id(并行读全部 json,再并行 unlink 命中项)
   const piDir = path.join(DATA_ROOT, 'pipelines')
   const piFiles = await readdirIfExists(piDir)
-  for (const f of piFiles.filter((f) => f.endsWith('.json'))) {
-    const run = await readJsonLenient<PipelineRun>(path.join(piDir, f))
-    if (run?.state_id === id) {
-      await unlinkIfExists(path.join(piDir, f))
-    }
-  }
+  const piJsonFiles = piFiles.filter((f) => f.endsWith('.json'))
+  const runs = await Promise.all(
+    piJsonFiles.map((f) => readJsonLenient<PipelineRun>(path.join(piDir, f))),
+  )
+  await Promise.all(
+    piJsonFiles
+      .filter((_, i) => runs[i]?.state_id === id)
+      .map((f) => unlinkIfExists(path.join(piDir, f))),
+  )
   await unlinkIfExists(paths.state(id))
 }

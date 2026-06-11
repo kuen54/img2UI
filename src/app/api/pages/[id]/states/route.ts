@@ -6,6 +6,7 @@ import {
   createState,
 } from '@/lib/projects'
 import { generateThumbnail, getImageDimensions } from '@/lib/thumbnails'
+import { invalidatePageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
 
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest, { params }: RouteParams): Promise<R
 
     // 更新 page.canonical_state_id
     await updatePage(pageId, { canonical_state_id: state.id })
+    // 建 state 改 state_count / pipeline_status 等口径,失效缓存(lib 层会成环,故放路由层),与 DELETE 对称
+    invalidatePageStats(pageId)
 
     return jsonResponse(state, { status: 201 })
   } catch (err) {
