@@ -2,8 +2,10 @@
 # img2UI pipeline 回归测试
 #
 # 本地 mock mllm / image_gen,经真实 HTTP API 跑完整 pipeline,
-# 覆盖重跑语义 / 失败信号 / 孤儿清理 / export 门禁等关键路径。
-# 全程不调真实 LLM,不花钱。约 2-4 分钟。
+# 覆盖重跑语义 / 失败信号 / 孤儿清理 / export 门禁 / 指派口径与 stats 缓存
+# 失效 / 撤销重放 / 运行中删除保护(409)/ 删除级联清素材等关键路径,
+# 外加 UI smoke(无头 Chrome 静态 DOM:术语全中文 / 面板三区 / 危险操作收口,
+# 无 Chrome 时自动跳过)。全程不调真实 LLM,不花钱。约 2-4 分钟。
 #
 # 用法(repo 根目录):bash scripts/regress/run.sh
 #
@@ -63,6 +65,9 @@ wait_run() {
 
 jget() { python3 -c "import json,sys;print(json.load(sys.stdin)$1)"; }
 
+# UI smoke(无头 Chrome DOM 检查)的 ui_smoke 函数;Chrome 不存在时自动整段跳过
+source scripts/regress/ui-smoke.sh
+
 # ════ 环境准备 ════════════════════════════════════════════════════════════
 step "环境准备"
 if lsof -ti ":$PORT" > /dev/null 2>&1; then
@@ -95,7 +100,7 @@ EOF
 rm -f "$TMP/control.json"
 node scripts/regress/mock-llm.mjs > "$TMP/mock.log" 2>&1 &
 MOCK_PID=$!
-npx next dev -p "$PORT" > "$TMP/dev.log" 2>&1 &
+IMG2UI_DIST_DIR=.next-regress npx next dev -p "$PORT" > "$TMP/dev.log" 2>&1 &  # 独立编译缓存,与 :3000 的 .next 隔离
 DEV_PID=$!
 for _ in $(seq 1 45); do
   curl -s -o /dev/null -w "%{http_code}" "$B/projects" 2>/dev/null | grep -q 200 && break
@@ -242,6 +247,122 @@ assert d['orphan_assets_skipped']==0, d
 " && ok "missing_assets=2,孤儿=0" || fail "export 断言失败"
 grep -rq "导出不完整" "$TMP"/export/*/pages/*/spec.md \
   && ok "spec.md 顶部含不完整警告" || fail "spec.md 缺警告"
+
+# ════ 8. 指派口径 + stats 缓存失效 + 撤销重放 ═════════════════════════════
+# 复用 step 6 force 重跑后的现场:新 elements(未指派)+ 旧 pass2 切片仍在盘上
+step "8. assigned_static_elements 口径 + 缓存失效 + 撤销重放无损"
+EL=$(curl -s "$B/pages/$PAGE/elements" | python3 -c "import json,sys;print([e['id'] for e in json.load(sys.stdin)['elements'] if e['name']=='红色方块'][0])")
+export EL
+
+# 全部置 reviewed(step 9 的 pass2 重跑需要),不动 type
+curl -s "$B/pages/$PAGE/elements" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for e in d['elements']: e['reviewed']=True
+print(json.dumps(d))
+" > "$TMP/els.json"
+curl -s -X PUT "$B/pages/$PAGE/elements" -H 'Content-Type: application/json' -d @"$TMP/els.json" > /dev/null
+
+# 基线 GET(顺带灌 5s TTL 缓存,供下面「指派后立即 GET」检验失效)
+curl -s "$B/pages/$PAGE" | python3 -c "
+import json,sys
+st=json.load(sys.stdin)['stats']
+assert st['assigned_static_elements']==0, st
+assert st['total_assets']==0, st
+assert st['static_elements']==2, st
+" && ok "基线 stats:assigned=0 / assets=0 / static=2(缓存已灌)" || fail "基线 stats 断言失败"
+
+# 指派 → 立刻 GET:缓存若不失效,5s TTL 内必拿旧值(assigned=0)而红
+IDX=$(curl -s "$B/states/$STATE/slices?page_id=$PAGE" | python3 -c "import json,sys;print([s['idx'] for s in json.load(sys.stdin)['slices'] if s['category']=='subject'][0])")
+curl -s -X POST "$B/elements/$EL/assign-slice" -H 'Content-Type: application/json' \
+  -d "{\"state_id\":\"$STATE\",\"category\":\"subject\",\"idx\":$IDX,\"page_id\":\"$PAGE\"}" > /dev/null
+curl -s "$B/pages/$PAGE" | python3 -c "
+import json,sys
+st=json.load(sys.stdin)['stats']
+assert st['assigned_static_elements']==1, st
+assert st['total_assets']==1, st
+" && ok "指派后立即 GET:assigned=1(写路径已失效缓存)" || fail "指派后 stats 仍是旧值(缓存未失效)"
+
+# 把已指派元素 type 改成 code → assigned 减 1,total_assets 不变(遗留 asset 不计入)
+curl -s "$B/pages/$PAGE/elements" | python3 -c "
+import json,sys,os
+d=json.load(sys.stdin)
+for e in d['elements']:
+    if e['id']==os.environ['EL']: e['type']='code'
+print(json.dumps(d))
+" > "$TMP/els.json"
+curl -s -X PUT "$B/pages/$PAGE/elements" -H 'Content-Type: application/json' -d @"$TMP/els.json" > /dev/null
+sleep 6  # PUT elements 不在缓存失效写路径上,等 5s TTL 自然过期
+curl -s "$B/pages/$PAGE" | python3 -c "
+import json,sys
+st=json.load(sys.stdin)['stats']
+assert st['assigned_static_elements']==0, st
+assert st['total_assets']==1, st
+assert st['static_elements']==1, st
+" && ok "type→code:assigned 减 1,total_assets 不变(遗留 asset 不再计入)" || fail "type→code 口径断言失败"
+
+# 改回 static,别污染后续断言
+curl -s "$B/pages/$PAGE/elements" | python3 -c "
+import json,sys,os
+d=json.load(sys.stdin)
+for e in d['elements']:
+    if e['id']==os.environ['EL']: e['type']='static'
+print(json.dumps(d))
+" > "$TMP/els.json"
+curl -s -X PUT "$B/pages/$PAGE/elements" -H 'Content-Type: application/json' -d @"$TMP/els.json" > /dev/null
+
+# 撤销重放:记 md5 + slice_source → unassign → 文件消失 → 重放 → 像素一致
+MD5_BEFORE=$(md5 -q "data/assets-bin/$EL.png")
+SRC=$(python3 -c "import json,os;print(json.dumps(json.load(open(f\"data/assets/{os.environ['EL']}.json\"))['slice_source']))")
+curl -s -o /dev/null "$B/pages/$PAGE"  # 重灌缓存,供撤销路径的失效检验
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$B/elements/$EL/asset")
+[ "$CODE" = 204 ] && [ ! -f "data/assets/$EL.json" ] && [ ! -f "data/assets-bin/$EL.png" ] \
+  && ok "撤销指派:204 + asset json/png 消失" || fail "撤销指派残留(code=$CODE)"
+curl -s "$B/pages/$PAGE" | python3 -c "
+import json,sys
+st=json.load(sys.stdin)['stats']
+assert st['total_assets']==0, st
+assert st['static_elements']==2, st
+" && ok "撤销后立即 GET:assets=0 / static=2(撤销路径已失效缓存)" || fail "撤销后 stats 仍是旧值(缓存未失效)"
+BODY=$(python3 -c "import json,sys;src=json.loads(sys.argv[1]);src['page_id']=sys.argv[2];print(json.dumps(src))" "$SRC" "$PAGE")
+curl -s -X POST "$B/elements/$EL/assign-slice" -H 'Content-Type: application/json' -d "$BODY" > /dev/null
+MD5_AFTER=$(md5 -q "data/assets-bin/$EL.png" 2>/dev/null || echo missing)
+[ "$MD5_AFTER" = "$MD5_BEFORE" ] \
+  && ok "slice_source 重放还原:png md5 一致" || fail "重放后像素不一致 before=$MD5_BEFORE after=$MD5_AFTER"
+
+# ════ 9. 运行中删除保护(409) ════════════════════════════════════════════
+step "9. 运行中删除保护:run 持锁时 DELETE 页面/项目 → 409"
+# 预热 projects/[id] 路由:dev 按需编译,首次命中的编译耗时会吃掉 409 窗口
+curl -s -o /dev/null "$B/projects/$PROJ"
+echo '{"delayMs":6000}' > "$TMP/control.json"
+RUN=$(curl -s -X POST "$B/states/$STATE/pass2" | jget "['run_id']")
+CODE=$(curl -s -o "$TMP/del-page.json" -w "%{http_code}" -X DELETE "$B/pages/$PAGE")
+[ "$CODE" = 409 ] && grep -q "无法删除" "$TMP/del-page.json" \
+  && ok "运行中 DELETE 页面 → 409" || fail "运行中删页面期望 409,得到 $CODE"
+CODE=$(curl -s -o "$TMP/del-proj.json" -w "%{http_code}" -X DELETE "$B/projects/$PROJ")
+[ "$CODE" = 409 ] && grep -q "无法删除" "$TMP/del-proj.json" \
+  && ok "运行中 DELETE 项目 → 409" || fail "运行中删项目期望 409,得到 $CODE"
+S=$(wait_run "$RUN")
+rm -f "$TMP/control.json"
+[ "$S" = completed ] && ok "延迟 run 终态 completed(删除窗口已关闭)" || fail "延迟 run $S"
+
+# ════ 10. UI smoke(无头 Chrome 静态 DOM)═════════════════════════════════
+# 放在删除步骤之前:此刻 pipeline 数据就绪(pass2_done / 1 of 2 已指派 / 无锁),
+# server 还活着,五个路由都有真实数据可渲染。详见 ui-smoke.sh。
+step "10. UI smoke:术语全中文 / 面板三区与唯一主按钮 / 危险操作收口"
+ui_smoke
+
+# ════ 11. 删除级联清素材 ═════════════════════════════════════════════════
+step "11. deletePage 级联删 Asset + deleteProject 收尾"
+[ -f "data/assets/$EL.json" ] && [ -f "data/assets-bin/$EL.png" ] \
+  && ok "前置:已指派 asset 存活到删除前" || fail "前置失败:asset 不在,级联断言无意义"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$B/pages/$PAGE")
+[ "$CODE" = 204 ] && ok "终态后 DELETE 页面 → 204" || fail "删页面期望 204,得到 $CODE"
+[ ! -f "data/assets/$EL.json" ] && [ ! -f "data/assets-bin/$EL.png" ] && [ ! -f "data/states/$STATE.json" ] \
+  && ok "页面级联:asset json/png + state 全消失(不再留孤儿)" || fail "页面删除后 asset/state 残留"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$B/projects/$PROJ")
+[ "$CODE" = 204 ] && ok "DELETE 项目 → 204" || fail "删项目期望 204,得到 $CODE"
+PROJ=""  # 已删干净,cleanup 不必再删
 
 # ════ 结果 ════════════════════════════════════════════════════════════════
 echo

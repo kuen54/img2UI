@@ -4,6 +4,9 @@
 //   IMG_DIR    gen-images.mjs 的输出目录(绿幕 PNG 所在)
 // 失败注入:往 ${IMG_DIR}/control.json 写 { "failCategoriesCn": ["主体"] },
 //   对应 category 的 pass2 image_gen 请求会返回 500(prompt 含「的主体类元素」)。
+// 延迟注入:control.json 写 { "delayMs": 4000 } → 所有 mock 响应延后,
+//   给回归测试制造「run 持锁中」窗口(断言运行中 DELETE 返回 409)。
+//   不写该字段时零延迟,向后兼容。
 import http from 'node:http'
 import { readFileSync } from 'node:fs'
 
@@ -71,7 +74,7 @@ const VALIDATE = {
 const server = http.createServer((req, res) => {
   let body = ''
   req.on('data', (c) => (body += c))
-  req.on('end', () => {
+  req.on('end', async () => {
     const json = (code, obj) => {
       res.writeHead(code, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(obj))
@@ -80,6 +83,13 @@ const server = http.createServer((req, res) => {
     try {
       parsed = JSON.parse(body || '{}')
     } catch {}
+
+    // 延迟注入(见文件头注释)
+    const delayMs = Number(control().delayMs ?? 0)
+    if (delayMs > 0) {
+      console.log(`[mock] delay ${delayMs}ms for ${req.url}`)
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
 
     // ── mllm:pass1 各路(按 system prompt 里的 category 区分)或 validate ──
     if (req.url?.endsWith('/chat/completions')) {
