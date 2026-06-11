@@ -191,6 +191,7 @@ export function PageDetailClient({
             ) : (
               <DesignWithPipeline
                 state={state!}
+                stats={page.stats}
                 onChanged={reload}
                 projectId={projectId}
                 pageId={pageId}
@@ -331,11 +332,13 @@ function PageStatsStrip({
 
 function DesignWithPipeline({
   state,
+  stats,
   onChanged,
   projectId,
   pageId,
 }: {
   state: StateRecord
+  stats: PageStats
   onChanged: () => void
   projectId: string
   pageId: string
@@ -497,6 +500,7 @@ function DesignWithPipeline({
       {/* Pipeline 状态 */}
       <PipelinePanel
         state={state}
+        stats={stats}
         onChanged={onChanged}
         projectId={projectId}
         pageId={pageId}
@@ -618,11 +622,13 @@ function DesignWithBboxOverlay({
 
 function PipelinePanel({
   state,
+  stats,
   onChanged,
   projectId,
   pageId,
 }: {
   state: StateRecord
+  stats: PageStats
   onChanged: () => void
   projectId: string
   pageId: string
@@ -658,6 +664,18 @@ function PipelinePanel({
   const [failedRoutes, setFailedRoutes] = useState<string[]>([])
   // Pass 1 重跑确认(后端 409 ELEMENTS_EXIST 时弹出)
   const [confirmRerunPass1Open, setConfirmRerunPass1Open] = useState(false)
+  // pass2_failed 时探测是否已有部分切片产出(有 → 给「去指派素材」次级入口)
+  const [hasSlices, setHasSlices] = useState(false)
+  useEffect(() => {
+    setHasSlices(false)
+    if (status !== 'pass2_failed') return
+    void fetch(`/api/states/${state.id}/slices`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { slices: unknown[] } | null) => {
+        if (data) setHasSlices(data.slices.length > 0)
+      })
+      .catch(() => {})
+  }, [status, state.id])
 
   // 刷新 / 重进页面后恢复运行中 pipeline 的进度感知:状态在 *_running / validating
   // 时周期性 reload 直到落到终态。否则只有「点击发起的那次轮询」能更新状态,
@@ -783,6 +801,251 @@ function PipelinePanel({
     }
   }
 
+  // CDN / 校验 / 导出(原 CdnExportActions 的 state + handler,逻辑原样上提,
+  // 让「导出文件夹」能按指派进度在「下一步」与「产出」两区之间移动)
+  const [uploading, setUploading] = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+
+  // resume-poll(2s)可能先于 pollPipelineRun 把 status 翻到终态
+  // ('validated' 或失败回退的 'pass2_done'),此时本地 validating 还没复位,
+  // validateButton 会短暂禁用并显示假的「校验中」。状态一到终态就同步复位。
+  // 点击后 onChanged 生效前 status 仍是 'pass2_done' 没有变化,effect 不会
+  // 重跑,不影响那个窗口。
+  useEffect(() => {
+    if (status === 'validated' || status === 'pass2_done') setValidating(false)
+  }, [status])
+
+  const validate = async (): Promise<void> => {
+    setValidating(true)
+    try {
+      const res = await fetch(`/api/states/${state.id}/validate`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      const { run_id } = (await res.json()) as { run_id: string }
+      toast.info('反向校验进行中…')
+      onChanged() // 状态进 validating,面板自动轮询接管进度
+      pollPipelineRun(run_id, '反向校验', () => {
+        onChanged()
+        setValidating(false)
+      })
+    } catch (err) {
+      toast.error(`校验失败:${errText(err)}`)
+      setValidating(false)
+    }
+  }
+
+  const upload = async (): Promise<void> => {
+    setUploading(true)
+    try {
+      const res = await fetch(`/api/pages/${pageId}/upload-all-assets`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      const data = (await res.json()) as {
+        uploaded: number
+        failed: Array<{ asset_id: string; element_name: string; error: string }>
+      }
+      if (data.failed.length > 0) {
+        // 失败明细常驻展示(只报数量没法定位哪个素材挂了)
+        toast.error(
+          `${data.failed.length} 个素材上传失败:${data.failed
+            .map((f) => `${f.element_name}(${f.error})`)
+            .join('; ')}`,
+          { duration: 10000 },
+        )
+      }
+      if (data.uploaded > 0) {
+        toast.success(`已上传 ${data.uploaded} 个素材`)
+      }
+    } catch (err) {
+      toast.error(`上传失败:${errText(err)}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // ── 状态 → 区块配置:下一步(唯一 contained 主按钮)/ 重跑 / 产出 ─────────
+  // 同一动作在不同区只差 variant / size,handler 与 disabled/loading 共用。
+  // 用交集统计而非原始 asset 总数:element review 整批替换不清理 asset,
+  // 遗留 asset 会把 total_assets 撑到 >= static_elements,误判「已全指派」
+  const allAssigned = stats.assigned_static_elements >= stats.static_elements
+
+  const startPass1Button = (
+    <Button
+      key="start-pass1"
+      variant="contained"
+      startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+      disabled={running}
+      onClick={() => void runPass1()}
+      fullWidth
+    >
+      {running
+        ? '布局分析进行中…'
+        : status === 'pass1_failed'
+          ? '重新开始布局分析'
+          : '开始布局分析'}
+    </Button>
+  )
+  const goElementReviewButton = (
+    <Button
+      key="element-review"
+      variant="contained"
+      component={Link}
+      href={`/projects/${projectId}/pages/${pageId}/element-review`}
+      fullWidth
+      startIcon={<PlayArrowIcon />}
+    >
+      去确认元素
+    </Button>
+  )
+  const directPass2Button = (
+    <Button
+      key="direct-pass2"
+      variant="outlined"
+      fullWidth
+      startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
+      disabled={running}
+      onClick={() => void runPass2()}
+    >
+      {running ? '素材生成进行中…' : '直接生成素材'}
+    </Button>
+  )
+  const skipReviewCaption = (
+    <Typography key="skip-review-caption" variant="caption" color="text.secondary">
+      建议确认每个元素后再生成素材(若要跳过元素确认可直接生成)
+    </Typography>
+  )
+  const assignButton = (primary: boolean): React.ReactNode => (
+    <Button
+      key="assign"
+      variant={primary ? 'contained' : 'outlined'}
+      component={Link}
+      href={`/projects/${projectId}/pages/${pageId}/asset-review`}
+      fullWidth
+      startIcon={<PlayArrowIcon />}
+    >
+      去指派素材
+    </Button>
+  )
+  const exportButton = (primary: boolean): React.ReactNode => (
+    <Button
+      key="export"
+      variant={primary ? 'contained' : 'outlined'}
+      size={primary ? 'medium' : 'small'}
+      fullWidth
+      onClick={() => setExportDialogOpen(true)}
+    >
+      导出文件夹
+    </Button>
+  )
+  const rerunFailedButton = (primary: boolean): React.ReactNode => (
+    <Button
+      key="rerun-failed"
+      variant={primary ? 'contained' : 'outlined'}
+      color="warning"
+      size={primary ? 'medium' : 'small'}
+      fullWidth
+      startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
+      disabled={running}
+      onClick={() => void runPass2(failedRoutes)}
+    >
+      {running
+        ? '重跑中…'
+        : `只重跑失败的 ${failedRoutes.length} 个类目 (${failedRoutes.map((c) => (VISUAL_CATEGORY_CN as Record<string, string>)[c] ?? c).join(' / ')})`}
+    </Button>
+  )
+  const rerunAllButton = (primary: boolean): React.ReactNode => (
+    <Button
+      key="rerun-all"
+      variant={primary ? 'contained' : 'outlined'}
+      size={primary ? 'medium' : 'small'}
+      fullWidth
+      startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
+      disabled={running}
+      onClick={() => void runPass2()}
+    >
+      {running ? '重新生成中…' : '重新生成全部素材'}
+    </Button>
+  )
+  const rerunPass1Button = (
+    <Button
+      key="rerun-pass1"
+      variant="outlined"
+      size="small"
+      fullWidth
+      disabled={running}
+      onClick={() => void runPass1()}
+    >
+      重新开始布局分析
+    </Button>
+  )
+  const validateButton = (
+    <Button
+      key="validate"
+      variant="outlined"
+      size="small"
+      fullWidth
+      disabled={validating}
+      onClick={() => void validate()}
+    >
+      {validating ? '反向校验中…' : '反向校验(LLM 验质量)'}
+    </Button>
+  )
+  const uploadButton = (
+    <Button
+      key="upload"
+      variant="outlined"
+      size="small"
+      fullWidth
+      disabled={uploading}
+      onClick={() => void upload()}
+    >
+      {uploading ? '上传中…' : '上传素材到 CDN'}
+    </Button>
+  )
+
+  const sections = ((): {
+    next: React.ReactNode[]
+    rerun: React.ReactNode[]
+    output: React.ReactNode[]
+  } => {
+    const next: React.ReactNode[] = []
+    const rerun: React.ReactNode[] = []
+    const output: React.ReactNode[] = []
+    switch (status) {
+      case 'idle':
+      case 'pass1_failed':
+        next.push(startPass1Button)
+        break
+      case 'pass1_done':
+        next.push(goElementReviewButton, directPass2Button, skipReviewCaption)
+        rerun.push(rerunPass1Button)
+        break
+      case 'pass2_done':
+      case 'validated':
+        if (allAssigned) next.push(exportButton(true), assignButton(false))
+        else next.push(assignButton(true))
+        if (failedRoutes.length > 0) rerun.push(rerunFailedButton(false))
+        rerun.push(rerunAllButton(false), rerunPass1Button)
+        output.push(validateButton, uploadButton)
+        if (!allAssigned) output.push(exportButton(false))
+        break
+      case 'pass2_failed':
+        if (failedRoutes.length > 0) {
+          next.push(rerunFailedButton(true))
+          if (hasSlices) next.push(assignButton(false))
+          rerun.push(rerunAllButton(false))
+        } else {
+          next.push(rerunAllButton(true))
+        }
+        rerun.push(rerunPass1Button)
+        break
+      case 'pass1_running':
+      case 'pass2_running':
+      case 'validating':
+        break // 运行中:RunningProgress 矩阵即当前状态,无下一步按钮
+    }
+    return { next, rerun, output }
+  })()
+
   return (
     <Card
       variant="outlined"
@@ -866,23 +1129,14 @@ function PipelinePanel({
           </Alert>
         )}
 
-        {(status === 'idle' || status === 'pass1_failed') && (
-          <Button
-            variant="contained"
-            startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
-            disabled={running}
-            onClick={() => void runPass1()}
-            fullWidth
-            sx={{ mt: 3 }}
-          >
-            {running
-              ? '布局分析进行中…'
-              : status === 'pass1_failed'
-                ? '重新开始布局分析'
-                : '开始布局分析'}
-          </Button>
+        {/* 下一步区:状态机给出的唯一 contained 主按钮(+ 紧随的次级选项),紧贴 stepper */}
+        {sections.next.length > 0 && (
+          <Stack spacing={1} sx={{ mt: 3 }}>
+            {sections.next}
+          </Stack>
         )}
 
+        {/* 运行中:矩阵即当前状态,无下一步按钮 */}
         {status === 'pass1_running' && (
           <RunningProgress
             stateId={state.id}
@@ -891,33 +1145,6 @@ function PipelinePanel({
             label="布局分析进行中"
           />
         )}
-
-        {status === 'pass1_done' && (
-          <Stack spacing={1} sx={{ mt: 3 }}>
-            <Button
-              variant="contained"
-              component={Link}
-              href={`/projects/${projectId}/pages/${pageId}/element-review`}
-              fullWidth
-              startIcon={<PlayArrowIcon />}
-            >
-              去确认元素
-            </Button>
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
-              disabled={running}
-              onClick={() => void runPass2()}
-            >
-              {running ? '素材生成进行中…' : '直接生成素材'}
-            </Button>
-            <Typography variant="caption" color="text.secondary">
-              建议确认每个元素后再生成素材(若要跳过元素确认可直接生成)
-            </Typography>
-          </Stack>
-        )}
-
         {status === 'pass2_running' && (
           <RunningProgress
             stateId={state.id}
@@ -927,71 +1154,43 @@ function PipelinePanel({
             estimate="1-3 分钟"
           />
         )}
-
         {status === 'validating' && (
           <RunningProgress stateId={state.id} label="反向校验进行中" />
         )}
 
-        {(status === 'pass2_done' || status === 'validated') && (
-          <Stack spacing={1} sx={{ mt: 3 }}>
-            <Button
-              variant="contained"
-              component={Link}
-              href={`/projects/${projectId}/pages/${pageId}/asset-review`}
-              fullWidth
-              startIcon={<PlayArrowIcon />}
+        {/* 重跑区:可选动作,outlined + small,与下一步明确区隔 */}
+        {sections.rerun.length > 0 && (
+          <Box sx={{ mt: 2.5 }}>
+            <Divider sx={{ mb: 1.5 }} />
+            <Typography
+              variant="overline"
+              sx={{ display: 'block', mb: 1, lineHeight: 1.5 }}
             >
-              去指派素材
-            </Button>
-            {failedRoutes.length > 0 && (
-              <Button
-                variant="outlined"
-                color="warning"
-                fullWidth
-                startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
-                disabled={running}
-                onClick={() => void runPass2(failedRoutes)}
-              >
-                {running ? '重跑中…' : `只重跑失败的 ${failedRoutes.length} 个类目 (${failedRoutes.map((c) => (VISUAL_CATEGORY_CN as Record<string, string>)[c] ?? c).join(' / ')})`}
-              </Button>
-            )}
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
-              disabled={running}
-              onClick={() => void runPass2()}
+              重跑
+            </Typography>
+            <Stack spacing={1}>{sections.rerun}</Stack>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.75 }}
             >
-              {running ? '重新生成中…' : '重新生成全部素材'}
-            </Button>
-            <CdnExportActions stateId={state.id} pageId={pageId} onChanged={onChanged} />
-          </Stack>
+              重跑会覆盖现有结果
+            </Typography>
+          </Box>
         )}
 
-        {status === 'pass2_failed' && (
-          <Stack spacing={1} sx={{ mt: 3 }}>
-            {failedRoutes.length > 0 && (
-              <Button
-                variant="contained"
-                color="warning"
-                fullWidth
-                startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
-                disabled={running}
-                onClick={() => void runPass2(failedRoutes)}
-              >
-                {running ? '重跑中…' : `只重跑失败的 ${failedRoutes.length} 个类目 (${failedRoutes.map((c) => (VISUAL_CATEGORY_CN as Record<string, string>)[c] ?? c).join(' / ')})`}
-              </Button>
-            )}
-            <Button
-              variant={failedRoutes.length > 0 ? 'outlined' : 'contained'}
-              fullWidth
-              startIcon={running ? <CircularProgress size={14} /> : <PlayArrowIcon />}
-              disabled={running}
-              onClick={() => void runPass2()}
+        {/* 产出区:质量检查与导出工具 */}
+        {sections.output.length > 0 && (
+          <Box sx={{ mt: 2.5 }}>
+            <Divider sx={{ mb: 1.5 }} />
+            <Typography
+              variant="overline"
+              sx={{ display: 'block', mb: 1, lineHeight: 1.5 }}
             >
-              重新生成全部素材
-            </Button>
-          </Stack>
+              产出
+            </Typography>
+            <Stack spacing={1}>{sections.output}</Stack>
+          </Box>
         )}
       </Box>
 
@@ -1003,6 +1202,11 @@ function PipelinePanel({
         confirmLabel="重跑并替换"
         confirmColor="warning"
         onConfirm={() => runPass1(true)}
+      />
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        pageId={pageId}
       />
     </Card>
   )
@@ -1422,98 +1626,6 @@ function pollPipelineRun(
   }, 2000)
 }
 
-// ─── CDN + Export actions ─────────────────────────────────────────────────
-
-function CdnExportActions({
-  stateId,
-  pageId,
-  onChanged,
-}: {
-  stateId: string
-  pageId: string
-  onChanged: () => void
-}): React.ReactElement {
-  const [uploading, setUploading] = useState(false)
-  const [validating, setValidating] = useState(false)
-  const [exportDialogOpen, setExportDialogOpen] = useState(false)
-
-  const validate = async (): Promise<void> => {
-    setValidating(true)
-    try {
-      const res = await fetch(`/api/states/${stateId}/validate`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
-      const { run_id } = (await res.json()) as { run_id: string }
-      toast.info('反向校验进行中…')
-      onChanged() // 状态进 validating,面板自动轮询接管进度
-      pollPipelineRun(run_id, '反向校验', () => {
-        onChanged()
-        setValidating(false)
-      })
-    } catch (err) {
-      toast.error(`校验失败:${errText(err)}`)
-      setValidating(false)
-    }
-  }
-
-  const upload = async (): Promise<void> => {
-    setUploading(true)
-    try {
-      const res = await fetch(`/api/pages/${pageId}/upload-all-assets`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text())
-      const data = (await res.json()) as {
-        uploaded: number
-        failed: Array<{ asset_id: string; element_name: string; error: string }>
-      }
-      if (data.failed.length > 0) {
-        // 失败明细常驻展示(只报数量没法定位哪个素材挂了)
-        toast.error(
-          `${data.failed.length} 个素材上传失败:${data.failed
-            .map((f) => `${f.element_name}(${f.error})`)
-            .join('; ')}`,
-          { duration: 10000 },
-        )
-      }
-      if (data.uploaded > 0) {
-        toast.success(`已上传 ${data.uploaded} 个素材`)
-      }
-    } catch (err) {
-      toast.error(`上传失败:${errText(err)}`)
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  return (
-    <>
-      <Button
-        variant="outlined"
-        disabled={validating}
-        onClick={() => void validate()}
-      >
-        {validating ? '反向校验中…' : '反向校验(LLM 验质量)'}
-      </Button>
-      <Button
-        variant="outlined"
-        disabled={uploading}
-        onClick={() => void upload()}
-      >
-        {uploading ? '上传中…' : '上传素材到 CDN'}
-      </Button>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={() => setExportDialogOpen(true)}
-      >
-        导出文件夹
-      </Button>
-      <ExportDialog
-        open={exportDialogOpen}
-        onClose={() => setExportDialogOpen(false)}
-        pageId={pageId}
-      />
-    </>
-  )
-}
 
 function ExportDialog({
   open,

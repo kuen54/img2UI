@@ -17,6 +17,7 @@ import {
 } from './fs-utils'
 import type { SliceInfo, SliceSource, VisualCategory, Asset } from './types'
 import { ALL_VISUAL_CATEGORIES } from './visual-category'
+import { invalidatePageStats } from './page-stats'
 
 interface SliceSidecar {
   idx: number
@@ -220,13 +221,19 @@ export async function assignSliceToElement(input: {
     updated_at: now,
   }
   await saveAsset(asset)
+  // 指派改变 total_assets / assigned_static_elements,5s TTL 缓存必须立即失效,
+  // 否则导航回详情页的那次 reload 会拿到指派前的 stats(主按钮挂错状态)
+  invalidatePageStats(input.pageId)
   return asset
 }
 
 /** 撤销指派:删 assets-bin + 删 Asset 记录 */
 export async function unassignAsset(elementId: string): Promise<void> {
+  // 先读出 page_id 再删(asset.id === element.id),删后失效 page stats 缓存
+  const existing = await getAsset(elementId)
   await unlinkIfExists(paths.assetBin(elementId))
   await deleteAsset(elementId)
+  if (existing) invalidatePageStats(existing.page_id)
 }
 
 /** 反查:某切片当前被哪些 asset 引用(可能多个,因 MVP S3 允许重复指派) */

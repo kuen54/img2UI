@@ -63,6 +63,7 @@ const EMPTY_PAGE_STATS: PageStats = {
   total_elements: 0,
   reviewed_elements: 0,
   static_elements: 0,
+  assigned_static_elements: 0,
   total_assets: 0,
   uploaded_assets: 0,
 }
