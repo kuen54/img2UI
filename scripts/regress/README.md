@@ -16,6 +16,17 @@ bash scripts/regress/run.sh
 5. **validate / re-extract**:走 beginAuditJob 统一锁路径,asset 写入校验结果 / 新切片自动指派
 6. **Pass 1 重跑保护**:无 force → `409 ELEMENTS_EXIST`;force → elements 整批替换 + 孤儿 Asset 清理(`deleteAssetsNotIn`)
 7. **export 门禁**:`missing_assets` 摘要 + spec.md 顶部「导出不完整」警告 + 孤儿 asset 过滤
+8. **指派口径与缓存**:`assigned_static_elements` 交集口径(type→code 的遗留 asset 不计入)+
+   指派/撤销落盘后 page-stats 5s TTL 缓存立即失效 + 撤销后用 `slice_source` 重放还原(png md5 一致)
+9. **运行中删除保护**:run 持锁时 DELETE 页面/项目 → 409
+10. **UI smoke**(`ui-smoke.sh` + `ui-dom.py`,无头 Chrome `--dump-dom` 静态 DOM;
+    **无 Chrome 时整段跳过,不算失败**):五路由可见文本无英文术语直出(Pass 1/2、
+    Element/Asset Review、Validate、孤立整词 asset/slice)/ pipeline 面板恰 1 个
+    contained 主按钮(按当时数据状态断言到文本级)+「重跑」「产出」分区 / 危险操作
+    收口(MoreMenu aria-label「更多操作」在、裸删除 IconButton 不在)/ stepper 中文阶段名。
+    断言跑在**可见文本**上(剥 script/style/template 再判,RSC payload 里的英文
+    字段名不误伤);断言失败先重 dump 一次再判(虚拟时间预算下的时序容忍)
+11. **删除级联**:deletePage 级联删 Asset(json + png)+ state,deleteProject 收尾
 
 ## 机制
 
