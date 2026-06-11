@@ -5,6 +5,7 @@
 // (StatusDot 组件反向 import RunStatusKind 类型,运行时无依赖。)
 
 import type { PipelinePassKind, StatePipelineStatus } from './types'
+import { VISUAL_CATEGORY_CN } from './visual-category'
 
 export type RunStatusKind = 'idle' | 'running' | 'completed' | 'failed'
 
@@ -30,28 +31,43 @@ export function formatRelative(iso: string): string {
   })
 }
 
+const PASS_BASE_CN: Record<string, string> = {
+  pass1: '布局分析',
+  pass2: '素材生成',
+  validate: '校验',
+  export: '导出',
+  re_extract: '单元素重抠',
+}
+
 export function formatPassKind(pass: string): string {
-  // pass1_subject → pass1·subject;pass2 → pass2;validate → validate
-  if (pass.includes('_')) return pass.replace('_', '·')
+  // pass1_subject → 布局分析·主体;pass2 → 素材生成;validate → 校验
+  const direct = PASS_BASE_CN[pass]
+  if (direct !== undefined) return direct
+  const sep = pass.indexOf('_')
+  if (sep > 0) {
+    const base = PASS_BASE_CN[pass.slice(0, sep)]
+    const cat = (VISUAL_CATEGORY_CN as Record<string, string | undefined>)[pass.slice(sep + 1)]
+    if (base !== undefined && cat !== undefined) return `${base}·${cat}`
+  }
   return pass
 }
 
 export function pipelineStatusLabel(status: StatePipelineStatus): string {
   switch (status) {
     case 'idle':
-      return '待 Pass 1'
+      return '待布局分析'
     case 'pass1_running':
-      return 'Pass 1 运行中'
+      return '布局分析进行中'
     case 'pass1_done':
-      return 'Pass 1 完成'
+      return '布局分析完成'
     case 'pass1_failed':
-      return 'Pass 1 失败'
+      return '布局分析失败'
     case 'pass2_running':
-      return 'Pass 2 运行中'
+      return '素材生成进行中'
     case 'pass2_done':
-      return 'Pass 2 完成'
+      return '素材生成完成'
     case 'pass2_failed':
-      return 'Pass 2 失败'
+      return '素材生成失败'
     case 'validating':
       return '校验中'
     case 'validated':

@@ -67,20 +67,12 @@ import type {
   LayoutElement,
 } from '@/lib/types'
 import type { PageStats } from '@/lib/page-stats'
+import { STAGES, STAGE_CN, ELEMENT_TYPE_CN } from '@/lib/ui-terms'
 
 interface PageWithStates extends Page {
   states: StateRecord[]
   stats: PageStats
 }
-
-const STAGE_LABELS: Array<{ key: string; label: string }> = [
-  { key: 'pass1', label: 'Pass 1 · 布局分析' },
-  { key: 'element_review', label: 'Element Review' },
-  { key: 'pass2', label: 'Pass 2 · 资产提取' },
-  { key: 'asset_review', label: 'Asset Review' },
-  { key: 'validate', label: 'Validate' },
-  { key: 'export', label: 'Export' },
-]
 
 export function PageDetailClient({
   projectId,
@@ -215,7 +207,7 @@ function PageStatsStrip({
       <StatChip
         icon={<LayersOutlinedIcon />}
         value={stats.state_count}
-        label="状态"
+        label="设计稿"
       />
       {stats.total_elements > 0 && (
         <StatChip
@@ -245,7 +237,7 @@ function PageStatsStrip({
         <StatChip
           icon={<CloudUploadOutlinedIcon />}
           value={`${stats.uploaded_assets}/${stats.total_assets}`}
-          label="资产已上传"
+          label="素材已上传"
           valueColor={
             stats.uploaded_assets === stats.total_assets
               ? 'success.main'
@@ -421,7 +413,7 @@ function DesignWithPipeline({
   const inFlight = state.pipeline_status.endsWith('_running') || state.pipeline_status === 'validating'
   const inFlightWarning = inFlight ? (
     <Alert severity="warning" sx={{ mt: 1.5 }}>
-      当前 pipeline 还在跑(<code>{state.pipeline_status}</code>
+      当前流程还在运行({pipelineStatusLabel(state.pipeline_status)}
       )。继续会丢失正在执行的结果(LLM 调用本身不会停止,但产物会被删)。
     </Alert>
   ) : null
@@ -510,7 +502,7 @@ function DesignWithPipeline({
                       onChange={(e) => setShowBboxes(e.target.checked)}
                     />
                   }
-                  label={`显示 static 元素 (${staticCount})`}
+                  label={`显示${ELEMENT_TYPE_CN.static} (${staticCount})`}
                   slotProps={{
                     typography: { variant: 'body2', color: 'text.secondary' },
                   }}
@@ -533,8 +525,8 @@ function DesignWithPipeline({
               size="small"
               color="error"
               onClick={() => setConfirmDeleteOpen(true)}
-              aria-label="删除当前 state"
-              title="删除当前 state"
+              aria-label="删除设计稿"
+              title="删除设计稿"
             >
               <DeleteIcon size={18} />
             </IconButton>
@@ -568,7 +560,7 @@ function DesignWithPipeline({
         body={
           <Box>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              替换为新设计稿,会先删除现有 state 及所有 pass 结果(elements / 切片 / asset / 校验)。无法恢复。
+              替换为新设计稿,会先删除现有设计稿及所有分析结果(元素 / 切片 / 素材 / 校验)。无法恢复。
             </Typography>
             <Typography variant="body2" color="text.secondary">
               新文件:<code>{pendingFile?.name}</code>({pendingFile ? Math.round(pendingFile.size / 1024) : 0} KB)
@@ -585,11 +577,11 @@ function DesignWithPipeline({
       <ConfirmDialog
         open={confirmDeleteOpen}
         onClose={() => setConfirmDeleteOpen(false)}
-        title="删除当前 state"
+        title="删除设计稿"
         body={
           <Box>
             <Typography variant="body2">
-              所有 pass 结果(elements / 切片 / asset)会一起删,无法恢复。原图也会删。
+              所有分析结果(元素 / 切片 / 素材)会一起删,无法恢复。原图也会删。
             </Typography>
             {inFlightWarning}
           </Box>
@@ -626,7 +618,7 @@ function DesignWithBboxOverlay({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/api/raw/${stateId}`}
-        alt="design mockup"
+        alt="设计稿"
         style={{
           maxWidth: '100%',
           maxHeight: '70vh',
@@ -799,17 +791,17 @@ function PipelinePanel({
           setConfirmRerunPass1Open(true)
           return
         }
-        throw new Error(data?.error ?? 'state busy')
+        throw new Error(data?.error ?? '当前设计稿正忙,请稍后重试')
       }
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
-      toast.info('Pass 1 启动…轮询状态中')
-      pollPipelineRun(run_id, 'Pass 1', () => {
+      toast.info('布局分析启动…轮询状态中')
+      pollPipelineRun(run_id, STAGE_CN.pass1, () => {
         onChanged()
         setRunning(false)
       })
     } catch (err) {
-      toast.error(`Pass 1 失败:${errText(err)}`)
+      toast.error(`布局分析失败:${errText(err)}`)
       setRunning(false)
     }
   }
@@ -829,15 +821,15 @@ function PipelinePanel({
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
       const label = categories && categories.length > 0
-        ? `Pass 2 重跑 ${categories.length} 路`
-        : 'Pass 2'
+        ? `重跑 ${categories.length} 个类目`
+        : STAGE_CN.pass2
       toast.info(`${label} 启动…轮询状态中(可能要 1-3 分钟)`)
-      pollPipelineRun(run_id, 'Pass 2', () => {
+      pollPipelineRun(run_id, STAGE_CN.pass2, () => {
         onChanged()
         setRunning(false)
       })
     } catch (err) {
-      toast.error(`Pass 2 失败:${errText(err)}`)
+      toast.error(`素材生成失败:${errText(err)}`)
       setRunning(false)
     }
   }
@@ -855,17 +847,17 @@ function PipelinePanel({
     >
       <Box sx={{ px: 2.5, py: 2, minWidth: 0 }}>
         <Typography variant="h5" sx={{ mb: 2 }}>
-          Pipeline
+          流程
         </Typography>
 
         {/* 竖向 stepper:dot 之间连接线(完成段染主色),completed=✓ / failed=✕ /
             running=脉动 ring / next-up=ring,流程推进感比 6 个孤立点强得多 */}
         <Stack spacing={0}>
-          {STAGE_LABELS.map((s, i) => {
+          {STAGES.map((s, i) => {
             const st = stageState(s.key)
             const isCurrent = isStageCurrent(s.key)
             const isRunning = isStageRunning(s.key)
-            const isLast = i === STAGE_LABELS.length - 1
+            const isLast = i === STAGES.length - 1
             return (
               <Stack key={s.key} direction="row" spacing={1.25} alignItems="stretch">
                 <Stack alignItems="center" sx={{ width: 18, flexShrink: 0 }}>
@@ -935,10 +927,10 @@ function PipelinePanel({
             sx={{ mt: 3 }}
           >
             {running
-              ? 'Pass 1 运行中…'
+              ? '布局分析进行中…'
               : status === 'pass1_failed'
-                ? '重跑 Pass 1'
-                : '运行 Pass 1'}
+                ? '重新开始布局分析'
+                : '开始布局分析'}
           </Button>
         )}
 
@@ -947,7 +939,7 @@ function PipelinePanel({
             stateId={state.id}
             runId={state.pass1_run_id}
             kind="pass1"
-            label="Pass 1 运行中"
+            label="布局分析进行中"
           />
         )}
 
@@ -960,7 +952,7 @@ function PipelinePanel({
               fullWidth
               startIcon={<PlayArrowIcon />}
             >
-              Element Review
+              去确认元素
             </Button>
             <Button
               variant="outlined"
@@ -969,10 +961,10 @@ function PipelinePanel({
               disabled={running}
               onClick={() => void runPass2()}
             >
-              {running ? 'Pass 2 运行中…' : '直接运行 Pass 2'}
+              {running ? '素材生成进行中…' : '直接生成素材'}
             </Button>
             <Typography variant="caption" color="text.secondary">
-              确认每个元素后再跑 Pass 2(若已跳过 Element Review)
+              建议确认每个元素后再生成素材(若要跳过元素确认可直接生成)
             </Typography>
           </Stack>
         )}
@@ -982,13 +974,13 @@ function PipelinePanel({
             stateId={state.id}
             runId={state.pass2_run_id}
             kind="pass2"
-            label="Pass 2 运行中"
+            label="素材生成进行中"
             estimate="1-3 分钟"
           />
         )}
 
         {status === 'validating' && (
-          <RunningProgress stateId={state.id} label="反向校验运行中" />
+          <RunningProgress stateId={state.id} label="反向校验进行中" />
         )}
 
         {(status === 'pass2_done' || status === 'validated') && (
@@ -1000,7 +992,7 @@ function PipelinePanel({
               fullWidth
               startIcon={<PlayArrowIcon />}
             >
-              Asset Review
+              去指派素材
             </Button>
             {failedRoutes.length > 0 && (
               <Button
@@ -1011,7 +1003,7 @@ function PipelinePanel({
                 disabled={running}
                 onClick={() => void runPass2(failedRoutes)}
               >
-                {running ? '重跑中…' : `只重跑失败 ${failedRoutes.length} 路 (${failedRoutes.join(' / ')})`}
+                {running ? '重跑中…' : `只重跑失败的 ${failedRoutes.length} 个类目 (${failedRoutes.map((c) => (VISUAL_CATEGORY_CN as Record<string, string>)[c] ?? c).join(' / ')})`}
               </Button>
             )}
             <Button
@@ -1021,7 +1013,7 @@ function PipelinePanel({
               disabled={running}
               onClick={() => void runPass2()}
             >
-              {running ? 'Pass 2 重跑中…' : '重跑全部 Pass 2'}
+              {running ? '重新生成中…' : '重新生成全部素材'}
             </Button>
             <CdnExportActions stateId={state.id} pageId={pageId} onChanged={onChanged} />
           </Stack>
@@ -1038,7 +1030,7 @@ function PipelinePanel({
                 disabled={running}
                 onClick={() => void runPass2(failedRoutes)}
               >
-                {running ? '重跑中…' : `只重跑失败 ${failedRoutes.length} 路 (${failedRoutes.join(' / ')})`}
+                {running ? '重跑中…' : `只重跑失败的 ${failedRoutes.length} 个类目 (${failedRoutes.map((c) => (VISUAL_CATEGORY_CN as Record<string, string>)[c] ?? c).join(' / ')})`}
               </Button>
             )}
             <Button
@@ -1048,7 +1040,7 @@ function PipelinePanel({
               disabled={running}
               onClick={() => void runPass2()}
             >
-              重跑全部 Pass 2
+              重新生成全部素材
             </Button>
           </Stack>
         )}
@@ -1057,8 +1049,8 @@ function PipelinePanel({
       <ConfirmDialog
         open={confirmRerunPass1Open}
         onClose={() => setConfirmRerunPass1Open(false)}
-        title="重跑 Pass 1?"
-        body="该页面已有元素标注(可能含你的人工修改和已指派的素材)。重跑会完全替换所有元素并清理已指派的 asset,此操作不可撤销。"
+        title="重新开始布局分析?"
+        body="该页面已有元素标注(可能含你的人工修改和已指派的素材)。重新分析会完全替换所有元素并清理已指派的素材,此操作不可撤销。"
         confirmLabel="重跑并替换"
         confirmColor="warning"
         onConfirm={() => runPass1(true)}
@@ -1253,7 +1245,7 @@ function RunningProgress({
       >
         <Typography variant="body2" color="text.secondary">
           {label}
-          {subs ? ` · ${done}/${subs.length} 路完成` : ''}
+          {subs ? ` · ${done}/${subs.length} 类目完成` : ''}
           {!subs && estimate ? ` · ${estimate}` : ''}
         </Typography>
         {elapsed !== null && (
@@ -1502,7 +1494,7 @@ function CdnExportActions({
       const res = await fetch(`/api/states/${stateId}/validate`, { method: 'POST' })
       if (!res.ok) throw new Error(await res.text())
       const { run_id } = (await res.json()) as { run_id: string }
-      toast.info('反向校验运行中…')
+      toast.info('反向校验进行中…')
       onChanged() // 状态进 validating,面板自动轮询接管进度
       pollPipelineRun(run_id, '反向校验', () => {
         onChanged()
@@ -1526,14 +1518,14 @@ function CdnExportActions({
       if (data.failed.length > 0) {
         // 失败明细常驻展示(只报数量没法定位哪个素材挂了)
         toast.error(
-          `${data.failed.length} 个 asset 上传失败:${data.failed
+          `${data.failed.length} 个素材上传失败:${data.failed
             .map((f) => `${f.element_name}(${f.error})`)
             .join('; ')}`,
           { duration: 10000 },
         )
       }
       if (data.uploaded > 0) {
-        toast.success(`已上传 ${data.uploaded} 个 asset`)
+        toast.success(`已上传 ${data.uploaded} 个素材`)
       }
     } catch (err) {
       toast.error(`上传失败:${errText(err)}`)
@@ -1556,7 +1548,7 @@ function CdnExportActions({
         disabled={uploading}
         onClick={() => void upload()}
       >
-        {uploading ? '上传中…' : '上传所有 asset 到 CDN'}
+        {uploading ? '上传中…' : '上传素材到 CDN'}
       </Button>
       <Button
         variant="contained"
