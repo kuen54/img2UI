@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getElementsForPage, saveElementsForPage } from '@/lib/elements'
+import { invalidatePageStats } from '@/lib/page-stats'
 import { getPage } from '@/lib/projects'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId, nowIso } from '@/lib/id'
@@ -46,6 +47,9 @@ export async function PUT(req: NextRequest, { params }: RouteParams): Promise<Re
       updated_at: now,
     }))
     await saveElementsForPage(id, cleaned)
+    // 整批替换会改 type / 增删元素,直接影响 stats 口径(assigned_static_elements 等),
+    // 与 assign/unassign 同理需失效缓存;lib 层加会 elements↔page-stats 成环,故放路由层
+    invalidatePageStats(id)
     return jsonResponse({ elements: cleaned })
   } catch (err) {
     return errorToResponse(err)

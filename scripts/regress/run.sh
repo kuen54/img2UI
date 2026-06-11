@@ -100,7 +100,7 @@ EOF
 rm -f "$TMP/control.json"
 node scripts/regress/mock-llm.mjs > "$TMP/mock.log" 2>&1 &
 MOCK_PID=$!
-npx next dev -p "$PORT" > "$TMP/dev.log" 2>&1 &
+IMG2UI_DIST_DIR=.next-regress npx next dev -p "$PORT" > "$TMP/dev.log" 2>&1 &  # 独立编译缓存,与 :3000 的 .next 隔离
 DEV_PID=$!
 for _ in $(seq 1 45); do
   curl -s -o /dev/null -w "%{http_code}" "$B/projects" 2>/dev/null | grep -q 200 && break
