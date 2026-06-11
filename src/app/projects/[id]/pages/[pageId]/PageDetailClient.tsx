@@ -11,7 +11,6 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Paper from '@mui/material/Paper'
 import Button from '@mui/material/Button'
-import IconButton from '@mui/material/IconButton'
 import Skeleton from '@mui/material/Skeleton'
 import LinearProgress from '@mui/material/LinearProgress'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -45,6 +44,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { MoreMenu } from '@/components/MoreMenu'
 import { StatChip } from '@/components/StatChip'
 import { EmptyState } from '@/components/EmptyState'
 import { StatusDot } from '@/components/StatusDot'
@@ -81,9 +81,12 @@ export function PageDetailClient({
   projectId: string
   pageId: string
 }): React.ReactElement {
+  const router = useRouter()
   const [project, setProject] = useState<Project | null>(null)
   const [page, setPage] = useState<PageWithStates | null>(null)
   const [loading, setLoading] = useState(true)
+  const [confirmDeletePageOpen, setConfirmDeletePageOpen] = useState(false)
+  const [deletingPage, setDeletingPage] = useState(false)
 
   const reload = useCallback((): void => {
     void Promise.all([
@@ -105,6 +108,23 @@ export function PageDetailClient({
 
   const state = page?.states[0] // MVP S1: 单 state per page
   const hasState = !!state
+  const pageInFlight =
+    !!state &&
+    (state.pipeline_status.endsWith('_running') || state.pipeline_status === 'validating')
+
+  const deletePage = async (): Promise<void> => {
+    if (deletingPage) return
+    setDeletingPage(true)
+    try {
+      const res = await fetch(`/api/pages/${pageId}`, { method: 'DELETE' })
+      if (!res.ok && res.status !== 204) throw new Error(await res.text())
+      toast.success('页面已删除')
+      router.push(`/projects/${projectId}`)
+    } catch (err) {
+      toast.error(`删除失败:${errText(err)}`)
+      setDeletingPage(false)
+    }
+  }
 
   return (
     <AppShell
@@ -116,6 +136,21 @@ export function PageDetailClient({
               { label: page.name },
             ]
           : [{ label: '加载中…' }]
+      }
+      rightAction={
+        page && (
+          <MoreMenu
+            items={[
+              {
+                label: '删除页面',
+                icon: <DeleteIcon size={16} />,
+                danger: true,
+                disabled: deletingPage,
+                onClick: () => setConfirmDeletePageOpen(true),
+              },
+            ]}
+          />
+        )
       }
     >
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -165,6 +200,27 @@ export function PageDetailClient({
           </Box>
         )}
       </Container>
+      <ConfirmDialog
+        open={confirmDeletePageOpen}
+        onClose={() => setConfirmDeletePageOpen(false)}
+        title="删除页面"
+        body={
+          <Box>
+            <Typography variant="body2">
+              将删除页面「{page?.name}」及其设计稿、分析结果、切片与素材,无法恢复。
+            </Typography>
+            {pageInFlight && state && (
+              <Alert severity="warning" sx={{ mt: 1.5 }}>
+                当前流程还在运行({pipelineStatusLabel(state.pipeline_status)}
+                ),运行中的页面无法删除,请等待流程完成后再试。
+              </Alert>
+            )}
+          </Box>
+        }
+        confirmLabel="删除页面"
+        confirmColor="error"
+        onConfirm={deletePage}
+      />
     </AppShell>
   )
 }
@@ -521,15 +577,17 @@ function DesignWithPipeline({
             >
               {reUploading ? '替换中…' : '重新上传'}
             </Button>
-            <IconButton
+            <MoreMenu
               size="small"
-              color="error"
-              onClick={() => setConfirmDeleteOpen(true)}
-              aria-label="删除设计稿"
-              title="删除设计稿"
-            >
-              <DeleteIcon size={18} />
-            </IconButton>
+              items={[
+                {
+                  label: '删除设计稿',
+                  icon: <DeleteIcon size={16} />,
+                  danger: true,
+                  onClick: () => setConfirmDeleteOpen(true),
+                },
+              ]}
+            />
             <input
               ref={fileInput}
               type="file"

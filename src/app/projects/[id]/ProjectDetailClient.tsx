@@ -21,7 +21,6 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContentText from '@mui/material/DialogContentText'
 import TextField from '@mui/material/TextField'
 import Button from '@mui/material/Button'
-import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
 import Grow from '@mui/material/Grow'
 import Alert from '@mui/material/Alert'
@@ -40,6 +39,7 @@ import {
 } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { MoreMenu } from '@/components/MoreMenu'
 import { StatusDot } from '@/components/StatusDot'
 import { StatChip } from '@/components/StatChip'
 import { EmptyState } from '@/components/EmptyState'
@@ -136,14 +136,16 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
       }
       rightAction={
         project && (
-          <IconButton
-            color="error"
-            onClick={() => setConfirmDelOpen(true)}
-            title="删除项目"
-            aria-label="删除项目"
-          >
-            <DeleteIcon size={18} />
-          </IconButton>
+          <MoreMenu
+            items={[
+              {
+                label: '删除项目',
+                icon: <DeleteIcon size={16} />,
+                danger: true,
+                onClick: () => setConfirmDelOpen(true),
+              },
+            ]}
+          />
         )
       }
     >
@@ -185,7 +187,17 @@ export function ProjectDetailClient({ projectId }: { projectId: string }): React
         ) : pages.length === 0 ? (
           <EmptyInline onCreate={() => setDialogOpen(true)} />
         ) : (
-          <PageCardGrid projectId={projectId} pages={pages} recentId={recentId} />
+          <PageCardGrid
+            projectId={projectId}
+            pages={pages}
+            recentId={recentId}
+            onDeleted={(pageId) => {
+              // 局部移除卡片,后台 refetch 校准 stats(同新建页面的刷新模式)
+              setPages((prev) => (prev ? prev.filter((p) => p.id !== pageId) : prev))
+              toast.success('页面已删除')
+              reload()
+            }}
+          />
         )}
       </Container>
 
@@ -293,10 +305,12 @@ function PageCardGrid({
   projectId,
   pages,
   recentId,
+  onDeleted,
 }: {
   projectId: string
   pages: PageListItem[]
   recentId: string | null
+  onDeleted: (pageId: string) => void
 }): React.ReactElement {
   return (
     <Stack
@@ -308,7 +322,7 @@ function PageCardGrid({
         // appear 只对「本地新插入」的卡片为 true:存量卡片首屏不播动画
         <Grow key={p.id} in appear={p.id === recentId} timeout={250}>
           <Box>
-            <PageCard projectId={projectId} page={p} />
+            <PageCard projectId={projectId} page={p} onDeleted={onDeleted} />
           </Box>
         </Grow>
       ))}
@@ -319,14 +333,27 @@ function PageCardGrid({
 function PageCard({
   projectId,
   page: p,
+  onDeleted,
 }: {
   projectId: string
   page: PageListItem
+  onDeleted: (pageId: string) => void
 }): React.ReactElement {
   const { kind, label } = describePageStatus(p.stats, p.has_state)
   const s = p.stats
   const hasProgress =
     s.total_elements > 0 || s.static_elements > 0 || s.total_assets > 0
+
+  const [confirmDelOpen, setConfirmDelOpen] = useState(false)
+  const deletePage = async (): Promise<void> => {
+    try {
+      const res = await fetch(`/api/pages/${p.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(await res.text())
+      onDeleted(p.id)
+    } catch (err) {
+      toast.error(`删除失败:${errText(err)}`)
+    }
+  }
 
   return (
     <Card
@@ -452,9 +479,44 @@ function PageCard({
             >
               {label}
             </Typography>
+            {/* 负 margin 抵消 IconButton 自身 padding,不撑高 status 行 */}
+            <Box sx={{ my: -0.5, mr: -1, flexShrink: 0 }}>
+              <MoreMenu
+                size="small"
+                items={[
+                  {
+                    label: '删除页面',
+                    icon: <DeleteIcon size={16} />,
+                    danger: true,
+                    onClick: () => setConfirmDelOpen(true),
+                  },
+                ]}
+              />
+            </Box>
           </Stack>
         </CardContent>
       </CardActionArea>
+      <ConfirmDialog
+        open={confirmDelOpen}
+        onClose={() => setConfirmDelOpen(false)}
+        title="删除页面"
+        body={
+          <Stack spacing={1.5}>
+            <DialogContentText>
+              将删除「{p.name}」及其所有设计稿、分析结果、切片与素材。
+            </DialogContentText>
+            {kind === 'running' && (
+              <Alert severity="warning">
+                当前流程还在运行({label}),运行中的页面无法删除,请等待流程完成后再试。
+              </Alert>
+            )}
+            <Alert severity="warning">此操作无法恢复</Alert>
+          </Stack>
+        }
+        confirmLabel="删除页面"
+        confirmColor="error"
+        onConfirm={deletePage}
+      />
     </Card>
   )
 }

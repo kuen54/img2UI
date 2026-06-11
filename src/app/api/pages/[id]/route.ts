@@ -8,6 +8,7 @@ import {
 import { getPageStats } from '@/lib/page-stats'
 import { errorToResponse, jsonResponse } from '@/lib/api-response'
 import { isValidId } from '@/lib/id'
+import { isStateLocked } from '@/lib/run-lock'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -45,6 +46,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams): Promis
   try {
     const { id } = await params
     if (!isValidId(id)) return jsonResponse({ error: 'invalid id' }, { status: 400 })
+    // 流程运行中(后台 job 持锁)不允许删:否则 job 完成时 writeSlice / createPipelineRun
+    // 会在已删的设计稿上重建目录、落盘产物,变成永久孤儿文件
+    const states = await listStatesByPage(id)
+    if (states.some((s) => isStateLocked(s.id))) {
+      return jsonResponse(
+        { error: '流程进行中,无法删除页面,请等待当前流程完成' },
+        { status: 409 },
+      )
+    }
     await deletePage(id)
     return new Response(null, { status: 204 })
   } catch (err) {

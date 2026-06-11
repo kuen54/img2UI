@@ -258,10 +258,16 @@ export function AssetReviewClient({
 
   const handleUnassign = useCallback(
     async (elementId: string): Promise<void> => {
+      // unassign 只删 assets-bin 副本 + Asset 记录,不动切片文件;
+      // 反悔按 slice_source 重放指派可还原像素,但旧 Asset 的校验/上传元数据
+      // (status / cdn_url / validation_notes)已随记录删除,重放后回到 extracted
+      // → 撤销反悔成功时若有丢失,提示需重新校验/上传
+      const prevAsset = assets.get(elementId)
+      const source = prevAsset?.slice_source
+      const elName = elements.find((e) => e.id === elementId)?.name ?? '元素'
       try {
         const res = await fetch(`/api/elements/${elementId}/asset`, { method: 'DELETE' })
         if (!res.ok && res.status !== 204) throw new Error(await res.text())
-        toast.success('已撤销')
         // 局部更新:删 asset + 释放切片标记
         setAssets((prev) => {
           const next = new Map(prev)
@@ -275,11 +281,64 @@ export function AssetReviewClient({
               : s,
           ),
         )
+        if (source) {
+          toast(`已撤销「${elName}」的素材指派`, {
+            action: {
+              label: '撤销',
+              onClick: () => {
+                void (async (): Promise<void> => {
+                  try {
+                    const r = await fetch(`/api/elements/${elementId}/assign-slice`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ...source, page_id: pageId }),
+                    })
+                    if (!r.ok) throw new Error(await r.text())
+                    const { asset } = (await r.json()) as { asset: Asset }
+                    setAssets((prev) => {
+                      const next = new Map(prev)
+                      next.set(elementId, asset)
+                      return next
+                    })
+                    setSlices((prev) =>
+                      prev.map((s) =>
+                        s.state_id === source.state_id &&
+                        s.category === source.category &&
+                        s.idx === source.idx &&
+                        !s.assigned_to.includes(elementId)
+                          ? { ...s, assigned_to: [...s.assigned_to, elementId] }
+                          : s,
+                      ),
+                    )
+                    flashRows([elementId])
+                    // 重放只还原像素:原校验/上传元数据已随旧 Asset 删除,提示补做
+                    if (
+                      prevAsset &&
+                      (prevAsset.status === 'validated' ||
+                        prevAsset.status === 'uploaded' ||
+                        prevAsset.cdn_url ||
+                        prevAsset.validation_notes)
+                    ) {
+                      toast.warning(
+                        `已恢复「${elName}」的素材指派,但原校验/上传记录未保留,请重新校验并上传`,
+                      )
+                    }
+                  } catch (err) {
+                    toast.error(`恢复指派失败:${errText(err)}`)
+                  }
+                })()
+              },
+            },
+          })
+        } else {
+          // 理论上不会发生(指派/重抠都会写 slice_source),兜底用原文案
+          toast.success('已撤销')
+        }
       } catch (err) {
         toast.error(`撤销失败:${errText(err)}`)
       }
     },
-    [],
+    [assets, elements, pageId, flashRows],
   )
 
   // 「顺序自动指派」:某 category 未指派元素数 == 该 category 空闲切片数时,
@@ -1543,16 +1602,22 @@ function ElementRow({
             重抠
           </Button>
           {asset && (
-            <IconButton
-              size="small"
-              color="error"
-              onClick={(e) => {
-                e.stopPropagation()
-                void onUnassign(element.id)
-              }}
-            >
-              <DeleteIcon size={16} />
-            </IconButton>
+            <Tooltip title="撤销指派">
+              <IconButton
+                size="small"
+                aria-label="撤销指派"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void onUnassign(element.id)
+                }}
+                sx={{
+                  color: 'text.disabled',
+                  '&:hover': { color: 'error.main' },
+                }}
+              >
+                <DeleteIcon size={16} />
+              </IconButton>
+            </Tooltip>
           )}
         </Stack>
       </Stack>
