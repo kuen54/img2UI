@@ -106,25 +106,30 @@ export async function exportPageToFolder(input: ExportPageInput): Promise<Export
     } catch {
       // raw 缺失就跳过
     }
-    for (const cat of ALL_VISUAL_CATEGORIES) {
-      const batches = await listPass2Batches(s.id, cat)
-      for (const b of batches) {
-        try {
-          const buf = await fs.readFile(b.pass2Path)
-          const suffix = b.batchIdx > 0 ? `-batch${b.batchIdx}` : ''
-          await writeAtomic(
-            path.join(
-              pageDir,
-              'raw',
-              `extracted-${sanitize(s.name)}-${cat}${suffix}.png`,
-            ),
-            buf,
-          )
-        } catch {
-          // 该 cat batch 无产物
-        }
-      }
-    }
+    // cat / batch 之间产物路径互不重叠(文件名含 cat + batchIdx),并行读写
+    await Promise.all(
+      ALL_VISUAL_CATEGORIES.map(async (cat) => {
+        const batches = await listPass2Batches(s.id, cat)
+        await Promise.all(
+          batches.map(async (b) => {
+            try {
+              const buf = await fs.readFile(b.pass2Path)
+              const suffix = b.batchIdx > 0 ? `-batch${b.batchIdx}` : ''
+              await writeAtomic(
+                path.join(
+                  pageDir,
+                  'raw',
+                  `extracted-${sanitize(s.name)}-${cat}${suffix}.png`,
+                ),
+                buf,
+              )
+            } catch {
+              // 该 cat batch 无产物
+            }
+          }),
+        )
+      }),
+    )
   }
 
   // 4. states/{state-name}.json

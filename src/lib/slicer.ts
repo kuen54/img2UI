@@ -96,9 +96,15 @@ export async function sliceAssets(
     const pct = (opaque / (w * h)) * 100
     if (pct < minOpaquePct) continue
 
-    // crop 走 sharp.extract,从原 RGBA buf,不从 dilated mask
-    const buffer = await sharp(transparentPng)
-      .extract({ left: x, top: y, width: w, height: h })
+    // crop 直接从开头那次 raw 解码的 RGBA buf 按行拷贝(避免每切片重复 full-decode),
+    // 像素与 sharp.extract 等价:同一 PNG 解码结果的同一矩形区域
+    const rowBytes = w * 4
+    const cropBuf = Buffer.allocUnsafe(h * rowBytes)
+    for (let yy = 0; yy < h; yy++) {
+      const srcStart = ((y + yy) * W + x) * 4
+      data.copy(cropBuf, yy * rowBytes, srcStart, srcStart + rowBytes)
+    }
+    const buffer = await sharp(cropBuf, { raw: { width: w, height: h, channels: 4 } })
       .png()
       .toBuffer()
     slices.push({ buffer, bbox: [x, y, w, h], opaque_pct: pct, width: w, height: h })
@@ -118,35 +124,43 @@ export async function sliceAssets(
 
 // ─── 8-connectivity binary dilation ────────────────────────────────────────
 
+// 等价性依据:8-connectivity dilation 的结构元是 3×3 方形 B,
+// B = H ⊕ V(H={(-1,0),(0,0),(1,0)},V={(0,-1),(0,0),(0,1)} 的 Minkowski 和恰为 3×3 方形),
+// dilation 满足结合律:A ⊕ B = (A ⊕ H) ⊕ V,故先行后列两趟 1×3 与一趟 3×3 逐像素结果相同。
+// 边界:两种写法都把图外视为 0;纵向趟只在本列内取 y±1,横向中间结果只需图内值,裁剪不丢信息。
+// buffer 策略:tmp(横向结果)/ buf(纵向结果)两块来回复用,每迭代不再新分配。
 function binaryDilate8(mask: Uint8Array, W: number, H: number, iters: number): Uint8Array {
-  let cur = mask
+  if (iters <= 0) return mask
+  const N = W * H
+  const tmp = new Uint8Array(N)
+  const buf = new Uint8Array(N)
+  let src: Uint8Array = mask
   for (let it = 0; it < iters; it++) {
-    const next = new Uint8Array(cur.length)
+    // 横向趟:src → tmp(每像素看 x-1 / x / x+1)
     for (let y = 0; y < H; y++) {
+      const row = y * W
       for (let x = 0; x < W; x++) {
-        const idx = y * W + x
-        if (cur[idx] === 1) {
-          next[idx] = 1
-          continue
-        }
-        let hit = 0
-        outer: for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = x + dx
-            const ny = y + dy
-            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue
-            if (cur[ny * W + nx] === 1) {
-              hit = 1
-              break outer
-            }
-          }
-        }
-        next[idx] = hit
+        const i = row + x
+        tmp[i] =
+          src[i] === 1 || (x > 0 && src[i - 1] === 1) || (x < W - 1 && src[i + 1] === 1)
+            ? 1
+            : 0
       }
     }
-    cur = next
+    // 纵向趟:tmp → buf(每像素看 y-1 / y / y+1;buf 全量覆写,旧内容无需清零)
+    for (let y = 0; y < H; y++) {
+      const row = y * W
+      for (let x = 0; x < W; x++) {
+        const i = row + x
+        buf[i] =
+          tmp[i] === 1 || (y > 0 && tmp[i - W] === 1) || (y < H - 1 && tmp[i + W] === 1)
+            ? 1
+            : 0
+      }
+    }
+    src = buf
   }
-  return cur
+  return buf
 }
 
 // ─── 8-connectivity connected component labeling (union-find, two pass) ───
