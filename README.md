@@ -4,6 +4,10 @@
 
 不替代设计师,不替代 coding agent,只填补**生图工具 → 代码**之间这条链路里"栅格化 PNG 没有图层、没有语义"的缝隙。
 
+![img2UI 页面详情](docs/screenshots/01-page-pipeline.png)
+
+一页跑完的样子:左边设计稿叠着 Pass 1 出的 bbox,右边 6 步流程走到最后的 导出,29 个元素已确认 / 13 个素材已指派。
+
 ---
 
 ## 形态
@@ -31,6 +35,10 @@
                               coding agent 直接消费
 ```
 
+![Element Review](docs/screenshots/02-element-review.png)
+
+上图 `Element Review` 那一步的实际界面:左边元素列表 + 分类筛选,中间直接在设计稿上拖 bbox,右边改 type / visual_category / 中文描述,`⏎` 确认后跳下一个,`⌘S` 保存。
+
 ## Setup
 
 ```bash
@@ -46,6 +54,10 @@ pnpm dev    # http://localhost:3000
 | **apimart gpt-image-2-official** (image_gen) | ✅ Pass 2 + 单元素重抠 | `api_key`(标准 Bearer) |
 | **koukoutu** (matting) | 可选 | Asset Review「用 API 抠图」按钮才用 |
 | **Self-hosted S3** (cdn) | 可选 | `access_key_id` + `api_key` + `bucket` + `region` + `public_url_prefix`(导出时上传 CDN) |
+
+![Provider 设置](docs/screenshots/03-providers.png)
+
+`/settings/providers` 按 kind 分组,上表两个必填的 provider 长这样,同 kind 内只能一个 active。key 只写进本机 `data/config.json`,不进 git。
 
 ## Stack
 
@@ -69,6 +81,10 @@ pnpm dev    # http://localhost:3000
 - Pass 2 输出**绿幕 #00FF00 背景**,不让 model 出 transparent / 白底(白底抠会抠穿元素内白)
 - 抠图**默认本地 chroma key**(0 API),koukoutu API 只作 Asset Review 用户手动 fallback
 - Pass 1 走**5 路并行 over-include + IoU 合并**,**不**用 EXCLUSIVE 措辞(实测召回率从 69% 救到 92%)
+
+![Asset Review](docs/screenshots/04-pass2-slices.png)
+
+上面这几条的产物在 Asset Review 里一次看全:顶部是 Pass 2 整张输出 chroma key 之后的拆分图(元素之间留了空隙,坐标不保原位),下面是切出来的 14 个切片(棋盘格是透明底,`#0 · 33%` 是不透明像素占比),右边 13 个元素全部指派完成,α 1.00。
 
 ## MVP 简化(`PLAN.md §0.4`)
 

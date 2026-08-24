@@ -71,3 +71,6 @@ yarn-error.log*
 next-env.d.ts
 debug-*.png
 qa-screenshots/
+
+# README 截图(产品展示,进版本库;上面的 asset-review*/element-review*/theme-* 等规则无锚点,会误伤这里)
+!/docs/screenshots/**
